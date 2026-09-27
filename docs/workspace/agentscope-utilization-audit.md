@@ -2,7 +2,7 @@
 
 Status: delivered with SPEC-018 (2026-08-20)
 Supersedes: the post-SPEC-017 utilization audit findings that motivated SPEC-018.
-Scope: every agentscope surface the agent-platform kernel touches or deliberately does not, re-audited after the middleware alignment landed. Verified against the locked agentscope 2.0.6 install.
+Scope: every agentscope surface the agent-platform kernel touches or deliberately does not, re-audited after the middleware alignment landed. Verified against the locked agentscope 2.0.6 install; re-verified under agentscope 2.0.8 in v0.43.2 (2026-09-27), which added the `CompressContext` tool and `pipeline` module (`GoalPipeline`) surfaces now tracked in §2 and deferred to SPEC-064.
 
 ## 1. What SPEC-018 changed
 
@@ -24,7 +24,9 @@ Adopted out-of-box features (each passed the four-point adoption gate in SPEC-01
 
 | Surface | Decision | Reason |
 |---|---|---|
-| `Toolkit.tool_groups` internals (task-tool append, gateway-tool counting/introspection) | **Kept best-effort, pinned by tests** | The one remaining internal-facing surface after SPEC-018: tool registration lands in `tool_groups[0]` and availability is read dynamically. Works in 2.0.6 and is pinned by `test_task_tools_appended_and_excluded_from_gateway_count`; re-verify on every agentscope upgrade. |
+| `Toolkit.tool_groups` internals (task-tool append, gateway-tool counting/introspection) | **Kept best-effort, pinned by tests** | The one remaining internal-facing surface after SPEC-018: tool registration lands in `tool_groups[0]` and availability is read dynamically. Works in 2.0.6, re-verified under 2.0.8 (v0.43.2), and is pinned by `test_task_tools_appended_and_excluded_from_gateway_count`; re-verify on every agentscope upgrade. |
+| Agent-driven context compression (`CompressContext` tool, new in 2.0.8) | **Deferred to SPEC-064** | The kernel already compresses automatically by threshold via `ContextConfig(trigger_ratio, tool_result_limit)`. `CompressContext` lets the *agent* choose to compress between tasks — a genuine adoption candidate, but a new opt-in tool surface that must pass the four-point adoption gate (kernel-owned compression state, audit, and durability interactions) before wiring. |
+| `pipeline` module (`GoalPipeline`, new in 2.0.8) | **Deferred to SPEC-064** | An executor-until-verifier orchestration surface with no current platform caller. Needs an adoption-gate spike to decide whether it belongs under the platform's governed execution path or stays out like the other orchestration edges. |
 | `MiddlewareBase` hooks (`on_check_permission`, `on_acting`, plus the out-of-box tracing/budget middlewares) | **Adopted** (SPEC-018) | Supported interception points replacing all hand-rolled paths; adoption gate passed per requirement. |
 | Built-in task tools | **Adopted** (SPEC-018, opt-in) | State-local only; durability for free via SPEC-017; no infrastructure access. |
 | MCP (MCPClient / MCP exposure of tool-gateway connectors) | **Spike needed** | Could let the kernel reach external MCP servers directly — must be gated so the tool-gateway stays the only execution surface (adoption gate point 1). Roadmap Exploration Backlog. |

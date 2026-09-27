@@ -7,6 +7,23 @@ waves and validation outcomes rather than published product releases.
 
 ## Available Notes
 
+- `2026-09-27-dependency-refresh-agentscope-2-0-8.md`
+  - patch (v0.43.2) — a dependency-only re-lock of the eight backend products
+    inside their declared ranges at latest stable, prompted by the AgentScope
+    2.0.8 release. Moves agentscope 2.0.7.post1 → **2.0.8** (the runtime kernel
+    per ADR-0002, so the bump carries the full kernel-verification leg),
+    pydantic 2.13.4 → **2.13.5** (pydantic-core 2.46.4 → 2.46.5) across all
+    eight, and playwright 1.62.0 → **1.63.0** in tool-gateway; agentscope-runtime
+    stays at 1.1.6.post2 (still latest) and co-resolves cleanly, and 2.0.8
+    additionally pulls `json-repair[schema]` whose jsonschema/pydantic
+    requirements reuse packages already in the tree. Consistent with the
+    four-point adoption-gate discipline, the patch adopts **none** of 2.0.8's new
+    agent surfaces — `CompressContext` (agent-driven compression), `pipeline`
+    (`GoalPipeline`), `A2AAgent`, realtime voice, and RAG LLM reranking are all
+    deferred; the first two are tracked in `agentscope-utilization-audit.md` and
+    scoped to **SPEC-064**. Redis/Elasticsearch client caps stay parked. No
+    manifest range, contract, policy, schema, audit, or execution-path change —
+    a lockfile refresh only.
 - `2026-09-27-clock-sensitive-document-fixtures.md`
   - patch (v0.43.1) — a test-only fix for two agent-platform operation-document
     tests that hardcoded a `created_at` of `2026-08-27`. The store sweeps rows

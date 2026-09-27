@@ -11,6 +11,35 @@ portal is enforced by `make validate-version`.
 Versions prior to 0.1.0 were not numbered; Release 0 foundation work and
 Release 1 entries are grouped retrospectively under 0.1.0.
 
+## 0.43.2 — 2026-09-27
+
+Dependency-refresh patch: a routine re-lock of the eight backend products
+inside their declared ranges at latest stable, prompted by the AgentScope 2.0.8
+release. No manifest range changed — every bump lands inside an existing
+caret-capped range — so this is a lockfile refresh, not a contract change. No
+new routes, actions, event types, contracts, schemas, audit changes, or
+execution paths. See the
+[release note](docs/agentic-aiops-platform/release-notes/2026-09-27-dependency-refresh-agentscope-2-0-8.md).
+
+### Changed
+
+- **agentscope 2.0.7.post1 → 2.0.8** (agent-platform; the runtime kernel per
+  ADR-0002, so the bump carries the full kernel-verification leg). Adopts
+  **none** of 2.0.8's new agent surfaces — `CompressContext` (agent-driven
+  context compression), the `pipeline` module (`GoalPipeline`), `A2AAgent`,
+  realtime voice, and RAG LLM reranking are all deferred; the first two are
+  tracked in `docs/workspace/agentscope-utilization-audit.md` and scoped to
+  **SPEC-064** under the four-point adoption gate. 2.0.8 additionally pulls
+  `json-repair[schema]`, whose `jsonschema`/`pydantic` requirements reuse
+  packages already in the tree (no new third-party package).
+  `agentscope-runtime` stays at **1.1.6.post2** (still the latest published
+  runtime) and co-resolves cleanly with agentscope 2.0.8.
+- **pydantic 2.13.4 → 2.13.5** (pydantic-core 2.46.4 → 2.46.5) across all eight
+  products.
+- **playwright 1.62.0 → 1.63.0** (tool-gateway).
+- Redis client `<7.0` and Elasticsearch client `<9.0` caps stay parked
+  (deployed server majors); tool-gateway's Kubernetes client stays `<33.0`.
+
 ## 0.43.1 — 2026-09-27
 
 Test-only patch fixing two clock-sensitive operation-document fixtures that
