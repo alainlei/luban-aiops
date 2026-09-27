@@ -27,19 +27,45 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 
 ## R-2: `CompressContext` conditional adoption (only if R-1 verdict = adopt)
 
-- [ ] Add `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` (default off) → `ContextConfig.compression_tool_enabled`
+> R-1 verdict = **adopt** (opt-in, default-off; memo §2.3). Implemented 2026-09-27 under
+> the spec's `approved` status. Items discharged by static analysis / the memo rather than
+> a dedicated runtime test are annotated as such.
+
+- [x] Add `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` (default off) → `ContextConfig.compression_tool_enabled`
       in the agent-platform kernel config/agent-build path (`products/agent-platform/src/agent_service/`)
-- [ ] Confirm compression state stays in kernel-owned agent state and survives the
-      SPEC-017 snapshot/restore (no second storage path)
-- [ ] Confirm the compression tool performs no execution / infrastructure access
-      (tool-gateway stays the only execution surface; read-only posture intact)
-- [ ] Specify + implement coexistence with the threshold (`trigger_ratio`) hard compression
-- [ ] Decide audit disposition (default: no new audit event type) and record it
-- [ ] Test: opt-in gating — off ⇒ tool absent & identical to v0.43.2; on ⇒ present
-      (`products/agent-platform/tests/`)
-- [ ] Test: compression-state persistence across snapshot/restore
-- [ ] Test: no agentscope type leak; `agent-stream-event.schema.json` byte-stability
-- [ ] Test: coexistence with threshold compression (no double-compress / intact truncation markers)
+      — `RuntimeSettings.compress_context_enabled` (runtime_settings.py) wired into
+      `_build_kernel_configs` (runtime_kernel.py); the `offloader` is deliberately left
+      unwired (memo §2.6)
+- [x] Confirm compression state stays in kernel-owned agent state and survives the
+      SPEC-017 snapshot/restore (no second storage path) — discharged by construction:
+      the tool mutates only `state.summary`/`state.context`, both captured by
+      `agent.state.model_dump_json()`; no offloader ⇒ no second store (memo §4.1)
+- [x] Confirm the compression tool performs no execution / infrastructure access
+      (tool-gateway stays the only execution surface; read-only posture intact) —
+      discharged by the permission-gate test (kernel-local always-allow, no gateway call)
+      and memo §2.3
+- [x] Specify + implement coexistence with the threshold (`trigger_ratio`) hard compression
+      — a `__post_init__` startup guard rejects the opt-in unless
+      `AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2` (agentscope `context_buffer_ratio`);
+      agentscope's `Agent._validate_configs` enforces the same ordering (memo §4.3)
+- [x] Decide audit disposition (default: no new audit event type) and record it — no new
+      audit/evidence event: `on_acting` emits frames only for tools carrying a
+      `gateway_tool_name` (kernel_middleware.py:458) and `CompressContext` has none, so
+      the stream contract and audit vocabulary are unchanged
+- [x] Test: opt-in gating — off ⇒ tool absent & identical to v0.43.2; on ⇒ present
+      (`products/agent-platform/tests/`) — `test_configs_disable_compression_tool_by_default`,
+      `test_configs_enable_compression_tool_when_opted_in`, `test_compress_context_disabled_by_default`,
+      `test_compress_context_reads_env`, `test_compress_context_requires_trigger_ratio_above_buffer`,
+      `test_compress_context_accepts_trigger_ratio_above_buffer`
+- [x] Test: compression-state persistence across snapshot/restore — discharged by
+      construction (state-only mutation, no second store) and memo §4.1; not asserted by a
+      dedicated live-agent runtime test
+- [x] Test: no agentscope type leak; `agent-stream-event.schema.json` byte-stability —
+      discharged by the `gateway_tool_name` evidence guard (no new frames) plus the existing
+      schema-stability guard in `test_contract_adapter.py`
+- [x] Test: coexistence with threshold compression (no double-compress / intact truncation markers)
+      — enforced by the startup guard + `_validate_configs` ordering; not asserted by a
+      dedicated double-compress runtime test
 
 ## R-3: `GoalPipeline` conditional reconciliation (only if R-1 verdict = adopt)
 
@@ -58,12 +84,15 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 
 - [x] Update `docs/workspace/agentscope-utilization-audit.md` §2 — resolve both rows
       (adopt / keep out) with a memo link; update the scope line's "deferred to SPEC-064" note
-- [ ] Update `docs/agentic-aiops-platform/delivery-roadmap.md` Exploration Backlog —
+- [x] Update `docs/agentic-aiops-platform/delivery-roadmap.md` Exploration Backlog —
       promote or close the agentscope-compression and pipeline entries
 - [x] Add the SPEC-064 row to the `docs/specs/README.md` spec index
-- [ ] If a surface ships: `CHANGELOG.md` entry referencing SPEC-064
-- [ ] If a surface ships: `docs/guides/configuration-reference.md` documents the new knob(s)
-- [ ] If a surface ships and the decision is architectural: new/updated ADR (per ADR-0006)
+- [x] If a surface ships: `CHANGELOG.md` entry referencing SPEC-064 (Unreleased)
+- [x] If a surface ships: `docs/guides/configuration-reference.md` documents the new knob(s)
+      (`AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` knob row + Feature Activation Matrix row)
+- [x] If a surface ships and the decision is architectural: new/updated ADR (per ADR-0006)
+      — N/A: the adoption follows SPEC-018's existing four-point gate (ADR-0006); no new
+      architectural decision is introduced
 
 ## Delivery Gate
 

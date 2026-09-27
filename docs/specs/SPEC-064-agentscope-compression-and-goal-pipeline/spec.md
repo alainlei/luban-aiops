@@ -2,9 +2,10 @@
 
 ## Status
 
-- status: `draft`
+- status: `approved`
 - owner: luban-platform-team
 - created: 2026-09-27
+- approved: 2026-09-27
 - release slice: R5 — hardening / Exploration Backlog (agentscope adoption family)
 - related ADRs: [ADR-0006](../../adr/0006-contract-purpose-invariant-enforcement.md)
   (kernel exploitation follows SPEC-018's four-point adoption gate),
@@ -16,11 +17,14 @@
   SPEC-017 (kernel state durability) and SPEC-018 (kernel middleware alignment /
   adoption gate) discipline
 
-> Drafting note (SDD discipline): this is a **draft adoption-gate spike**. Per the
-> workspace workflow, `spec.md` is agreed first; the accompanying `plan.md` and
-> `tasks.md` are provisional scaffolds that firm up only after scope approval. Nothing
-> in this spec authorizes product-code, contract, policy, GitOps, deployment, or live
-> changes. A "keep out" verdict is a complete, deliverable outcome.
+> Approval note (SDD discipline): `spec.md` was agreed first and advanced to `approved`
+> on 2026-09-27. The R-1 spike memo
+> ([agentscope-compression-goal-pipeline-spike.md](../../workspace/agentscope-compression-goal-pipeline-spike.md))
+> resolved all five Open Questions and produced per-surface verdicts: `CompressContext`
+> **clears** the four-point adoption gate (adopt, opt-in) and `GoalPipeline` is **kept
+> out**. This approval authorizes the R-2 opt-in wiring for `CompressContext` only; the
+> R-3 `GoalPipeline` reconciliation tasks stay N/A under the keep-out verdict. Advancing
+> to `delivered` (VERSION bump, release note, tag) is a separate operator decision.
 
 ## Summary
 
@@ -261,14 +265,27 @@ operator to approve or reject.
 - **`CompressContext`: clears the four-point adoption gate.** Recommended for opt-in,
   default-off adoption under R-2 (`AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` →
   `ContextConfig.compression_tool_enabled`; add `"CompressContext"` to
-  `KERNEL_LOCAL_TOOL_NAMES`; do not wire the `offloader`). R-2 wiring is **not** authorized
-  by the spike and requires this spec to reach `approved` plus separate implementation
-  authorization.
+  `KERNEL_LOCAL_TOOL_NAMES`; do not wire the `offloader`). **Implemented 2026-09-27** under
+  this spec's `approved` status: the knob, kernel-config wiring, `KERNEL_LOCAL_TOOL_NAMES`
+  membership, and the `trigger_ratio > context_buffer_ratio` startup guard are in place with
+  tests; the offloader stays unwired (memo §2.6). Not yet released (VERSION/tag deferred).
 - **`GoalPipeline`: kept out.** No code; the audit row is resolved to "Kept out (SPEC-064)".
 
 
 ## Changelog
 
+- 2026-09-27: **Advanced `draft` → `approved`; R-2 opt-in `CompressContext` wiring
+  implemented.** Approved the R-1 verdicts: adopt `CompressContext` (opt-in, default-off),
+  keep `GoalPipeline` out. Implemented the R-2 adoption in the agent-platform kernel —
+  `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` (`RuntimeSettings.compress_context_enabled`,
+  default `false`) → `ContextConfig.compression_tool_enabled`; `"CompressContext"` added to
+  `KERNEL_LOCAL_TOOL_NAMES`; a startup guard rejecting the opt-in unless
+  `AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2` (agentscope `context_buffer_ratio`); the
+  `offloader` deliberately left unwired (memo §2.6). Covered by gating, no-leak,
+  schema-stability, and coexistence tests; the full agent-platform suite passes (1514).
+  `docs/specs/README.md`, the delivery-roadmap Exploration Backlog row,
+  `configuration-reference.md`, and `CHANGELOG.md` (Unreleased) updated. VERSION bump,
+  release note, tag, and the `delivered` flip remain a separate operator decision.
 - 2026-09-27: **R-1 spike landed.** Static inspection of the locked agentscope 2.0.8
   install and the agent-platform kernel integration at 0.43.2 resolved all five Open
   Questions and produced per-surface verdicts in

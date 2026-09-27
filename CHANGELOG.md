@@ -11,6 +11,29 @@ portal is enforced by `make validate-version`.
 Versions prior to 0.1.0 were not numbered; Release 0 foundation work and
 Release 1 entries are grouped retrospectively under 0.1.0.
 
+## Unreleased
+
+### Added
+
+- **Opt-in agent-driven context compression (`CompressContext`, SPEC-064 R-2).**
+  The agent-platform kernel can now register agentscope 2.0.8's `CompressContext`
+  tool behind a new `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` flag (`RuntimeSettings.compress_context_enabled`,
+  default `false` → `ContextConfig.compression_tool_enabled`). When enabled, the agent may
+  summarize its own working context on demand, reusing the same `_compress_context_impl`
+  the threshold trigger already runs; it mutates only `state.summary`/`state.context`,
+  which the SPEC-017 agent-state snapshot already persists and secret-redacts. The tool is
+  a kernel-local always-allow (`KERNEL_LOCAL_TOOL_NAMES`) because it touches no external
+  system, and a startup guard rejects the opt-in unless `AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2`
+  (agentscope's `context_buffer_ratio`), preserving the agent-fires-before-threshold ordering.
+  The `offloader` is deliberately **not** wired: it would write divergent pod-local context
+  copies to the `emptyDir` workspace that the shared Postgres snapshot never sees (split-brain
+  on scale-out, loss on reschedule). No new route, action, contract, schema, audit event type,
+  or evidence frame — `on_acting` emits only for gateway tools, and `CompressContext` has no
+  `gateway_tool_name`. Default-off, so unset deployments are byte-identical to 0.43.2. See
+  [SPEC-064](docs/specs/SPEC-064-agentscope-compression-and-goal-pipeline/spec.md) and the
+  [spike memo](docs/workspace/agentscope-compression-goal-pipeline-spike.md). Not yet released
+  (VERSION/tag deferred).
+
 ## 0.43.2 — 2026-09-27
 
 Dependency-refresh patch: a routine re-lock of the eight backend products

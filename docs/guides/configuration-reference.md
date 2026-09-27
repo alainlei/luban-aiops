@@ -34,6 +34,7 @@ activate them. A feature is **active** when all required variables are set to no
 | **Skill compositions (`kind: composition`, SPEC-057)** | *(no activation switch — additive on the skills path above)*; `SKILLS_COMPOSITION_MAX_SUB_SKILLS` bounds a composition's `sub_skills` count. A composition carries no authority (ADR-0011): no new policy action, no new audit event type, no new gate — each sub-skill keeps its own HITL gate | skills-hub | enabled (`8`); `make policy-diff` reports zero transitions |
 | **Incident intake and triage** | `INCIDENT_WEBHOOK_TOKEN`, `PLATFORM_GATEWAY_INCIDENT_SERVICE_URL`, `PLATFORM_GATEWAY_INCIDENT_CLIENT_SECRET`, `AGENT_INCIDENT_SERVICE_URL`, `AGENT_INCIDENT_CLIENT_SECRET` (SPEC-043 incident-report documents) ↔ `INCIDENT_QUERY_CLIENTS` | incident-service, platform-gateway, tool-gateway, agent-service | **must be provisioned** (`sync-incident-secrets.sh`) |
 | **Portal voice input** | *(none — browser Web Speech API; `input_modality` passes through gateway/agent and is audited only)* | operator-portal, platform-gateway, agent-service | enabled (browser-capability gated) |
+| **Agent-driven context compression (`CompressContext`, SPEC-064)** | `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=true` + `AGENTSCOPE_CONTEXT_TRIGGER_RATIO>0.2`; *(no execution/audit surface — kernel-local, state-only, no `offloader`)* | agent-service | disabled (`false`) |
 
 ## Secure Password Generation and Delivery (SPEC-062)
 
@@ -438,6 +439,7 @@ Config fragment: `shared/platform-ops/gitops/dev-k8s/base/agent-platform/runtime
 | `AGENTSCOPE_REPLY_INPUT_TOKEN_WEIGHT` | Input token weight for the reply budget (must be >= 0; `0` is valid) | `1.0` | code default |
 | `AGENTSCOPE_REPLY_OUTPUT_TOKEN_WEIGHT` | Output token weight for the reply budget (must be >= 0; `0` is valid) | `1.0` | code default |
 | `AGENTSCOPE_TASK_TOOLS_ENABLED` | Opt-in agentscope task tools (`TaskCreate`/`TaskGet`/`TaskList`/`TaskUpdate`; state-local, persisted via the agent state store) | `false` | code default |
+| `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` | Opt-in agent-driven context compression (`CompressContext`, SPEC-064 R-2): registers the kernel-local tool that reuses the threshold `_compress_context_impl` to summarize `state.summary`/`state.context`. State-only, no `offloader` wired, no new audit/evidence event. Requires `AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2` (agentscope `context_buffer_ratio`); rejected at startup otherwise | `false` | code default |
 | `AGENT_AUDIT_SERVICE_URL` | Audit-service ingest URL for agent-service emissions (SPEC-037 execution events); unset degrades to log-only auditing | `http://audit-service:8000` | runtime-config |
 | `AGENT_AUDIT_CLIENT_ID` | Audit ingest client id for agent-service; must match an `AUDIT_INGEST_CLIENTS` entry | `agent-service` | runtime-config |
 | `AGENT_INCIDENT_SERVICE_URL` | incident-service base URL for incident-report document assembly (SPEC-043); unset fails incident-report creation closed (503) | `http://incident-service:8000` (dev-k8s) | runtime-config |

@@ -17,6 +17,7 @@ import jsonschema
 from agent_service.services.kernel_middleware import (
     AUTO_ALLOW_ENV,
     AUTO_ALLOW_EXTRA_ENV,
+    COMPRESS_CONTEXT_TOOL_NAME,
     PENDING_RELEASE_DELIVERIES,
     STREAM_PENDING_DELIVERIES,
     TASK_TOOL_NAMES,
@@ -486,6 +487,30 @@ class GatewayPermissionMiddlewareTests(unittest.TestCase):
         decision, calls = self._decide(mw, tool)
         self.assertEqual(decision.behavior, PermissionBehavior.ALLOW)
         self.assertEqual(calls, [])
+
+    def test_compress_context_tool_always_allowed(self) -> None:
+        """SPEC-064 R-2: the opt-in agent-driven CompressContext tool only
+        summarizes the agent's own working context into state.summary /
+        state.context and never touches an external system, so it joins the
+        task tools and GenerateStructuredOutput as a kernel-local always-allow.
+        Parking it on the headless ASK gate would wedge compression."""
+        from agentscope.permission import PermissionBehavior
+
+        mw = GatewayPermissionMiddleware()
+        tool = _StubTool(COMPRESS_CONTEXT_TOOL_NAME, is_read_only=False)
+        decision, calls = self._decide(mw, tool)
+        self.assertEqual(decision.behavior, PermissionBehavior.ALLOW)
+        self.assertEqual(calls, [])
+
+    def test_compress_context_tool_is_kernel_local(self) -> None:
+        """SPEC-064 R-2: CompressContext must be a KERNEL-local name so the
+        permission gate short-circuits it before the read-only allow-list and
+        the run-stop DENY path (it is not a mutating gateway call)."""
+        from agent_service.services.kernel_middleware import (
+            KERNEL_LOCAL_TOOL_NAMES,
+        )
+
+        self.assertIn(COMPRESS_CONTEXT_TOOL_NAME, KERNEL_LOCAL_TOOL_NAMES)
 
     def test_env_override_scopes_auto_approval(self) -> None:
         from agentscope.permission import PermissionBehavior

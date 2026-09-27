@@ -688,6 +688,35 @@ class TestKernelConfigs:
         assert configs["injection_config"].timezone == "UTC"
         assert configs["model_config"].max_retries == 0
 
+    def test_configs_disable_compression_tool_by_default(self):
+        """SPEC-064 R-2: agent-driven compression is opt-in. The default kernel
+        config leaves ``compression_tool_enabled`` False, so agentscope never
+        registers the ``CompressContext`` tool and the kernel is byte-identical
+        to v0.43.2 (threshold compression still runs off ``trigger_ratio``)."""
+        kernel = AgentKernel(settings=RuntimeSettings(api_key="test-key"))
+
+        configs = kernel._build_kernel_configs()
+
+        assert configs["context_config"].compression_tool_enabled is False
+
+    def test_configs_enable_compression_tool_when_opted_in(self):
+        """SPEC-064 R-2: the opt-in knob maps straight onto
+        ``ContextConfig.compression_tool_enabled``. No ``offloader`` is wired —
+        the kernel builds its Agent without one, so compression state stays in
+        ``state.summary``/``state.context`` (SPEC-017 snapshot-covered) instead
+        of a pod-local Workspace file."""
+        kernel = AgentKernel(
+            settings=RuntimeSettings(
+                api_key="test-key",
+                compress_context_enabled=True,
+            )
+        )
+
+        configs = kernel._build_kernel_configs()
+
+        assert configs["context_config"].compression_tool_enabled is True
+        assert configs["context_config"].trigger_ratio == 0.8
+
 
 # ---------------------------------------------------------------------------
 # SPEC-017 R-2: structured output round trip

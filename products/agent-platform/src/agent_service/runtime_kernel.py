@@ -594,9 +594,19 @@ class AgentKernel:
         settings = self.settings
         return {
             "model_config": ModelConfig(max_retries=settings.model_max_retries),
+            # SPEC-064 R-2: ``compression_tool_enabled`` adds the opt-in
+            # ``CompressContext`` tool (default off). Deliberately no
+            # ``offloader`` is wired into the Agent: the offloader would write
+            # compressed context to a Workspace filesystem path, which breaches
+            # the read-only posture (gate point 3) and lands pod-local state on
+            # the emptyDir workspace volume — invisible to other replicas and
+            # lost on reschedule. Compression state stays in
+            # ``state.summary``/``state.context`` and rides the SPEC-017
+            # snapshot, which is shared and durable across replicas.
             "context_config": ContextConfig(
                 trigger_ratio=settings.context_trigger_ratio,
                 tool_result_limit=settings.tool_result_limit,
+                compression_tool_enabled=settings.compress_context_enabled,
             ),
             "react_config": ReActConfig(max_iters=settings.max_iters),
             "injection_config": InjectionConfig(

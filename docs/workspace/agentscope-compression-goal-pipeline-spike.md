@@ -136,11 +136,49 @@ threshold compression; adopting the agent-triggered path does not widen it.
   the headless ASK gate (`kernel_middleware.py:313-337`). agentscope also marks the tool
   `ALLOW`, but the platform middleware applies its own KERNEL-local/read-only logic, so the
   explicit membership is required — the task-tools/`GenerateStructuredOutput` precedent.
-- Do **not** pass an `offloader` (gate point 3).
+- Do **not** pass an `offloader` (gate point 3; see §2.6 for the deployment-topology
+  rationale).
 - Tests: opt-in gating (off ⇒ tool absent, on ⇒ present); state persistence across
   snapshot/restore; no evidence frame / no type leak; `agent-stream-event.schema.json`
   byte-stability; coexistence with threshold compression (no double-compress, truncation
   markers intact).
+
+### 2.6 Why the offloader stays unwired (deployment topology)
+
+Gate point 3 is not the only reason to leave `offloader=None`; the k8s deployment shape
+makes an offloader actively wrong for this runtime.
+
+- **The workspace volume is pod-local `emptyDir`.** The agent-service deployment mounts its
+  workspace dir as `emptyDir: {}` at `/var/lib/luban-aiops/workspaces`
+  ([`agent-service-deployment.yaml`](../../shared/platform-ops/gitops/dev-k8s/base/agent-platform/agent-service-deployment.yaml)),
+  with `AGENTSCOPE_WORKSPACE_DIR=/var/lib/luban-aiops/workspaces/agent-platform`. An
+  offloader (`LocalWorkspace`) writes `sessions/<id>/context.jsonl` into that emptyDir —
+  node-local, ephemeral storage that is **not shared** across pods and is **wiped on pod
+  deletion / reschedule / eviction**.
+- **Durable state is externalized by design.** The SPEC-017 snapshot goes to a *shared*
+  store (`AGENT_STATE_STORE_BACKEND` = in-memory for dev/CI, **Postgres** deployed;
+  [`agent_state_store.py`](../../products/agent-platform/src/agent_service/services/agent_state_store.py)),
+  which is why any replica can restore a session. An offloader would fork durability: the
+  governed summary stays in Postgres while the evicted raw context lands on pod-local disk.
+- **Multi-replica ⇒ divergent copies.** The base currently pins `replicas: 1`, so the
+  split-copy problem is *latent*, not active. The moment the service scales out (the whole
+  point of its stateless shape), with no session affinity consecutive turns of one session
+  land on different pods and **each pod's emptyDir accumulates its own partial
+  `context.jsonl`**. The injected `<system-reminder>` — "the compressed context is offloaded
+  to '<path>', you can refer to it when needed" (`_agent.py:715-719`) — would then point the
+  model at a path that is missing or stale on the pod handling the next turn.
+- **Broken even at `replicas: 1`.** After a reschedule the Postgres snapshot survives and the
+  summary still references path X, but X is gone; the model may try to `Read` a missing file.
+  Fixing this across replicas would require a shared ReadWriteMany PV (NFS/CephFS) — a whole
+  infrastructure addition — and *even then* the Gate-3 breaches remain (ungoverned write/exec
+  surface; unmasked plaintext copy of history outside `redact_structure` / SPEC-025 /
+  SPEC-039).
+
+Conclusion: the offloader reintroduces pod-local mutable state, fundamentally incompatible
+with a stateless, horizontally-scalable, externally-durable agent runtime. Compression as a
+pure `state.summary`/`state.context` rewrite already rides the shared, durable, masked
+snapshot — so the offloader would add risk and duplicate storage while providing nothing the
+platform does not already govern. **R-2 keeps `offloader=None`.**
 
 ## 3. `GoalPipeline` — evidence and gate scoring
 
@@ -214,6 +252,12 @@ adopting `GoalPipeline`.
 
 ## Changelog
 
+- 2026-09-27: added §2.6 "Why the offloader stays unwired (deployment topology)" and
+  cross-referenced it from §2.5, recording the operator-raised multi-replica concern:
+  the agent runtime runs in-cluster with `replicas: 1` and the workspace mounted as
+  `emptyDir`, so an offloader would persist divergent pod-local context copies that the
+  shared SPEC-017 Postgres snapshot never sees — split-brain on scale-out and total loss
+  on reschedule. Reinforces the R-2 decision to keep `offloader=None`.
 - 2026-09-27: initial assessment (SPEC-064 R-1). Static inspection of the locked
   agentscope 2.0.8 install and the agent-platform kernel integration at 0.43.2
   (`96a301e`). Verdicts: `CompressContext` clears the four-point gate (adopt, opt-in,

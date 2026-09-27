@@ -102,7 +102,19 @@ TASK_TOOL_NAMES = frozenset({
 # touches external systems, so it must never park on the ASK gate either.
 STRUCTURED_OUTPUT_TOOL_NAME = "GenerateStructuredOutput"
 
-KERNEL_LOCAL_TOOL_NAMES = TASK_TOOL_NAMES | {STRUCTURED_OUTPUT_TOOL_NAME}
+# Kernel-built-in agent-driven context compression tool (SPEC-064 R-2): it
+# only summarizes the agent's own working context into state.summary /
+# state.context and never touches external systems, so — like the task tools
+# and GenerateStructuredOutput — it must never park on the headless ASK gate.
+# Opt-in via AGENTSCOPE_COMPRESS_CONTEXT_ENABLED; agentscope only registers the
+# tool when ContextConfig.compression_tool_enabled is set, so this membership is
+# inert when the knob is off.
+COMPRESS_CONTEXT_TOOL_NAME = "CompressContext"
+
+KERNEL_LOCAL_TOOL_NAMES = TASK_TOOL_NAMES | {
+    STRUCTURED_OUTPUT_TOOL_NAME,
+    COMPRESS_CONTEXT_TOOL_NAME,
+}
 
 # Vetted tool names that may bypass the permission gate. Only read-only
 # tools on this explicit allow-list are auto-approved; every other tool is

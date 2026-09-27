@@ -634,6 +634,49 @@ def test_kernel_settings_reject_negative_model_max_retries():
         raise AssertionError("model_max_retries < 0 should be rejected")
 
 
+def test_compress_context_disabled_by_default(monkeypatch):
+    """SPEC-064 R-2: agent-driven compression is opt-in. An unset deployment
+    leaves the tool disabled, so the kernel behaves exactly as before."""
+    monkeypatch.delenv("AGENTSCOPE_COMPRESS_CONTEXT_ENABLED", raising=False)
+
+    settings = RuntimeSettings.from_env()
+
+    assert settings.compress_context_enabled is False
+
+
+def test_compress_context_reads_env(monkeypatch):
+    monkeypatch.setenv("AGENTSCOPE_COMPRESS_CONTEXT_ENABLED", "true")
+
+    settings = RuntimeSettings.from_env()
+
+    assert settings.compress_context_enabled is True
+
+
+def test_compress_context_requires_trigger_ratio_above_buffer():
+    """SPEC-064 R-2: agentscope fires the tool at trigger_ratio -
+    context_buffer_ratio and validates context_buffer_ratio < trigger_ratio,
+    so enabling compression with a trigger_ratio at/below the 0.2 buffer
+    default must fail startup rather than wedge at agent-build time."""
+    try:
+        RuntimeSettings(compress_context_enabled=True, context_trigger_ratio=0.2)
+    except ValueError as exc:
+        assert "AGENTSCOPE_COMPRESS_CONTEXT_ENABLED" in str(exc)
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError(
+            "compression with trigger_ratio <= context_buffer_ratio "
+            "should be rejected"
+        )
+
+
+def test_compress_context_accepts_trigger_ratio_above_buffer():
+    settings = RuntimeSettings(
+        compress_context_enabled=True,
+        context_trigger_ratio=0.8,
+    )
+
+    assert settings.compress_context_enabled is True
+
+
 def test_kernel_settings_reject_unknown_timezone():
     try:
         RuntimeSettings(timezone="Mars/Olympus_Mons")

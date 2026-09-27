@@ -65,6 +65,13 @@ SUPPORTED_RUNTIME_PROVIDERS = ("dashscope", "deepseek", "openai", "luban")
 DeepSeekReasoningEffort = Literal["high", "max"]
 OpenAIReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 
+# agentscope ``ContextConfig.context_buffer_ratio`` default. The kernel does not
+# override it, so ``trigger_ratio`` must stay strictly above it: agentscope's
+# ``Agent._validate_configs`` requires ``context_buffer_ratio < trigger_ratio``
+# whenever runtime-state injection or the compression tool is active. Mirrored
+# here only to fail startup early (SPEC-064 R-2), never to configure agentscope.
+_AGENTSCOPE_CONTEXT_BUFFER_RATIO = 0.2
+
 
 def _optional_str(name: str) -> str | None:
     value = os.getenv(name)
@@ -167,6 +174,15 @@ class RuntimeSettings:
     reply_input_token_weight: float = 1.0
     reply_output_token_weight: float = 1.0
     task_tools_enabled: bool = False
+    # Agent-driven context compression (SPEC-064 R-2): opt-in tool that lets
+    # the kernel agent compress its own working context between tasks. It
+    # reuses the identical ``_compress_context_impl`` the threshold trigger
+    # already runs, so it changes *who* triggers compression, not the
+    # mechanism. Default off — an unset deployment is byte-identical to
+    # v0.43.2 (threshold compression still runs). The kernel never wires the
+    # optional agentscope ``offloader``: compression state stays in
+    # ``state.summary``/``state.context`` and rides the SPEC-017 snapshot.
+    compress_context_enabled: bool = False
     # HITL confirmation bridging (SPEC-020 R-2): seconds a parked kernel
     # confirmation stays answerable. 0 disables the bridge and restores the
     # pre-SPEC-020 silent-park posture.
@@ -293,6 +309,22 @@ class RuntimeSettings:
             raise ValueError(
                 "AGENTSCOPE_CONTEXT_TRIGGER_RATIO must be in the open "
                 "interval (0, 0.9)."
+            )
+        # SPEC-064 R-2: the opt-in compression tool fires ahead of the hard
+        # threshold at ``trigger_ratio - context_buffer_ratio``, so agentscope
+        # requires ``context_buffer_ratio < trigger_ratio``. inject_runtime_state
+        # is always True in the kernel (so this is already implied), but pin it
+        # here so a future AGENTSCOPE_CONTEXT_TRIGGER_RATIO change cannot silently
+        # wedge the compression tool at agent-build time.
+        if (
+            self.compress_context_enabled
+            and self.context_trigger_ratio <= _AGENTSCOPE_CONTEXT_BUFFER_RATIO
+        ):
+            raise ValueError(
+                "AGENTSCOPE_COMPRESS_CONTEXT_ENABLED requires "
+                "AGENTSCOPE_CONTEXT_TRIGGER_RATIO > "
+                f"{_AGENTSCOPE_CONTEXT_BUFFER_RATIO} (agentscope "
+                "context_buffer_ratio)."
             )
         if self.tool_result_limit < 1:
             raise ValueError("AGENTSCOPE_TOOL_RESULT_LIMIT must be >= 1.")
@@ -494,6 +526,9 @@ class RuntimeSettings:
             ),
             task_tools_enabled=(
                 _optional_bool("AGENTSCOPE_TASK_TOOLS_ENABLED") or False
+            ),
+            compress_context_enabled=(
+                _optional_bool("AGENTSCOPE_COMPRESS_CONTEXT_ENABLED") or False
             ),
             hitl_confirm_timeout=int(os.getenv("AGENT_HITL_CONFIRM_TIMEOUT", "600")),
             email_recipient_allowlist=tuple(
