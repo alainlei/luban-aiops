@@ -16,6 +16,7 @@
 - [agent-platform runtime-config.env](file://shared/platform-ops/gitops/dev-k8s/base/agent-platform/runtime-config.env)
 - [skills-hub runtime-config.env](file://shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env)
 - [kernel_middleware.py](file://products/agent-platform/src/agent_service/services/kernel_middleware.py)
+- [runtime_settings.py](file://products/agent-platform/src/agent_service/runtime_settings.py)
 - [config.py](file://products/tool-gateway/src/tool_gateway/core/config.py)
 - [skills_hub config.py](file://products/skills-hub/src/skills_hub/core/config.py)
 - [skills_hub ingestion.py](file://products/skills-hub/src/skills_hub/services/ingestion.py)
@@ -25,12 +26,12 @@
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive documentation for the new `GATEWAY_SECRET_DELIVERY_HOLD_TTL_SECONDS` environment variable (default 900 seconds) for portal_copy channel TTL management in gated workflows
-- Updated configuration validation section to include positive integer constraints for both standard and hold TTL values
-- Enhanced secret delivery configuration section with detailed explanation of portal_copy channel behavior and HITL approval timing
-- Added troubleshooting guidance for secret delivery TTL validation failures
-- Updated performance considerations to address secret delivery buffer management
-- Added reference to SPEC-062 secure password generation and delivery feature
+- Added comprehensive documentation for the new `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` environment variable for enabling agent-driven context compression (SPEC-064 R-2)
+- Updated configuration validation section to include trigger ratio constraints for compression functionality
+- Enhanced agent platform configuration section with detailed explanation of context compression behavior and relationship to trigger ratio configuration
+- Added troubleshooting guidance for compression-related startup failures
+- Updated performance considerations to address context compression impact on memory usage
+- Added reference to SPEC-064 agent-driven context compression feature
 
 ## Table of Contents
 1. Introduction
@@ -54,6 +55,7 @@ This document explains how the Luban AIOPS platform manages configuration and se
 - Best practices for managing configuration across development, staging, and production.
 - **New**: Skill composition configuration including the `SKILLS_COMPOSITION_MAX_SUB_SKILLS` operator-tunable limit for controlling the maximum number of sub-skills in compositions.
 - **Updated**: Secret delivery configuration including the `GATEWAY_SECRET_DELIVERY_HOLD_TTL_SECONDS` environment variable for portal_copy channel TTL management in gated workflows.
+- **New**: Agent-driven context compression configuration including the `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` environment variable for enabling proactive context summarization with trigger ratio validation.
 
 ## Project Structure
 The configuration is assembled with Kustomize. The dev overlay defines a configMapGenerator that merges multiple env files into one ConfigMap named platform-runtime-config. Runtime profiles add additional environment fragments (for example, default, mutating-dev, browser-dev). Product deployments reference these ConfigMaps and Secrets through their deployment manifests.
@@ -67,6 +69,7 @@ A --> E["Browser profile env<br/>browser-dev/browser.env"]
 B --> F["Platform services read ConfigMap at startup"]
 F --> G["Skills Hub<br/>Composition Limits"]
 F --> H["Tool Gateway<br/>Secret Delivery TTL"]
+F --> I["Agent Platform<br/>Context Compression"]
 ```
 
 **Diagram sources**
@@ -84,12 +87,14 @@ F --> H["Tool Gateway<br/>Secret Delivery TTL"]
 - Environment overlays: Profiles under runtime-profiles allow environment-specific configuration without changing application code.
 - **New**: Skills composition configuration: Operator-tunable limits for controlling the maximum number of sub-skills in skill compositions to prevent resource exhaustion and maintain security boundaries.
 - **Updated**: Secret delivery configuration: Portal_copy channel TTL management with configurable hold periods spanning full HITL approval workflows.
+- **New**: Agent-driven context compression: Opt-in feature that enables proactive context summarization before hard compression thresholds are reached, with strict trigger ratio validation.
 
 Key responsibilities:
 - Non-secret configuration: Managed via ConfigMap; changes can be applied without image rebuilds.
 - Secret configuration: Managed via Secrets; provisioned by sync scripts; changes require Secret updates and workload restarts.
 - **New**: Composition limits: Configurable bounds on skill composition complexity to balance functionality with resource constraints.
 - **Updated**: Secret delivery TTL: Configurable hold periods for portal_copy channels to support gated workflow scenarios.
+- **New**: Context compression: Opt-in agent-driven compression with trigger ratio validation to prevent premature context summarization.
 
 **Section sources**
 - [kustomization.yaml:9-15](file://shared/platform-ops/gitops/dev-k8s/kustomization.yaml#L9-L15)
@@ -103,6 +108,7 @@ The platform uses a layered configuration approach:
 - Secrets are provisioned separately by sync scripts and mounted into pods.
 - **New**: Skills composition limits are enforced at ingestion time through configurable bounds.
 - **Updated**: Secret delivery hold TTL spans full HITL approval workflows for portal_copy channels.
+- **New**: Agent-driven context compression is opt-in and validates trigger ratios against buffer constraints.
 
 ```mermaid
 graph TB
@@ -112,6 +118,7 @@ P2["Mutating profile env<br/>mutating-dev/mutating.env"]
 P3["Browser profile env<br/>browser-dev/browser.env"]
 P4["Skills Hub config<br/>SKILLS_COMPOSITION_MAX_SUB_SKILLS"]
 P5["Tool Gateway config<br/>GATEWAY_SECRET_DELIVERY_HOLD_TTL_SECONDS"]
+P6["Agent Platform config<br/>AGENTSCOPE_COMPRESS_CONTEXT_ENABLED"]
 end
 subgraph "Kustomize Assembly"
 K["dev-k8s/kustomization.yaml<br/>configMapGenerator"]
@@ -121,7 +128,7 @@ CM["ConfigMap<br/>platform-runtime-config"]
 S1["Secrets<br/>per-product runtime-secrets"]
 end
 subgraph "Services"
-AG["Agent Service"]
+AG["Agent Service<br/>Context Compression"]
 PG["Platform Gateway"]
 TG["Tool Gateway<br/>Secret Delivery"]
 IB["Identity Broker"]
@@ -134,6 +141,7 @@ P2 --> K
 P3 --> K
 P4 --> K
 P5 --> K
+P6 --> K
 K --> CM
 S1 --> AG
 S1 --> PG
@@ -213,6 +221,63 @@ AGENT_GATEWAY_TOOL_AUTO_ALLOW=k8s.list_pods,k8s.get_pod,skills.search
 **Section sources**
 - [kernel_middleware.py:71-138](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L71-L138)
 - [agent-platform runtime-config.env:23-30](file://shared/platform-ops/gitops/dev-k8s/base/agent-platform/runtime-config.env#L23-L30)
+
+### Agent-driven context compression configuration
+**New Feature**: The agent-platform service now supports agent-driven context compression through SPEC-064 R-2, enabling proactive context summarization before hard compression thresholds are reached. The `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` environment variable provides operator control over this opt-in feature.
+
+**Configuration Details:**
+- **Variable**: `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED`
+- **Default**: `false` (opt-in, disabled by default)
+- **Source**: `runtime-config` (via Kustomize ConfigMap)
+- **Validation**: Requires `AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2` (agentscope context_buffer_ratio); invalid combinations cause startup failure with `ValueError`
+- **Purpose**: Enables the kernel agent to proactively compress its working context between tasks using the same mechanism as threshold-based compression
+
+**Compression Behavior:**
+- When enabled, the `CompressContext` tool is registered in the kernel toolkit and runs ahead of hard compression
+- Fires at `trigger_ratio - context_buffer_ratio` (typically 0.6 when trigger_ratio=0.8), providing early compression before reaching hard threshold
+- Reuses the existing `_compress_context_impl` mechanism, so it changes *who* triggers compression, not the mechanism itself
+- State-only operation: no external network calls, no evidence events, no audit trail beyond normal session persistence
+- Persists compression state via existing SPEC-017 snapshot/restore mechanism
+
+**Security Implications:**
+- Context-only operation: compression performs no infrastructure access, cannot reach network/filesystem/connectors
+- Identity unchanged: compression path carries identity only via existing delegated-token contextvar
+- Contract boundary unchanged: no agentscope types leak through v2 contract
+- Kernel-local tool: always allowed, never parks on headless ASK gate
+- No offloader wired: compression state stays in `state.summary`/`state.context`, rides SPEC-017 snapshot
+
+**Trigger Ratio Validation:**
+- Must satisfy `context_buffer_ratio < trigger_ratio` (agentscope requirement)
+- With default `context_buffer_ratio = 0.2`, requires `AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2`
+- Startup validation prevents wedge conditions at agent-build time
+- Error message explicitly references `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` when validation fails
+
+**Behavior Matrix:**
+| Value | Behavior | Use Case |
+|-------|----------|----------|
+| `false` (default) | No agent-driven compression | Standard deployments, backward compatible |
+| `true` + trigger_ratio > 0.2 | Proactive compression at 0.6 threshold | Memory-constrained environments, long sessions |
+| `true` + trigger_ratio ≤ 0.2 | Startup failure with validation error | Misconfiguration prevention |
+
+**Example Configuration:**
+```bash
+# Development environment - enable proactive compression
+AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=true
+AGENTSCOPE_CONTEXT_TRIGGER_RATIO=0.8
+
+# Production environment - conservative compression timing
+AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=true
+AGENTSCOPE_CONTEXT_TRIGGER_RATIO=0.7
+
+# High-memory environment - disable to avoid overhead
+AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=false
+```
+
+**Section sources**
+- [runtime_settings.py:177-185](file://products/agent-platform/src/agent_service/runtime_settings.py#L177-L185)
+- [runtime_settings.py:313-328](file://products/agent-platform/src/agent_service/runtime_settings.py#L313-L328)
+- [runtime_settings.py:530-532](file://products/agent-platform/src/agent_service/runtime_settings.py#L530-L532)
+- [kernel_middleware.py:105-117](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L105-L117)
 
 ### Secret management strategy
 Secrets are provisioned using dedicated sync scripts. Each script handles a specific concern:
@@ -323,8 +388,8 @@ SKILLS_COMPOSITION_MAX_SUB_SKILLS=4
 
 **Section sources**
 - [skills_hub config.py:161-178](file://products/skills-hub/src/skills_hub/core/config.py#L161-L178)
-- [skills_hub config.py:188-191](file://products/skills-hub/src/skills_hub/core/config.py#L188-L191)
-- [skills_hub config.py:211-213](file://products/skills-hub/src/skills_hub/core/config.py#L211-L213)
+- [skills_hub config.py:188-191](file://products/skills_hub/src/skills_hub/core/config.py#L188-L191)
+- [skills_hub config.py:211-213](file://products/skills_hub/src/skills_hub/core/config.py#L211-L213)
 - [skills-hub runtime-config.env:4-8](file://shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env#L4-L8)
 
 ### Secret delivery configuration
@@ -387,6 +452,7 @@ GATEWAY_SECRET_DELIVERY_HOLD_TTL_SECONDS=600
 - Browser-dev profile: Adds browser-related configuration via browser.env and patches tool-gateway with a sidecar. Also enables HTTP connectors for service health checks.
 - **New**: Skills composition limits can be tuned per environment based on security requirements and operational needs.
 - **Updated**: Secret delivery hold TTL can be configured per environment based on HITL workflow requirements.
+- **New**: Agent-driven context compression can be enabled per environment based on memory constraints and session length requirements.
 
 To switch environments:
 - Select or create a runtime profile under runtime-profiles.
@@ -406,11 +472,13 @@ To switch environments:
 - Agent auto-allow validation: Tools listed in auto-allow configuration must be read-only; mutating tools are logged as misconfiguration but remain available for HITL approval.
 - **New**: Skills composition validation: Invalid `SKILLS_COMPOSITION_MAX_SUB_SKILLS` values (non-integer or < 1) cause immediate startup failure with descriptive error messages.
 - **Updated**: Secret delivery validation: Both `GATEWAY_SECRET_DELIVERY_TTL_SECONDS` and `GATEWAY_SECRET_DELIVERY_HOLD_TTL_SECONDS` must be positive integers; invalid values cause startup failure with `ValueError("Secret delivery TTL and capacity must be positive integers")`.
+- **New**: Context compression validation: When `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=true`, requires `AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2`; invalid combinations cause startup failure with `ValueError` referencing the compression setting.
 
 Operational guidance:
 - Validate that all required keys are present in the relevant runtime-secrets.env files before applying.
 - Use the SKIP_* environment variables in sync scripts to bypass provisioning when CI injects secrets externally.
 - Verify auto-allow list composition matches expected behavior for your environment.
+- **New**: Test context compression configuration with appropriate trigger ratios to ensure proper startup.
 - **New**: Test composition limits during development to ensure they meet operational requirements before production deployment.
 - **Updated**: Verify secret delivery TTL values are appropriate for your HITL workflow timing requirements.
 
@@ -424,12 +492,15 @@ Operational guidance:
 - Agent auto-allow changes: Update `AGENT_GATEWAY_TOOL_AUTO_ALLOW` or `AGENT_GATEWAY_TOOL_AUTO_ALLOW_EXTRA` through ConfigMap updates; changes take effect on service restart.
 - **New**: Skills composition limit changes: Update `SKILLS_COMPOSITION_MAX_SUB_SKILLS` through ConfigMap updates; changes take effect on skills-hub service restart.
 - **Updated**: Secret delivery hold TTL changes: Update `GATEWAY_SECRET_DELIVERY_HOLD_TTL_SECONDS` through ConfigMap updates; changes take effect on tool-gateway service restart.
+- **New**: Context compression changes: Update `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` and `AGENTSCOPE_CONTEXT_TRIGGER_RATIO` through ConfigMap updates; changes take effect on agent-service restart with proper trigger ratio validation.
 
 Best practice:
 - Keep non-secret configuration in profile env files and ConfigMaps.
 - Keep sensitive configuration in Secrets and manage them exclusively via sync scripts.
 - Test HTTP and browser connector configurations in development profiles before promoting to production.
 - Use additive auto-allow patterns (`_EXTRA` variables) for environment-specific opt-ins rather than replacing entire default lists.
+- **New**: Test context compression with appropriate trigger ratios in development to validate memory savings before production deployment.
+- **New**: Ensure trigger ratio validation passes before enabling compression in production environments.
 - **New**: Test composition limits thoroughly in development environments to validate workflow complexity requirements before production deployment.
 - **Updated**: Test secret delivery hold TTL values to ensure they accommodate your HITL approval workflow timing before production deployment.
 
@@ -556,7 +627,7 @@ echo "Testing composition with $(cat /proc/self/environ | tr '\0' '\n' | grep SK
 
 **Section sources**
 - [skills-hub runtime-config.env:4-8](file://shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env#L4-L8)
-- [skills_hub config.py:161-178](file://products/skills-hub/src/skills_hub/core/config.py#L161-L178)
+- [skills_hub config.py:161-178](file://products/skills_hub/src/skills_hub/core/config.py#L161-L178)
 
 #### Configuring secret delivery hold TTL for gated workflows
 **Updated Scenario**: Configure the portal_copy channel hold TTL to support gated workflow scenarios where passwords are generated before HITL approval completes.
@@ -599,6 +670,40 @@ echo "Testing secret delivery with $(cat /proc/self/environ | tr '\0' '\n' | gre
 - [tool-gateway runtime-config.env:84-97](file://shared/platform-ops/gitops/dev-k8s/base/tool-gateway/runtime-config.env#L84-L97)
 - [config.py:373-378](file://products/tool-gateway/src/tool_gateway/core/config.py#L373-L378)
 
+#### Enabling agent-driven context compression
+**New Scenario**: Enable proactive context compression to reduce memory usage in long-running agent sessions by summarizing context before reaching hard compression thresholds.
+
+**Development Environment (Aggressive Compression):**
+```bash
+# Enable compression with standard trigger ratio
+AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=true
+AGENTSCOPE_CONTEXT_TRIGGER_RATIO=0.8
+```
+
+**Production Environment (Conservative Compression):**
+```bash
+# Enable compression with earlier trigger for memory efficiency
+AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=true
+AGENTSCOPE_CONTEXT_TRIGGER_RATIO=0.7
+```
+
+**High-Memory Environment (Disable Compression):**
+```bash
+# Disable compression to avoid overhead in memory-rich environments
+AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=false
+```
+
+**Validation Testing:**
+```bash
+# Test compression configuration with current trigger ratio
+echo "Testing compression with $(cat /proc/self/environ | tr '\0' '\n' | grep AGENTSCOPE_COMPRESS_CONTEXT_ENABLED)"
+echo "Trigger ratio: $(cat /proc/self/environ | tr '\0' '\n' | grep AGENTSCOPE_CONTEXT_TRIGGER_RATIO)"
+```
+
+**Section sources**
+- [runtime_settings.py:177-185](file://products/agent-platform/src/agent_service/runtime_settings.py#L177-L185)
+- [runtime_settings.py:313-328](file://products/agent-platform/src/agent_service/runtime_settings.py#L313-L328)
+
 ### Conceptual overview
 ```mermaid
 flowchart TD
@@ -613,9 +718,12 @@ Verify --> CompositionCheck{"Skills composition limit?"}
 CompositionCheck --> |Yes| ValidateLimits["Validate SKILLS_COMPOSITION_MAX_SUB_SKILLS"]
 CompositionCheck --> |No| SecretDeliveryCheck{"Secret delivery TTL?"}
 SecretDeliveryCheck --> |Yes| ValidateTTL["Validate GATEWAY_SECRET_DELIVERY_HOLD_TTL_SECONDS"]
-SecretDeliveryCheck --> |No| Complete["Configuration complete"]
+SecretDeliveryCheck --> |No| CompressionCheck{"Context compression?"}
+CompressionCheck --> |Yes| ValidateCompression["Validate AGENTSCOPE_COMPRESS_CONTEXT_ENABLED + trigger ratio"]
+CompressionCheck --> |No| Complete["Configuration complete"]
 ValidateLimits --> Complete
 ValidateTTL --> Complete
+ValidateCompression --> Complete
 ```
 
 [No sources needed since this diagram shows conceptual workflow, not actual code structure]
@@ -632,6 +740,7 @@ The sync scripts coordinate dependencies across services and databases:
 - Agent auto-allow list depends on tool definitions being available at toolkit construction time.
 - **New**: Skills composition limits depend on proper validation of `SKILLS_COMPOSITION_MAX_SUB_SKILLS` during service startup.
 - **Updated**: Secret delivery hold TTL depends on proper validation of `GATEWAY_SECRET_DELIVERY_HOLD_TTL_SECONDS` during service startup and appropriate backend selection for multi-replica deployments.
+- **New**: Context compression depends on proper validation of trigger ratio constraints relative to buffer ratio during service startup.
 
 ```mermaid
 graph LR
@@ -643,10 +752,11 @@ TG --> SH["Skills Hub<br/>Composition Limits"]
 TG --> HTTP["HTTP Connectors"]
 TG --> BROWSER["Browser Connectors"]
 TG --> SECRET["Secret Delivery<br/>Hold TTL"]
-AG["Agent Service"] --> IS
+AG["Agent Service<br/>Context Compression"] --> IS
 AG --> SH
 AG --> EXEC["Execution Runtime"]
 AG --> AUTOALLOW["Auto-Allow List"]
+AG --> COMPRESS["Context Compression<br/>Trigger Ratio Validation"]
 IS --> DBI["Postgres 'incidents'"]
 SH --> DBS["Postgres 'skills'"]
 SH --> LIMITS["Composition Limits<br/>SKILLS_COMPOSITION_MAX_SUB_SKILLS"]
@@ -656,6 +766,7 @@ BROWSER --> ACME["Acme Admin Sample"]
 AUTOALLOW --> TOOLS["Gateway Tools"]
 LIMITS --> VALIDATION["Ingestion Validation"]
 SECRET --> BUFFER["Delivery Buffer<br/>Memory/Redis"]
+COMPRESS --> TRIGGER["Trigger Ratio<br/>Buffer Validation"]
 ```
 
 **Diagram sources**
@@ -665,8 +776,9 @@ SECRET --> BUFFER["Delivery Buffer<br/>Memory/Redis"]
 - [sync-execution-signing-secret.sh:1-72](file://shared/platform-ops/gitops/sync-execution-signing-secret.sh#L1-L72)
 - [sync-sessions-db.sh:1-46](file://shared/platform-ops/gitops/sync-sessions-db.sh#L1-L46)
 - [kernel_middleware.py:117-138](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L117-L138)
-- [skills_hub config.py:161-178](file://products/skills-hub/src/skills_hub/core/config.py#L161-L178)
+- [skills_hub config.py:161-178](file://products/skills_hub/src/skills_hub/core/config.py#L161-L178)
 - [config.py:373-378](file://products/tool-gateway/src/tool_gateway/core/config.py#L373-L378)
+- [runtime_settings.py:313-328](file://products/agent-platform/src/agent_service/runtime_settings.py#L313-L328)
 
 **Section sources**
 - [sync-delegation-secrets.sh:1-97](file://shared/platform-ops/gitops/sync-delegation-secrets.sh#L1-L97)
@@ -690,6 +802,9 @@ SECRET --> BUFFER["Delivery Buffer<br/>Memory/Redis"]
 - **Updated**: Secret delivery hold TTL impacts memory usage in the delivery buffer; longer hold periods retain secrets longer in memory.
 - **Updated**: Multi-replica deployments require Redis backend for secret delivery to persist held values across restarts.
 - **Updated**: Consider the relationship between `GATEWAY_SECRET_DELIVERY_HOLD_TTL_SECONDS` and `GATEWAY_SECRET_DELIVERY_MAX_ENTRIES` for capacity planning.
+- **New**: Context compression reduces memory usage in long-running sessions by proactively summarizing context; enable in memory-constrained environments.
+- **New**: Context compression adds CPU overhead for summarization operations; monitor agent performance when enabling compression.
+- **New**: Trigger ratio affects compression frequency; lower ratios trigger compression earlier but may result in more aggressive summarization.
 
 [No sources needed since this section provides general guidance]
 
@@ -715,6 +830,9 @@ Common issues and resolutions:
 - **Updated**: Portal copy delivery expired prematurely: Verify that `GATEWAY_SECRET_DELIVERY_HOLD_TTL_SECONDS` is sufficient to span your HITL approval workflow duration. Consider increasing the hold TTL if approvals take longer than expected.
 - **Updated**: Multi-replica secret delivery issues: Ensure Redis backend is configured for multi-replica deployments to persist held deliveries across restarts. Check Redis connectivity and authentication.
 - **Updated**: Secret delivery buffer capacity exceeded: Monitor `GATEWAY_SECRET_DELIVERY_MAX_ENTRIES` and increase if you're experiencing eviction of held deliveries. Check for leaked delivery handles in long-running processes.
+- **New**: Context compression startup failure: Check `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` and `AGENTSCOPE_CONTEXT_TRIGGER_RATIO` values. Ensure trigger ratio is greater than 0.2 (buffer ratio). Review startup error messages for specific validation failures.
+- **New**: Context compression not triggering: Verify that compression is enabled and trigger ratio is properly configured. Check agent logs for compression activity and memory usage patterns.
+- **New**: Excessive compression overhead: Consider adjusting trigger ratio or disabling compression if CPU overhead is too high. Monitor agent performance metrics.
 
 **Updated** After SPEC-061, the browser-dev profile no longer includes the static browser-check-target app, so browser navigation is only permitted to the acme-admin sample application.
 
@@ -732,6 +850,8 @@ Verification steps:
 - **New**: Test composition creation with various sub-skill counts to validate limit enforcement.
 - **Updated**: Verify tool-gateway logs for secret delivery TTL validation and successful portal copy delivery handling.
 - **Updated**: Test secret delivery flows with various hold TTL values to validate portal copy channel behavior.
+- **New**: Verify agent-service logs for context compression activation and trigger ratio validation.
+- **New**: Monitor agent memory usage patterns to validate compression effectiveness.
 
 **Section sources**
 - [sync-runtime-secret.sh:1-29](file://shared/platform-ops/gitops/sync-runtime-secret.sh#L1-L29)
@@ -751,9 +871,10 @@ Luban's configuration system separates non-secret and secret concerns:
 - Agent auto-allow list configuration supports both hardened defaults and environment-specific opt-ins through additive patterns.
 - **New**: Skills composition configuration provides operator control over composition complexity through the `SKILLS_COMPOSITION_MAX_SUB_SKILLS` knob, balancing functionality with security and resource constraints.
 - **Updated**: Secret delivery configuration provides operator control over portal_copy channel hold periods through the `GATEWAY_SECRET_DELIVERY_HOLD_TTL_SECONDS` knob, supporting gated workflow scenarios with configurable TTL validation.
+- **New**: Agent-driven context compression configuration provides operator control over proactive context summarization through the `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` knob, with strict trigger ratio validation to ensure proper compression timing.
 - Following the documented procedures ensures consistent, auditable, and recoverable configuration management across development, staging, and production.
 
-**Updated** The retirement of browser-check-target per SPEC-061 simplifies the browser configuration surface while maintaining full functionality through the stateful acme-admin sample application. The addition of `AGENT_GATEWAY_TOOL_AUTO_ALLOW_EXTRA` provides more granular control over tool auto-approval while maintaining security-hardened defaults. **New**: The introduction of `SKILLS_COMPOSITION_MAX_SUB_SKILLS` enables fine-grained control over skill composition complexity, supporting diverse operational requirements from high-security environments to development scenarios. **Updated**: The addition of `GATEWAY_SECRET_DELIVERY_HOLD_TTL_SECONDS` enables precise control over portal_copy channel TTL management, supporting gated workflow scenarios with robust validation and flexible backend options.
+**Updated** The retirement of browser-check-target per SPEC-061 simplifies the browser configuration surface while maintaining full functionality through the stateful acme-admin sample application. The addition of `AGENT_GATEWAY_TOOL_AUTO_ALLOW_EXTRA` provides more granular control over tool auto-approval while maintaining security-hardened defaults. **New**: The introduction of `SKILLS_COMPOSITION_MAX_SUB_SKILLS` enables fine-grained control over skill composition complexity, supporting diverse operational requirements from high-security environments to development scenarios. **Updated**: The addition of `GATEWAY_SECRET_DELIVERY_HOLD_TTL_SECONDS` enables precise control over portal_copy channel TTL management, supporting gated workflow scenarios with robust validation and flexible backend options. **New**: The addition of `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` enables proactive context compression for memory optimization in long-running agent sessions, with comprehensive validation to prevent misconfiguration.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -894,9 +1015,9 @@ SKILLS_COMPOSITION_MAX_SUB_SKILLS=4
 ```
 
 **Section sources**
-- [skills_hub config.py:161-178](file://products/skills-hub/src/skills_hub/core/config.py#L161-L178)
-- [skills_hub config.py:188-191](file://products/skills-hub/src/skills_hub/core/config.py#L188-L191)
-- [skills_hub config.py:211-213](file://products/skills-hub/src/skills_hub/core/config.py#L211-L213)
+- [skills_hub config.py:161-178](file://products/skills_hub/src/skills_hub/core/config.py#L161-L178)
+- [skills_hub config.py:188-191](file://products/skills_hub/src/skills_hub/core/config.py#L188-L191)
+- [skills_hub config.py:211-213](file://products/skills_hub/src/skills_hub/core/config.py#L211-L213)
 - [skills-hub runtime-config.env:4-8](file://shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env#L4-L8)
 
 ### Secret Delivery Configuration Reference
@@ -961,3 +1082,56 @@ GATEWAY_SECRET_DELIVERY_MAX_ENTRIES=512
 - [config.py:373-378](file://products/tool-gateway/src/tool_gateway/core/config.py#L373-L378)
 - [secrets_connector.py:323-335](file://products/tool-gateway/src/tool_gateway/tools/secrets_connector.py#L323-L335)
 - [tool-gateway runtime-config.env:84-97](file://shared/platform-ops/gitops/dev-k8s/base/tool-gateway/runtime-config.env#L84-L97)
+
+### Agent-Driven Context Compression Configuration Reference
+**New Feature**: Agent-driven context compression configuration for SPEC-064 R-2 proactive context summarization.
+
+**Environment Variables:**
+- `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED`: Enable/disable agent-driven compression (default: false)
+- `AGENTSCOPE_CONTEXT_TRIGGER_RATIO`: Context compression trigger ratio (default: 0.8)
+
+**Configuration Options:**
+| Variable | Default | Purpose | Validation |
+|----------|---------|---------|------------|
+| `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` | false | Enable agent-driven compression | Boolean |
+| `AGENTSCOPE_CONTEXT_TRIGGER_RATIO` | 0.8 | Context compression trigger | Float in (0, 0.9) |
+
+**Compression Behavior:**
+- Opt-in feature that registers `CompressContext` tool in kernel toolkit
+- Fires at `trigger_ratio - context_buffer_ratio` (typically 0.6 when trigger_ratio=0.8)
+- Reuses existing `_compress_context_impl` mechanism for summarization
+- State-only operation: no external network calls, no evidence events
+- Persists via existing SPEC-017 snapshot/restore mechanism
+
+**Validation Rules:**
+- When enabled, requires `AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2` (buffer ratio)
+- Invalid trigger ratios cause startup failure with `ValueError`
+- Error message explicitly references `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED`
+- Context-only operation: no execution surface, no identity changes
+
+**Example Configuration:**
+```bash
+# Development environment - enable proactive compression
+AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=true
+AGENTSCOPE_CONTEXT_TRIGGER_RATIO=0.8
+
+# Production environment - conservative compression timing
+AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=true
+AGENTSCOPE_CONTEXT_TRIGGER_RATIO=0.7
+
+# High-memory environment - disable to avoid overhead
+AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=false
+```
+
+**Security Implications:**
+- Context-only: compression performs no infrastructure access
+- Identity unchanged: uses existing delegated-token contextvar
+- Contract boundary unchanged: no agentscope types leak through v2 contract
+- Kernel-local tool: always allowed, never parks on headless ASK gate
+- No offloader wired: compression state stays in agent state
+
+**Section sources**
+- [runtime_settings.py:177-185](file://products/agent-platform/src/agent_service/runtime_settings.py#L177-L185)
+- [runtime_settings.py:313-328](file://products/agent-platform/src/agent_service/runtime_settings.py#L313-L328)
+- [runtime_settings.py:530-532](file://products/agent-platform/src/agent_service/runtime_settings.py#L530-L532)
+- [kernel_middleware.py:105-117](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L105-L117)

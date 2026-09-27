@@ -23,6 +23,7 @@
 - Enhanced ToolEvidenceMiddleware documentation to cover secrets.generate_password interception and deferred delivery mechanism
 - Updated architecture diagrams to reflect the new delivery buffer system
 - Added detailed examples of gated secret delivery workflows
+- **New**: Added CompressContext tool integration documentation as kernel-local operation with AGENTSCOPE_COMPRESS_CONTEXT_ENABLED environment variable and validation guards requiring AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2
 
 ## Table of Contents
 1. Introduction
@@ -39,7 +40,7 @@
 ## Introduction
 This document explains the Agent Platform's runtime kernel and middleware system that coordinates agent execution, request context propagation, and cross-cutting concerns such as observability, security, and performance. It covers how the kernel composes middlewares for permission gating and evidence emission, how request IDs flow through tracing, and how metrics are collected. It also provides guidance for implementing custom middleware, extending the request pipeline, debugging runtime issues, and scaling for high-throughput scenarios.
 
-**Updated** The runtime kernel now features enhanced per-stream delivery buffers that enable gated secret delivery workflows, allowing secure one-time password generation with deferred reveal-on-commit semantics. This enhancement supports both standalone generate-and-copy scenarios and complex human-in-the-loop (HITL) approval workflows where secrets are only revealed when approved mutations commit successfully.
+**Updated** The runtime kernel now features enhanced per-stream delivery buffers that enable gated secret delivery workflows, allowing secure one-time password generation with deferred reveal-on-commit semantics. Additionally, the kernel integrates the CompressContext tool as a kernel-local operation, enabling optional context compression with the AGENTSCOPE_COMPRESS_CONTEXT_ENABLED environment variable and validation guards requiring AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2. This enhancement supports both standalone generate-and-copy scenarios and complex human-in-the-loop (HITL) approval workflows where secrets are only revealed when approved mutations commit successfully.
 
 ## Project Structure
 The runtime kernel lives under the agent-service package and is composed of:
@@ -59,6 +60,7 @@ TEL["Telemetry (OTel)<br/>telemetry.py"]
 MET["Prometheus Metrics<br/>metrics.py"]
 SET["Runtime Settings<br/>runtime_settings.py"]
 BUF["Delivery Buffers<br/>STREAM_PENDING_DELIVERIES<br/>PENDING_RELEASE_DELIVERIES"]
+COMP["CompressContext Tool<br/>AGENTSCOPE_COMPRESS_CONTEXT_ENABLED"]
 end
 APP --> RC
 APP --> MET
@@ -67,6 +69,7 @@ APP --> KERNEL
 KERNEL --> MW
 KERNEL --> SET
 KERNEL --> BUF
+KERNEL --> COMP
 RC --> TEL
 ```
 
@@ -89,13 +92,13 @@ RC --> TEL
 - [runtime_settings.py:136-184](file://products/agent-platform/src/agent_service/runtime_settings.py#L136-L184)
 
 ## Core Components
-- AgentKernel: Builds and caches agents per session, composes the middleware stack, manages toolkit discovery and caching per delegated token, handles model switching, structured output, streaming events, and evidence persistence. **Updated** Now includes per-stream delivery buffers for gated secret delivery workflows.
-- GatewayPermissionMiddleware: Enforces a platform allow-list for auto-approved read-only tools, always allows kernel-local task tools, and routes other tool invocations to explicit ASK for operator confirmation; supports browser flow unlock for approved mutating flows. **Updated** Outbound HTTP requests now require explicit operator confirmation by default.
+- AgentKernel: Builds and caches agents per session, composes the middleware stack, manages toolkit discovery and caching per delegated token, handles model switching, structured output, streaming events, and evidence persistence. **Updated** Now includes per-stream delivery buffers for gated secret delivery workflows and CompressContext tool integration for optional context compression.
+- GatewayPermissionMiddleware: Enforces a platform allow-list for auto-approved read-only tools, always allows kernel-local task tools, and routes other tool invocations to explicit ASK for operator confirmation; supports browser flow unlock for approved mutating flows. **Updated** Outbound HTTP requests now require explicit operator confirmation by default. **Updated** CompressContext tool is registered as kernel-local and always allowed.
 - ToolEvidenceMiddleware: Emits tool_call and tool_result evidence frames for gateway-backed tools during streaming, with bounded data summaries and optional full payloads, and redacts sensitive parameters. **Updated** Now intercepts secrets.generate_password calls and implements deferred delivery mechanism using per-stream buffers.
 - Request Context: Resolves x-request-id by preferring inbound header, then current OTel trace_id, then generating a UUID.
 - Telemetry: Optional OpenTelemetry push pipeline for traces, metrics, and logs; integrates FastAPI and HTTPX instrumentation.
 - Metrics: Always-on Prometheus surface with RED middleware and /metrics endpoint; includes counters/gauges for sessions, chat requests, store backends, evidence writes, audit emissions, and model discovery.
-- Runtime Settings: Environment-driven configuration for provider options, kernel tuning, middleware toggles, HITL timeouts, evidence caps, model discovery, signed execution, isolated worker, browser flow TTL, audit/incident/skills clients, and authoring-trace bounds. **Updated** Enhanced default system prompt with operational request handling improvements.
+- Runtime Settings: Environment-driven configuration for provider options, kernel tuning, middleware toggles, HITL timeouts, evidence caps, model discovery, signed execution, isolated worker, browser flow TTL, audit/incident/skills clients, and authoring-trace bounds. **Updated** Enhanced default system prompt with operational request handling improvements and CompressContext tool configuration.
 
 **Section sources**
 - [runtime_kernel.py:212-235](file://products/agent-platform/src/agent_service/runtime_kernel.py#L212-L235)
@@ -108,7 +111,7 @@ RC --> TEL
 - [runtime_settings.py:136-184](file://products/agent-platform/src/agent_service/runtime_settings.py#L136-L184)
 
 ## Architecture Overview
-The runtime kernel sits at the center of agent execution. Requests enter FastAPI, where logging and metrics are recorded, and request IDs are resolved. The kernel builds or reuses an Agent instance per session, composes middlewares, and executes turns either as blocking replies or streaming events. Middlewares enforce permissions and emit evidence frames. Observability is enabled via optional OTel and always-on Prometheus metrics. **Updated** The architecture now includes per-stream delivery buffers that enable gated secret delivery workflows with reveal-on-commit semantics.
+The runtime kernel sits at the center of agent execution. Requests enter FastAPI, where logging and metrics are recorded, and request IDs are resolved. The kernel builds or reuses an Agent instance per session, composes middlewares, and executes turns either as blocking replies or streaming events. Middlewares enforce permissions and emit evidence frames. Observability is enabled via optional OTel and always-on Prometheus metrics. **Updated** The architecture now includes per-stream delivery buffers that enable gated secret delivery workflows with reveal-on-commit semantics, and CompressContext tool integration for optional context compression.
 
 ```mermaid
 sequenceDiagram
@@ -119,6 +122,7 @@ participant Kernel as "AgentKernel<br/>runtime_kernel.py"
 participant Perm as "GatewayPermissionMiddleware"
 participant Evidence as "ToolEvidenceMiddleware"
 participant Buf as "Delivery Buffers"
+participant Comp as "CompressContext Tool"
 participant Provider as "Model Provider"
 Client->>App : HTTP request
 App->>RC : resolve_request_id(x-request-id)
@@ -130,6 +134,7 @@ Perm-->>Kernel : ALLOW or ASK
 Kernel->>Evidence : on_acting(tool_call)
 Evidence->>Buf : Buffer portal_copy deliveries
 Evidence-->>Kernel : yield items + emit frames
+Kernel->>Comp : CompressContext (if enabled)
 Kernel->>Provider : execute turn
 Provider-->>Kernel : stream events / result
 Kernel->>Buf : Flush pending deliveries
@@ -151,7 +156,7 @@ Responsibilities:
 - Agent lifecycle: build, cache, and reuse per session; LRU-bounded cache; serializes concurrent creation to avoid memory loss.
 - Toolkit management: discovers tools from the tool-gateway per delegated token; caches per token; filters mutating tools when HITL bridging is disabled; supports read-only toolkits for automated diagnostics.
 - Model switching: resolves model id via catalog; rebuilds agent when bound model changes; restores persisted state.
-- Streaming and evidence: sets request-scoped evidence sink around streamed turns; persists evidence frames best-effort; flushes streaming prose redactor tails on terminal events. **Updated** Manages per-stream delivery buffers for gated secret delivery workflows.
+- Streaming and evidence: sets request-scoped evidence sink around streamed turns; persists evidence frames best-effort; flushes streaming prose redactor tails on terminal events. **Updated** Manages per-stream delivery buffers for gated secret delivery workflows and CompressContext tool integration.
 - Structured output: passes schema to agent and returns validated structured output when requested.
 - Observability integration: records metrics for evidence writes and agent state errors; emits audit events via configured service.
 
@@ -165,6 +170,7 @@ Key behaviors verified by tests:
 - Structured output round trip.
 - State persistence and snapshot failure tolerance.
 - **Updated** Per-stream delivery buffer management for gated secret delivery workflows.
+- **Updated** CompressContext tool registration and configuration via ContextConfig.compression_tool_enabled.
 
 ```mermaid
 flowchart TD
@@ -198,7 +204,7 @@ DrainDeliveries --> End
 - [runtime_kernel.py:462-496](file://products/agent-platform/src/agent_service/runtime_kernel.py#L462-L496)
 - [test_runtime_kernel.py:219-298](file://products/agent-platform/tests/test_runtime_kernel.py#L219-L298)
 - [test_runtime_kernel.py:301-552](file://products/agent-platform/tests/test_runtime_kernel.py#L301-L552)
-- [test_runtime_kernel.py:652-683](file://products/agent-platform/tests/test_runtime_kernel.py#L652-683)
+- [test_runtime_kernel.py:652-683](file://products/agent-platform/tests/test_runtime_kernel.py#L652-L683)
 - [test_runtime_kernel.py:713-749](file://products/agent-platform/tests/test_runtime_kernel.py#L713-L749)
 - [test_runtime_kernel.py:757-795](file://products/agent-platform/tests/test_runtime_kernel.py#L757-L795)
 
@@ -241,7 +247,7 @@ NoMatch --> Alternative["Suggest alternatives or ask for clarification"]
 ### GatewayPermissionMiddleware
 Responsibilities:
 - Auto-approve vetted read-only gateway tools from a static allow-list; environment override supported. **Updated** `http.get` has been removed from the default allow-list due to security hardening.
-- Always allow kernel-local tools (task tools and structured-output delivery).
+- Always allow kernel-local tools (task tools, GenerateStructuredOutput, and CompressContext).
 - Route all other tools to explicit ASK to park for operator confirmation; avoids delegating to built-in PermissionEngine to prevent bypassing the allow-list.
 - Supports browser flow unlock: when a mutating web.* call occurs inside an already-approved flow, an optional flow_signer can return an envelope to ALLOW it once per flow.
 
@@ -251,13 +257,14 @@ Behavior verified by tests:
 - Missing tool delegates to built-in resolution.
 - Already-ALLOWED calls on resume bypass re-ASK.
 - Task tools and structured-output tool always allowed.
+- **Updated** CompressContext tool always allowed as kernel-local operation.
 - Browser flow unlock consults signer only for BROWSER_WRITE_TOOLS and fails safe when no authority exists.
 
 ```mermaid
 flowchart TD
 Enter(["on_check_permission"]) --> CheckState{"tool_call.state == ALLOWED?"}
 CheckState --> |Yes| Delegate["Delegate to built-in resolution"]
-CheckState --> |No| LocalTools{"Kernel-local tool?"}
+CheckState --> |No| LocalTools{"Kernel-local tool?<br/>(Task, StructuredOutput, CompressContext)"}
 LocalTools --> |Yes| AllowLocal["ALLOW (session-local)"]
 LocalTools --> |No| AllowList{"Read-only AND in allow-list?"}
 AllowList --> |Yes| AllowGW["ALLOW (vetted read-only)"]
@@ -371,6 +378,53 @@ Commit --> |No| Burn
 - [test_kernel_middleware.py:760-815](file://products/agent-platform/tests/test_kernel_middleware.py#L760-L815)
 - [test_kernel_middleware.py:816-888](file://products/agent-platform/tests/test_kernel_middleware.py#L816-L888)
 
+### CompressContext Tool Integration
+**New Section** The runtime kernel integrates the CompressContext tool as a kernel-local operation, providing optional agent-driven context compression with strict validation and safety guarantees.
+
+Key components:
+- **AGENTSCOPE_COMPRESS_CONTEXT_ENABLED**: Environment variable to opt-in context compression (default: false)
+- **AGENTSCOPE_CONTEXT_TRIGGER_RATIO**: Must be greater than 0.2 (agentscope context_buffer_ratio default)
+- **KERNEL_LOCAL_TOOL_NAMES**: CompressContext registered as kernel-local tool, always allowed
+- **ContextConfig.compression_tool_enabled**: Wires the setting into the agent configuration
+
+Security and safety characteristics:
+- **Kernel-local operation**: Never parks on the headless ASK gate, preventing compression from being blocked
+- **State-only mutation**: Only summarizes agent's own working context into state.summary/state.context
+- **No external access**: Performs no execution or infrastructure access operations
+- **Opt-in by default**: Disabled unless explicitly enabled via environment variable
+- **Validation guard**: Requires AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2 to prevent configuration conflicts
+
+Configuration behavior:
+- When disabled (default): CompressContext tool is not registered, kernel behaves identically to previous versions
+- When enabled: CompressContext tool is registered and available for agent-driven context compression
+- Startup validation: Rejects invalid configurations where trigger_ratio <= 0.2 to prevent wedge conditions
+
+```mermaid
+flowchart TD
+EnvCheck{"AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=true?"}
+EnvCheck --> |No| ToolDisabled["CompressContext tool disabled"]
+EnvCheck --> |Yes| Validation{"AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2?"}
+Validation --> |No| ConfigError["Startup error: invalid configuration"]
+Validation --> |Yes| ToolEnabled["CompressContext tool enabled<br/>Registered as kernel-local"]
+ToolEnabled --> AlwaysAllowed["Always allowed - no ASK gate"]
+ToolDisabled --> NormalOperation["Normal operation"]
+ConfigError --> DeploymentFailure["Deployment fails startup"]
+```
+
+**Diagram sources**
+- [runtime_settings.py:185-185](file://products/agent-platform/src/agent_service/runtime_settings.py#L185-L185)
+- [runtime_settings.py:319-328](file://products/agent-platform/src/agent_service/runtime_settings.py#L319-L328)
+- [runtime_kernel.py:597-610](file://products/agent-platform/src/agent_service/runtime_kernel.py#L597-L610)
+- [kernel_middleware.py:105-117](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L105-L117)
+
+**Section sources**
+- [runtime_settings.py:185-185](file://products/agent-platform/src/agent_service/runtime_settings.py#L185-L185)
+- [runtime_settings.py:319-328](file://products/agent-platform/src/agent_service/runtime_settings.py#L319-L328)
+- [runtime_kernel.py:597-610](file://products/agent-platform/src/agent_service/runtime_kernel.py#L597-L610)
+- [kernel_middleware.py:105-117](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L105-L117)
+- [test_runtime_settings.py:637-678](file://products/agent-platform/tests/test_runtime_settings.py#L637-L678)
+- [test_kernel_middleware.py:491-513](file://products/agent-platform/tests/test_kernel_middleware.py#L491-L513)
+
 ### Request Context and Tracing Integration
 - Request ID resolution prefers inbound x-request-id, falls back to current OTel trace_id when tracing is enabled, otherwise generates a UUID.
 - Telemetry setup initializes providers and instrumentations when OTEL_ENABLED is true; fail-open on setup errors.
@@ -411,11 +465,13 @@ HasTrace --> |No| GenUUID["Generate UUID"]
 - Environment-driven configuration for provider options, kernel tuning, middleware toggles, HITL timeout, evidence caps, model discovery, signed execution, isolated worker, browser flow approval TTL, audit/incident/skills clients, and authoring-trace bounds.
 - Validation ensures sane defaults and rejects invalid values at startup.
 - **Updated** Enhanced default system prompt with operational request handling improvements including skills.search-first policy and anti-fabrication prevention.
+- **Updated** CompressContext tool configuration with AGENTSCOPE_COMPRESS_CONTEXT_ENABLED and validation requiring AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2.
 
 **Section sources**
 - [runtime_settings.py:136-184](file://products/agent-platform/src/agent_service/runtime_settings.py#L136-L184)
 - [runtime_settings.py:265-341](file://products/agent-platform/src/agent_service/runtime_settings.py#L265-L341)
 - [runtime_settings.py:413-517](file://products/agent-platform/src/agent_service/runtime_settings.py#L413-L517)
+- [runtime_settings.py:530-532](file://products/agent-platform/src/agent_service/runtime_settings.py#L530-L532)
 
 ## Dependency Analysis
 The kernel depends on:
@@ -434,6 +490,7 @@ Kernel --> EvidenceStore["Evidence Store"]
 Kernel --> Audit["Audit Emitter"]
 Kernel --> Middleware["AgentScope MiddlewareBase"]
 Kernel --> DeliveryBuffers["Delivery Buffers"]
+Kernel --> CompressContext["CompressContext Tool"]
 ```
 
 **Diagram sources**
@@ -459,6 +516,7 @@ Kernel --> DeliveryBuffers["Delivery Buffers"]
 - Model switching: Rebuilds occur only when necessary (model id change or toolkit recovery), preserving conversation history via persisted state.
 - **Updated** Enhanced system prompt processing: Skills search-first approach may add initial latency but improves overall operational efficiency by reducing failed attempts and improving first-time success rates.
 - **Updated** Delivery buffer management: Per-stream buffers minimize memory footprint and provide efficient deferred delivery mechanisms without blocking main execution paths.
+- **Updated** CompressContext tool: Optional context compression reduces memory usage for long conversations; disabled by default to maintain backward compatibility; when enabled, operates efficiently without external network calls.
 
 ## Troubleshooting Guide
 Common issues and diagnostics:
@@ -470,6 +528,7 @@ Common issues and diagnostics:
 - HITL parking: unexpected ASK indicates tool not in allow-list or flow-unlock not applicable; verify allow-list and flow authority. **Updated** `http.get` now parks by default unless explicitly opted in via `AGENT_GATEWAY_TOOL_AUTO_ALLOW_EXTRA`.
 - **Updated** Operational request refusals: If models refuse operational requests without calling skills.search, verify the enhanced default system prompt is being used and that skills.search tool is available.
 - **Updated** Secret delivery issues: Monitor delivery buffer states and verify portal_copy handles are properly formatted; check that held deliveries are released only on successful gated commits.
+- **Updated** CompressContext configuration issues: Verify AGENTSCOPE_COMPRESS_CONTEXT_ENABLED is set correctly and AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2; check for startup validation errors indicating invalid configuration.
 - Telemetry misconfiguration: OTel setup failures are logged but do not block requests; verify OTEL_ENABLED and endpoint configuration.
 
 **Section sources**
@@ -483,7 +542,7 @@ Common issues and diagnostics:
 ## Conclusion
 The runtime kernel provides a robust, configurable foundation for agent execution with strong separation of concerns: permission gating, evidence emission, request context propagation, and observability. Its design emphasizes safety (deny-by-default permissions, bounded payloads), resilience (best-effort persistence, fail-open telemetry), and scalability (per-session caching, per-token toolkit caching, streaming). Operators can tune behavior via environment-driven settings and extend the pipeline through supported middleware hooks.
 
-**Updated** The enhanced runtime kernel now includes sophisticated per-stream delivery buffers that enable secure gated secret delivery workflows with reveal-on-commit semantics. This enhancement supports both standalone generate-and-copy scenarios and complex human-in-the-loop (HITL) approval workflows where secrets are only revealed when approved mutations commit successfully. The enhanced default system prompt significantly improves operational request handling by ensuring models consult skills.search FIRST for any request to act on named systems, accounts, or targets. This prevents anti-fabrication refusals and promotes better operational workflows by prioritizing skill-based guidance over model-generated procedures. The security posture has been strengthened with hardened defaults that require explicit operator confirmation for outbound HTTP requests, providing defense-in-depth against potential SSRF vulnerabilities while maintaining operational flexibility through additive configuration.
+**Updated** The enhanced runtime kernel now includes sophisticated per-stream delivery buffers that enable secure gated secret delivery workflows with reveal-on-commit semantics, and integrates the CompressContext tool as a kernel-local operation for optional context compression. The CompressContext tool provides agent-driven context summarization while maintaining strict safety guarantees: it never parks on the ASK gate, performs no external access, and requires explicit opt-in via AGENTSCOPE_COMPRESS_CONTEXT_ENABLED with validation ensuring AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2. The enhanced default system prompt significantly improves operational request handling by ensuring models consult skills.search FIRST for any request to act on named systems, accounts, or targets. This prevents anti-fabrication refusals and promotes better operational workflows by prioritizing skill-based guidance over model-generated procedures. The security posture has been strengthened with hardened defaults that require explicit operator confirmation for outbound HTTP requests, providing defense-in-depth against potential SSRF vulnerabilities while maintaining operational flexibility through additive configuration.
 
 ## Appendices
 
@@ -497,6 +556,7 @@ Guidance grounded in existing patterns:
 - Permission decisions should explicitly ALLOW or ASK rather than delegating to built-in engines when platform policy requires strict control.
 - Evidence emission should produce schema-valid frames with bounded data and redacted parameters.
 - **Updated** For secret delivery workflows, leverage the per-stream delivery buffers (STREAM_PENDING_DELIVERIES and PENDING_RELEASE_DELIVERIES) for deferred reveal semantics.
+- **Updated** For kernel-local tools like CompressContext, register them in KERNEL_LOCAL_TOOL_NAMES to ensure they're always allowed and don't park on the ASK gate.
 
 **Section sources**
 - [kernel_middleware.py:151-193](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L151-L193)
@@ -509,6 +569,7 @@ Guidance grounded in existing patterns:
 - Use request context resolution to correlate requests across services using x-request-id or trace_id.
 - Enable OTel for distributed tracing and attach log bridge to correlate logs with traces.
 - **Updated** Leverage per-stream delivery buffers for implementing custom secret delivery workflows with gated reveal semantics.
+- **Updated** Consider kernel-local tool patterns for internal operations that should never park on the ASK gate.
 
 **Section sources**
 - [app.py:55-76](file://products/agent-platform/src/agent_service/app.py#L55-L76)
@@ -521,6 +582,7 @@ Guidance grounded in existing patterns:
 - Validate middleware behavior with unit-style checks similar to existing tests for permission and evidence emission.
 - **Updated** For operational request issues: Verify that the enhanced default system prompt is active and that skills.search tool is properly configured and accessible.
 - **Updated** For secret delivery issues: Monitor delivery buffer states, verify portal_copy handle formatting, and ensure held deliveries are properly released on successful gated commits.
+- **Updated** For CompressContext issues: Check AGENTSCOPE_COMPRESS_CONTEXT_ENABLED and AGENTSCOPE_CONTEXT_TRIGGER_RATIO configuration, verify startup validation passes, and ensure the tool is registered as kernel-local.
 
 **Section sources**
 - [runtime_kernel.py:236-289](file://products/agent-platform/src/agent_service/runtime_kernel.py#L236-L289)
@@ -623,3 +685,39 @@ AGENT_GATEWAY_TOOL_AUTO_ALLOW_EXTRA=http.get
 - [test_secret_delivery_integration.py:35-152](file://products/agent-platform/tests/test_secret_delivery_integration.py#L35-L152)
 - [test_kernel_middleware.py:760-815](file://products/agent-platform/tests/test_kernel_middleware.py#L760-L815)
 - [test_kernel_middleware.py:816-888](file://products/agent-platform/tests/test_kernel_middleware.py#L816-L888)
+
+### CompressContext Configuration Reference
+**New Section** Configuration reference for the CompressContext tool integration:
+
+**Environment Variables:**
+- `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED`: Enable/disable agent-driven context compression (default: false)
+- `AGENTSCOPE_CONTEXT_TRIGGER_RATIO`: Context compression trigger ratio (must be > 0.2, default: 0.8)
+
+**Behavior:**
+- When disabled (default): CompressContext tool is not registered, kernel behaves identically to previous versions
+- When enabled: CompressContext tool is registered as kernel-local and always allowed
+- Startup validation: Fails if AGENTSCOPE_CONTEXT_TRIGGER_RATIO <= 0.2 to prevent configuration conflicts
+
+**Security Characteristics:**
+- Kernel-local operation: Never parks on the headless ASK gate
+- State-only mutation: Only summarizes agent's own working context
+- No external access: Performs no execution or infrastructure access operations
+- Opt-in by default: Disabled unless explicitly enabled
+
+**Example Configuration:**
+```bash
+# Enable context compression with safe trigger ratio
+export AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=true
+export AGENTSCOPE_CONTEXT_TRIGGER_RATIO=0.8
+
+# Disable context compression (default behavior)
+export AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=false
+```
+
+**Section sources**
+- [runtime_settings.py:185-185](file://products/agent-platform/src/agent_service/runtime_settings.py#L185-L185)
+- [runtime_settings.py:319-328](file://products/agent-platform/src/agent_service/runtime_settings.py#L319-L328)
+- [runtime_kernel.py:597-610](file://products/agent-platform/src/agent_service/runtime_kernel.py#L597-L610)
+- [kernel_middleware.py:105-117](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L105-L117)
+- [test_runtime_settings.py:637-678](file://products/agent-platform/tests/test_runtime_settings.py#L637-L678)
+- [test_kernel_middleware.py:491-513](file://products/agent-platform/tests/test_kernel_middleware.py#L491-L513)

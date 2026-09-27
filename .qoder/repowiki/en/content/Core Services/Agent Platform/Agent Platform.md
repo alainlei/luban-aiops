@@ -6,6 +6,7 @@
 - [app.py](file://products/agent-platform/src/agent_service/app.py)
 - [runtime_kernel.py](file://products/agent-platform/src/agent_service/runtime_kernel.py)
 - [runtime_settings.py](file://products/agent-platform/src/agent_service/runtime_settings.py)
+- [kernel_middleware.py](file://products/agent-platform/src/agent_service/services/kernel_middleware.py)
 - [providers/__init__.py](file://products/agent-platform/src/agent_service/providers/__init__.py)
 - [services/model_catalog.py](file://products/agent-platform/src/agent_service/services/model_catalog.py)
 - [services/agent_state_store.py](file://products/agent-platform/src/agent_service/services/agent_state_store.py)
@@ -14,14 +15,18 @@
 - [api/v2/routes.py](file://products/agent-platform/src/agent_service/api/v2/routes.py)
 - [tests/test_operation_documents.py](file://products/agent-platform/tests/test_operation_documents.py)
 - [tests/test_documents.py](file://products/agent-platform/tests/test_documents.py)
+- [tests/test_runtime_settings.py](file://products/agent-platform/tests/test_runtime_settings.py)
+- [tests/test_runtime_kernel.py](file://products/agent-platform/tests/test_runtime_kernel.py)
+- [tests/test_kernel_middleware.py](file://products/agent-platform/tests/test_kernel_middleware.py)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Updated Operation Documents section to document the retention policy sweep mechanism and its impact on test data
-- Added new subsection documenting the clock-relative timestamp pattern for test stability
-- Enhanced troubleshooting guide with guidance on retention policy considerations
-- Updated examples to demonstrate proper timestamp handling for operation documents
+- Added new section documenting the optional context compression feature through CompressContext tool (SPEC-064)
+- Updated Runtime Settings section to include AGENTSCOPE_COMPRESS_CONTEXT_ENABLED configuration
+- Enhanced Kernel Configuration section with compression tool integration details
+- Updated Troubleshooting Guide with compression-related guidance
+- Added references to SPEC-064 implementation and testing patterns
 
 ## Table of Contents
 1. Introduction
@@ -36,6 +41,8 @@
 
 ## Introduction
 The Agent Platform is the orchestration engine of the Luban AIOps platform. It owns agent sessions, coordinates LLM model switching at runtime, drives tool execution via the Tool Gateway, and persists evidence for replay and audit. It exposes a FastAPI-based v2 contract that streams chat events, manages human-in-the-loop approvals, and integrates with session persistence backends (in-memory or PostgreSQL). The service also supports live model discovery and a credential-gated multi-model catalog so operators can switch models mid-conversation without losing conversation history.
+
+**Updated** The platform now includes an optional context compression feature through the CompressContext tool (SPEC-064), which allows agents to proactively compress their working context between tasks while maintaining backward compatibility when disabled.
 
 ## Project Structure
 The Agent Platform service lives under products/agent-platform/src/agent_service and is organized into:
@@ -60,6 +67,7 @@ C["services/model_catalog.py<br/>ModelCatalog"]
 SS["services/agent_state_store.py<br/>Session state store"]
 ES["services/evidence_store.py<br/>Evidence store"]
 OD["services/operation_documents.py<br/>Operation document store"]
+KM["services/kernel_middleware.py<br/>Kernel middleware"]
 end
 M --> A --> R --> K
 K --> S
@@ -67,6 +75,7 @@ K --> P
 K --> C
 K --> SS
 K --> ES
+K --> KM
 R --> OD
 ```
 
@@ -81,6 +90,7 @@ R --> OD
 - [services/agent_state_store.py:276-324](file://products/agent-platform/src/agent_service/services/agent_state_store.py#L276-L324)
 - [services/evidence_store.py:504-551](file://products/agent-platform/src/agent_service/services/evidence_store.py#L504-L551)
 - [services/operation_documents.py:530-572](file://products/agent-platform/src/agent_service/services/operation_documents.py#L530-L572)
+- [kernel_middleware.py:105-117](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L105-L117)
 
 **Section sources**
 - [main.py:1-22](file://products/agent-platform/src/agent_service/main.py#L1-L22)
@@ -93,6 +103,7 @@ R --> OD
 - Session state store: Persists AgentState snapshots to memory or PostgreSQL; restores on agent creation.
 - Evidence store: Captures tool_call/tool_result frames per turn with size caps and budget eviction; persisted to memory or PostgreSQL.
 - Operation document repository: Manages typed operational documents (shift summaries, incident reports) with owner-scoped visibility, one-way publish lifecycle, and 30-day retention sweep.
+- Kernel middleware: Permission gates, evidence capture, and local tool management including the optional CompressContext tool.
 - API v2 routes: Chat, streaming chat, confirmation bridge, session management, model catalog exposure, evidence retrieval, and operation document CRUD.
 
 **Section sources**
@@ -101,10 +112,13 @@ R --> OD
 - [services/agent_state_store.py:1-324](file://products/agent-platform/src/agent_service/services/agent_state_store.py#L1-L324)
 - [services/evidence_store.py:1-551](file://products/agent-platform/src/agent_service/services/evidence_store.py#L1-L551)
 - [services/operation_documents.py:1-573](file://products/agent-platform/src/agent_service/services/operation_documents.py#L1-L573)
+- [kernel_middleware.py:105-117](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L105-L117)
 - [api/v2/routes.py:276-800](file://products/agent-platform/src/agent_service/api/v2/routes.py#L276-L800)
 
 ## Architecture Overview
 The request flow starts at the Uvicorn entrypoint, which boots the FastAPI app. The app configures logging, metrics, telemetry, and includes the v2 router. Routes validate identity headers, resolve sessions and models, then delegate to the runtime kernel. The kernel constructs or reuses an AgentScope agent bound to a session, optionally restoring persisted state, and executes turns with middleware for permissions, evidence capture, tracing, and token budgets. Streaming responses are normalized to the shared v2 schema and emitted as Server-Sent Events. Operation documents follow a separate lifecycle through the operation document repository with owner-scoped visibility and retention policies.
+
+**Updated** The kernel now supports optional context compression through the CompressContext tool, which can be enabled via the AGENTSCOPE_COMPRESS_CONTEXT_ENABLED environment variable. When enabled, agents can proactively compress their working context between tasks using the same underlying mechanism as threshold-based compression.
 
 ```mermaid
 sequenceDiagram
@@ -122,6 +136,7 @@ API->>Kernel : reply_text / stream_events
 Kernel->>Store : Restore agent state (if any)
 Kernel->>Kernel : Build toolkit (gateway tools if configured)
 Kernel->>Kernel : Execute turn with middlewares
+Note over Kernel : Optional CompressContext tool (SPEC-064)
 Kernel-->>API : Text or stream frames
 API-->>Client : Response or SSE frames
 Note over Client,DocStore : Operation documents follow separate lifecycle
@@ -151,6 +166,8 @@ The kernel is the central coordinator:
 - Streams prose redaction safely, flushing held-back tails before terminal events.
 - Persists evidence best-effort with size caps and session budgets.
 
+**Updated** The kernel now supports optional context compression through ContextConfig.compression_tool_enabled, which is controlled by the AGENTSCOPE_COMPRESS_CONTEXT_ENABLED setting. When enabled, the CompressContext tool becomes available to agents for proactive context compression between tasks.
+
 ```mermaid
 flowchart TD
 Start(["ensure_agent(session_id, bearer_token, model_id, read_only)"]) --> CheckCache{"Cached agent exists?"}
@@ -174,6 +191,42 @@ Cache --> ReturnCached
 
 **Section sources**
 - [runtime_kernel.py:212-774](file://products/agent-platform/src/agent_service/runtime_kernel.py#L212-L774)
+
+### Optional Context Compression (SPEC-064)
+**New** The Agent Platform now supports optional agent-driven context compression through the CompressContext tool, implemented according to SPEC-064. This feature allows agents to proactively compress their working context between tasks while maintaining full backward compatibility when disabled.
+
+Key features include:
+- **Opt-in Configuration**: Enabled via `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` environment variable (default: false)
+- **Kernel-local Tool**: CompressContext is registered as a KERNEL_LOCAL_TOOL_NAME, bypassing the permission gate since it only manipulates internal agent state
+- **State-only Operations**: Compression operates exclusively on `state.summary` and `state.context`, never touching external systems or network resources
+- **Durability Preservation**: Compression state survives session persistence through the existing SPEC-017 snapshot/restore mechanism
+- **Coexistence with Threshold Compression**: Works alongside existing `ContextConfig(trigger_ratio, tool_result_limit)` hard compression without conflicts
+- **Startup Validation**: Requires `AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2` (agentscope's context_buffer_ratio) to prevent configuration conflicts
+
+```mermaid
+flowchart TD
+Enabled{"AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=true?"} --> |No| Disabled["CompressContext tool unavailable"]
+Enabled --> |Yes| ConfigValid{"context_trigger_ratio > 0.2?"}
+ConfigValid --> |No| Error["Startup validation error"]
+ConfigValid --> |Yes| RegisterTool["Register CompressContext tool"]
+RegisterTool --> AddToKernel["Add to KERNEL_LOCAL_TOOL_NAMES"]
+AddToKernel --> Available["Tool available to agents"]
+Available --> Compress["Agent calls CompressContext"]
+Compress --> StateUpdate["Updates state.summary/state.context"]
+StateUpdate --> Persist["Persists via SPEC-017 snapshot"]
+```
+
+**Diagram sources**
+- [runtime_settings.py:177-185](file://products/agent-platform/src/agent_service/runtime_settings.py#L177-L185)
+- [runtime_settings.py:319-328](file://products/agent-platform/src/agent_service/runtime_settings.py#L319-L328)
+- [runtime_kernel.py:597-610](file://products/agent-platform/src/agent_service/runtime_kernel.py#L597-L610)
+- [kernel_middleware.py:105-117](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L105-L117)
+
+**Section sources**
+- [runtime_settings.py:177-185](file://products/agent-platform/src/agent_service/runtime_settings.py#L177-L185)
+- [runtime_settings.py:319-328](file://products/agent-platform/src/agent_service/runtime_settings.py#L319-L328)
+- [runtime_kernel.py:597-610](file://products/agent-platform/src/agent_service/runtime_kernel.py#L597-L610)
+- [kernel_middleware.py:105-117](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L105-L117)
 
 ### Multi-Model Provider Registry and Catalog
 - Providers: The registry returns a provider adapter based on the active profile or catalog entry. Supported providers include dashscope, deepseek, openai, and luban.
@@ -203,6 +256,7 @@ class RuntimeSettings {
 +provider string
 +model_name string
 +base_url string
++compress_context_enabled bool
 +from_env() RuntimeSettings
 }
 ModelCatalog --> ModelCatalogEntry : "contains"
@@ -391,6 +445,7 @@ Kernel --> Providers["providers/__init__.py"]
 Kernel --> Catalog["services/model_catalog.py"]
 Kernel --> StateStore["services/agent_state_store.py"]
 Kernel --> Evidence["services/evidence_store.py"]
+Kernel --> Middleware["services/kernel_middleware.py"]
 ```
 
 **Diagram sources**
@@ -404,6 +459,7 @@ Kernel --> Evidence["services/evidence_store.py"]
 - [services/agent_state_store.py:276-324](file://products/agent-platform/src/agent_service/services/agent_state_store.py#L276-L324)
 - [services/evidence_store.py:504-551](file://products/agent-platform/src/agent_service/services/evidence_store.py#L504-L551)
 - [services/operation_documents.py:530-572](file://products/agent-platform/src/agent_service/services/operation_documents.py#L530-L572)
+- [kernel_middleware.py:105-117](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L105-L117)
 
 **Section sources**
 - [app.py:19-79](file://products/agent-platform/src/agent_service/app.py#L19-L79)
@@ -417,6 +473,7 @@ Kernel --> Evidence["services/evidence_store.py"]
 - Model discovery: Periodic refresh with timeouts avoids blocking startup; failures degrade gracefully.
 - **Enhanced Skill Search**: The proactive skill-search triggering adds minimal overhead but significantly improves operational request handling efficiency by preventing unnecessary refusals and guiding models toward appropriate skill discovery.
 - **Retention Policy Sweeps**: Operation document retention sweeps run opportunistically on writes with bounded limits (100 rows per sweep) to minimize performance impact while maintaining storage hygiene.
+- **Context Compression**: When enabled, CompressContext provides proactive context management that can improve long-running session performance by reducing context size before reaching threshold limits.
 
 ## Troubleshooting Guide
 - Unknown model id: Requests specifying an unrecognized model id fail closed with 422; verify the model exists in the catalog or remove the field to use pinned/default.
@@ -427,6 +484,8 @@ Kernel --> Evidence["services/evidence_store.py"]
 - **Operational Request Refusals**: If operational requests are still being refused despite having relevant skills, verify that skills.search is being triggered by checking for "named system, account, or target" patterns in the prompt. The enhanced prompt should proactively search skills before refusing requests lacking offhand grounding.
 - **Operation Document Retention Issues**: If operation documents disappear unexpectedly, check if they've aged beyond the 30-day retention window. Test fixtures should use clock-relative timestamps (`datetime.now(timezone.utc) - timedelta(...)`) instead of hardcoded dates to avoid this issue.
 - **Test Failures with Hardcoded Dates**: Tests using hardcoded dates like `2026-08-27` may fail due to retention policy sweeps. Replace with relative timestamps using the `_iso()` helper pattern to ensure test stability.
+- **Context Compression Startup Errors**: If enabling AGENTSCOPE_COMPRESS_CONTEXT_ENABLED causes startup failures, verify that AGENTSCOPE_CONTEXT_TRIGGER_RATIO is set above 0.2 (the agentscope context_buffer_ratio default). The error message will indicate the required relationship between these settings.
+- **Compression Tool Not Available**: If CompressContext doesn't appear in the toolkit despite being enabled, verify that the environment variable is properly set and that the kernel is built with the correct configuration. The tool is only registered when ContextConfig.compression_tool_enabled is true.
 
 **Section sources**
 - [api/v2/routes.py:202-243](file://products/agent-platform/src/agent_service/api/v2/routes.py#L202-L243)
@@ -436,6 +495,10 @@ Kernel --> Evidence["services/evidence_store.py"]
 - [runtime_kernel.py:94-119](file://products/agent-platform/src/agent_service/runtime_kernel.py#L94-L119)
 - [services/operation_documents.py:196-209](file://products/agent-platform/src/agent_service/services/operation_documents.py#L196-L209)
 - [tests/test_operation_documents.py:53-55](file://products/agent-platform/tests/test_operation_documents.py#L53-L55)
+- [runtime_settings.py:319-328](file://products/agent-platform/src/agent_service/runtime_settings.py#L319-L328)
+- [tests/test_runtime_settings.py:655-668](file://products/agent-platform/tests/test_runtime_settings.py#L655-L668)
 
 ## Conclusion
-The Agent Platform provides a robust, observable, and durable orchestration layer for AIOPS workflows. It centralizes session lifecycle, supports dynamic model switching across multiple providers, enforces safety through HITL approvals and read-only modes, and captures rich evidence for transparency and replay. With pluggable persistence, streaming responses, and careful error handling, it scales to concurrent sessions while maintaining reliability and auditability. The enhanced system prompt now ensures that operational requests are handled more intelligently by proactively searching for relevant skills before refusing requests due to lack of immediate knowledge, improving both user experience and operational efficiency. The addition of the operation document repository with retention policies provides durable operational documentation with automatic cleanup, while the clock-relative timestamp pattern ensures test stability across different deployment timelines.
+The Agent Platform provides a robust, observable, and durable orchestration layer for AIOPS workflows. It centralizes session lifecycle, supports dynamic model switching across multiple providers, enforces safety through HITL approvals and read-only modes, and captures rich evidence for transparency and replay. With pluggable persistence, streaming responses, and careful error handling, it scales to concurrent sessions while maintaining reliability and auditability. 
+
+**Updated** The addition of optional context compression through the CompressContext tool (SPEC-064) enhances the platform's ability to manage long-running sessions efficiently while maintaining full backward compatibility. The enhanced system prompt now ensures that operational requests are handled more intelligently by proactively searching for relevant skills before refusing requests due to lack of immediate knowledge, improving both user experience and operational efficiency. The addition of the operation document repository with retention policies provides durable operational documentation with automatic cleanup, while the clock-relative timestamp pattern ensures test stability across different deployment timelines. The optional compression feature represents a significant advancement in agent autonomy while preserving the platform's security and governance principles.
