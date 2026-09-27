@@ -8,18 +8,22 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 
 ## R-1: Four-point adoption-gate evaluation
 
-- [ ] Stage 0: read `CompressContext` in the locked 2.0.8 install
+- [x] Stage 0: read `CompressContext` in the locked 2.0.8 install
       (`agentscope/agent/_agent.py` — tool name, `ContextConfig.compression_tool_enabled`,
       `on_compress_context` hook, context offloader, `compress_context` middleware path)
-- [ ] Stage 0: read `GoalPipeline` in the locked 2.0.8 install
+- [x] Stage 0: read `GoalPipeline` in the locked 2.0.8 install
       (`agentscope/pipeline/_goal_pipeline.py` — executor/verifier loop, `max_iters`,
       `max_retries`, `RequireUserConfirmEvent` / `RequireExternalExecutionEvent` /
       `UserInterruptEvent` surface)
-- [ ] Stage 1: score `CompressContext` against the four gate points with 2.0.8 evidence
-- [ ] Stage 1: score `GoalPipeline` against the four gate points with 2.0.8 evidence
-- [ ] Stage 1: land the spike memo under `docs/workspace/` with a per-surface
+- [x] Stage 1: score `CompressContext` against the four gate points with 2.0.8 evidence
+      — **clears all four** (memo §2.3)
+- [x] Stage 1: score `GoalPipeline` against the four gate points with 2.0.8 evidence
+      — **fails 1–4, no caller** (memo §3.2)
+- [x] Stage 1: land the spike memo under `docs/workspace/` with a per-surface
       `adopt` / `keep out` verdict and rationale
-- [ ] Stage 1: resolve the R-1 memo answers to all five spec `Open Questions`
+      ([agentscope-compression-goal-pipeline-spike.md](../../workspace/agentscope-compression-goal-pipeline-spike.md))
+- [x] Stage 1: resolve the R-1 memo answers to all five spec `Open Questions` (memo §4)
+- [x] Stage 1: resolve the two `agentscope-utilization-audit.md` §2 rows to the verdicts
 
 ## R-2: `CompressContext` conditional adoption (only if R-1 verdict = adopt)
 
@@ -39,21 +43,24 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 
 ## R-3: `GoalPipeline` conditional reconciliation (only if R-1 verdict = adopt)
 
-- [ ] Reconcile the executor/verifier loop against ADR-0011 (composition carries no
-      authority) and the SPEC-037/038/063 governed dispatch path in the memo
-- [ ] Confirm no concrete platform caller ⇒ keep out (expected default), or define how
-      every loop iteration stays under existing policy/HITL/dispatch-claim gates
+> R-1 verdict = **keep out** (memo §3). The reconciliation and no-caller confirmation are
+> discharged by the memo; the "if adopted" tasks below are N/A and remain unchecked.
+
+- [x] Reconcile the executor/verifier loop against ADR-0011 (composition carries no
+      authority) and the SPEC-037/038/063 governed dispatch path in the memo (memo §3.2)
+- [x] Confirm no concrete platform caller ⇒ keep out (memo §3.3); reopen condition recorded
+      (memo §3.4)
 - [ ] If adopted: bridge `RequireUserConfirmEvent` / `RequireExternalExecutionEvent` /
-      `UserInterruptEvent` onto existing confirmation + execution frames (no second edge)
-- [ ] If adopted: tests asserting the loop cannot bypass policy/HITL/approval or dispatch claims
+      `UserInterruptEvent` onto existing confirmation + execution frames (no second edge) — N/A
+- [ ] If adopted: tests asserting the loop cannot bypass policy/HITL/approval or dispatch claims — N/A
 
 ## R-4: Documentation, audit, and backlog reconciliation (always)
 
-- [ ] Update `docs/workspace/agentscope-utilization-audit.md` §2 — resolve both rows
+- [x] Update `docs/workspace/agentscope-utilization-audit.md` §2 — resolve both rows
       (adopt / keep out) with a memo link; update the scope line's "deferred to SPEC-064" note
 - [ ] Update `docs/agentic-aiops-platform/delivery-roadmap.md` Exploration Backlog —
       promote or close the agentscope-compression and pipeline entries
-- [ ] Add the SPEC-064 row to the `docs/specs/README.md` spec index
+- [x] Add the SPEC-064 row to the `docs/specs/README.md` spec index
 - [ ] If a surface ships: `CHANGELOG.md` entry referencing SPEC-064
 - [ ] If a surface ships: `docs/guides/configuration-reference.md` documents the new knob(s)
 - [ ] If a surface ships and the decision is architectural: new/updated ADR (per ADR-0006)

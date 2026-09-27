@@ -226,26 +226,57 @@ Acceptance criteria:
 
 ## Open Questions
 
-These must be empty (resolved in the R-1 memo) before this spec advances to `approved`:
+Resolved by the R-1 spike
+([agentscope-compression-goal-pipeline-spike.md](../../workspace/agentscope-compression-goal-pipeline-spike.md),
+2026-09-27); none remain open, so this spec is decision-complete and ready for the
+operator to approve or reject.
 
-1. Does `CompressContext` write any state the SPEC-017 snapshot/restore does not already
-   capture, and is that state safe to persist (no secrets, no ungrounded claims)? What
-   exactly does the optional context offloader emit, and where would it live?
-2. Does agent-directed compression risk the anti-fabrication posture the way ReME's
-   automatic LLM write-back was rejected — i.e. can it drop grounding/citations?
-3. How do `on_compress_context` middleware and `ContextConfig.compression_tool_enabled`
-   interact with `ReplyBudgetControlMiddleware`'s budget state in
-   `agent.state.middle_context` and with the hard-compression `trigger_ratio` path?
-4. Is there **any** concrete platform caller/product need for `GoalPipeline`, or does it
-   remain a capability with no product need (the TTS situation)? This determines whether
-   R-3 is worth an adoption attempt or resolves to an immediate keep-out.
-5. If `GoalPipeline` were ever adopted, how would its
-   `RequireUserConfirmEvent` / `RequireExternalExecutionEvent` bridge onto the platform's
-   existing confirmation frames and the durable single-use dispatch claim without
-   creating a second execution edge?
+1. **State the snapshot does not capture / offloader safety — resolved.** `CompressContext`
+   mutates only `state.summary` + `state.context`, both captured by `_snapshot_state`'s
+   `agent.state.model_dump_json()` and secret-redacted at rest. The optional `offloader`
+   writes compressed messages to a `Workspace` filesystem path; it is **not** wired (the
+   workspace surface stays "kept out"), so there is no new store and no filesystem write.
+2. **Anti-fabrication (ReME analogy) — resolved.** Not analogous: the identical
+   `_compress_context_impl` already runs by threshold today (`trigger_ratio=0.8`), the
+   `compression_prompt` mandates self-contained absolute references (paths, IDs, URLs,
+   exact commands verbatim), and the durable evidence (SPEC-025) and transcript (SPEC-039)
+   records are separate from kernel context — so compression reshapes only the model's
+   working context, never the auditable record.
+3. **Interaction with `ReplyBudgetControlMiddleware` / the trigger path — resolved.** No
+   conflict: the budget middleware's state lives in `agent.state.middle_context` (SPEC-018)
+   while compression touches `state.context`/`state.summary`; `on_compress_context` is a
+   distinct hook (none registered today). The agent tool fires at
+   `trigger_ratio - context_buffer_ratio`, ahead of the hard-threshold backstop, and
+   `_validate_configs` already enforces that ordering because `inject_runtime_state=True`.
+4. **Any concrete `GoalPipeline` caller — resolved.** None. The platform is human-led,
+   approval-gated operations, not autonomous goal-seeking (the TTS/channels situation), so
+   R-3 resolves to an immediate **keep out**.
+5. **`GoalPipeline` event bridging — resolved (N/A).** Moot under keep-out; recorded as the
+   reopen condition — a future need must run entirely under the existing
+   policy/HITL/signed-dispatch gates as a single governed agent, which the two-agent
+   loop-with-retries shape does not satisfy.
+
+## R-1 Verdicts (2026-09-27)
+
+- **`CompressContext`: clears the four-point adoption gate.** Recommended for opt-in,
+  default-off adoption under R-2 (`AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` →
+  `ContextConfig.compression_tool_enabled`; add `"CompressContext"` to
+  `KERNEL_LOCAL_TOOL_NAMES`; do not wire the `offloader`). R-2 wiring is **not** authorized
+  by the spike and requires this spec to reach `approved` plus separate implementation
+  authorization.
+- **`GoalPipeline`: kept out.** No code; the audit row is resolved to "Kept out (SPEC-064)".
+
 
 ## Changelog
 
+- 2026-09-27: **R-1 spike landed.** Static inspection of the locked agentscope 2.0.8
+  install and the agent-platform kernel integration at 0.43.2 resolved all five Open
+  Questions and produced per-surface verdicts in
+  [agentscope-compression-goal-pipeline-spike.md](../../workspace/agentscope-compression-goal-pipeline-spike.md):
+  `CompressContext` **clears** the four-point gate (recommended opt-in adoption under R-2);
+  `GoalPipeline` is **kept out**. Updated the utilization-audit §2 rows accordingly. Status
+  stays `draft` — the spike authorizes no wiring, and advancing to `approved` (which would
+  permit R-2 under separate authorization) is the operator's decision.
 - 2026-09-27: created as `draft` — an adoption-gate spike resolving the two
   agentscope 2.0.8 surfaces (`CompressContext`, `GoalPipeline`) deferred to SPEC-064 by
   the v0.43.2 dependency refresh. Grounded in the locked 2.0.8 install and the SPEC-018
