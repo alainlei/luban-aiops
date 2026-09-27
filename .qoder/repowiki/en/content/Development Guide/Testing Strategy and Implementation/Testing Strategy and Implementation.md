@@ -12,7 +12,17 @@
 - [test_contracts.py](file://products/platform-gateway/tests/test_contracts.py)
 - [test_policy_engine.py](file://products/platform-gateway/tests/test_policy_engine.py)
 - [test_tool_registry.py](file://products/tool-gateway/tests/test_tool_registry.py)
+- [test_documents.py](file://products/agent-platform/tests/test_documents.py)
+- [test_operation_documents.py](file://products/agent-platform/tests/test_operation_documents.py)
+- [clock-sensitive-document-fixtures.md](file://docs/agentic-aiops-platform/release-notes/2026-09-27-clock-sensitive-document-fixtures.md)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Added comprehensive guidance for handling clock-sensitive test fixtures and retention policy interactions
+- Updated fixture management patterns with dynamic timestamp generation examples
+- Enhanced troubleshooting section with retention-related debugging strategies
+- Added new section on time-based testing patterns and best practices
 
 ## Table of Contents
 1. Introduction
@@ -26,7 +36,9 @@
 9. Conclusion
 
 ## Introduction
-This document describes the multi-layered testing strategy across the platform’s microservices. It covers unit tests using pytest and unittest, mocking strategies for external dependencies, test data management, integration testing for service-to-service communication and databases, end-to-end (E2E) procedures via shared scripts, contract testing for API schemas and policy definitions, and guidance on organization, naming, assertions, performance/security testing, coverage maintenance, and debugging failing tests.
+This document describes the multi-layered testing strategy across the platform's microservices. It covers unit tests using pytest and unittest, mocking strategies for external dependencies, test data management, integration testing for service-to-service communication and databases, end-to-end (E2E) procedures via shared scripts, contract testing for API schemas and policy definitions, and guidance on organization, naming, assertions, performance/security testing, coverage maintenance, and debugging failing tests.
+
+**Updated** Added comprehensive guidance for handling clock-sensitive test fixtures and retention policy interactions, including dynamic timestamp generation patterns to prevent fixture aging issues.
 
 ## Project Structure
 The repository organizes tests alongside each product:
@@ -76,6 +88,8 @@ Key patterns observed:
 - Mocking of async HTTP clients with AsyncMock to isolate network calls.
 - Contract alignment tests against shared schema files.
 - Deterministic E2E scripts that obtain tokens, call APIs, and assert structured responses.
+
+**Updated** Added patterns for clock-sensitive fixture management and retention-aware test data generation.
 
 **Section sources**
 - [test_app.py:6-52](file://products/agent-platform/tests/test_app.py#L6-L52)
@@ -143,6 +157,86 @@ AssertChat --> |No| Fail
 
 **Section sources**
 - [test_app.py:6-52](file://products/agent-platform/tests/test_app.py#L6-L52)
+
+### Clock-Sensitive Test Fixtures and Retention Policy Handling
+
+**New Section** The agent-platform tests implement sophisticated patterns for handling clock-sensitive fixtures and retention policy interactions. These patterns prevent test failures due to fixture aging and ensure deterministic behavior across different execution times.
+
+#### Dynamic Timestamp Generation Pattern
+
+Tests use `datetime.now(timezone.utc)` to generate timestamps relative to the current execution time, preventing fixtures from aging out of retention windows:
+
+```python
+from datetime import datetime, timedelta, timezone
+
+# Instead of hardcoded dates like "2026-08-27T08:00:00Z"
+now = datetime.now(timezone.utc)
+recent_timestamp = (now - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+older_timestamp = (now - timedelta(minutes=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+```
+
+#### Retention-Aware Test Data Management
+
+The operation document store sweeps rows older than `RETENTION_DAYS` (30 days) on every write. Tests must account for this behavior:
+
+```python
+def test_list_for_owner_is_owner_scoped_and_newest_first(self) -> None:
+    store = InMemoryOperationDocumentStore()
+    # Timestamps must be relative to now: create() sweeps rows older than
+    # RETENTION_DAYS, so a hardcoded date silently ages out once the wall
+    # clock passes it. doc-2 stays newer than doc-1 for the ordering assert.
+    now = datetime.now(timezone.utc)
+    store.create(
+        _doc("doc-1", created_at=(now - timedelta(minutes=2)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    )
+    store.create(
+        _doc("doc-2", created_at=(now - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    )
+    rows = store.list_for_owner("alice")
+    assert [row["document_id"] for row in rows] == ["doc-2", "doc-1"]
+```
+
+#### Fixture Isolation with Cleanup
+
+Tests use autouse fixtures to clean state between test runs:
+
+```python
+@pytest.fixture(autouse=True)
+def _clean_stores(monkeypatch):
+    documents = getattr(OPERATION_DOCUMENT_STORE, "_by_document_id", None)
+    sessions = getattr(SESSION_STORE, "_sessions", None)
+    last_accessed = getattr(SESSION_STORE, "_last_accessed", None)
+    if documents is not None:
+        documents.clear()
+    if sessions is not None:
+        sessions.clear()
+    if last_accessed is not None:
+        last_accessed.clear()
+```
+
+#### Time-Based Ordering Assertions
+
+When testing ordering behavior, maintain relative time differences rather than absolute values:
+
+```python
+def test_cap_evicts_oldest_per_owner(self) -> None:
+    store = InMemoryOperationDocumentStore()
+    now = datetime.now(timezone.utc)
+    for index in range(PER_OWNER_CAP + 3):
+        # Timestamps must be relative to now: create() sweeps rows older
+        # than RETENTION_DAYS, so a hardcoded date would silently age out
+        # once the wall clock passes it and corrupt the cap assertion.
+        stamp = now - timedelta(minutes=PER_OWNER_CAP + 3 - index)
+        store.create(_doc(f"doc-{index:02d}", created_at=stamp.strftime("%Y-%m-%dT%H:%M:%SZ")))
+    rows = store.list_for_owner("alice")
+    assert len(rows) == PER_OWNER_CAP
+```
+
+**Section sources**
+- [test_documents.py:278-307](file://products/agent-platform/tests/test_documents.py#L278-L307)
+- [test_operation_documents.py:98-123](file://products/agent-platform/tests/test_operation_documents.py#L98-L123)
+- [test_operation_documents.py:141-160](file://products/agent-platform/tests/test_operation_documents.py#L141-L160)
+- [clock-sensitive-document-fixtures.md:35-41](file://docs/agentic-aiops-platform/release-notes/2026-09-27-clock-sensitive-document-fixtures.md#L35-L41)
 
 ### Execution Worker Handoff: Mocking External Dependencies
 - Mocks httpx.AsyncClient to simulate success, transport errors, timeouts, and malformed payloads.
@@ -334,6 +428,8 @@ E2E --> SECRETS["Runtime Secrets/ConfigMaps"]
 - Reserve E2E scripts for critical paths; they are slower and environment-dependent.
 - For load/performance testing beyond smoke tests, consider adding dedicated harnesses that target gateway endpoints with controlled concurrency while reusing token issuance patterns seen in E2E scripts.
 
+**Updated** When writing time-sensitive tests, avoid expensive operations in fixtures; prefer lightweight dynamic timestamp generation over complex setup procedures.
+
 [No sources needed since this section provides general guidance]
 
 ## Troubleshooting Guide
@@ -349,10 +445,16 @@ Common failure modes and how to debug:
 - Audit trail gaps:
   - E2E scripts wait briefly for fire-and-forget emissions and query audit events with appropriate credentials.
 
+**Updated** Retention-related test failures:
+- **Fixture aging**: If tests fail intermittently with empty results, check for hardcoded timestamps that may have aged out of retention windows. Use `datetime.now(timezone.utc)` to generate relative timestamps.
+- **Retention sweep interference**: Tests that directly insert into stores with old timestamps may trigger retention sweeps. Ensure test data is recent enough to survive cleanup.
+- **Ordering assertions**: When testing time-based ordering, maintain relative time differences rather than absolute values to prevent fixture aging issues.
+
 Actionable tips:
 - Re-run the minimal failing step from the relevant E2E script with verbose curl to inspect payloads.
 - For unit failures, reduce scope to the smallest assertion and print intermediate values.
 - For contract failures, compare model properties and enum values against the referenced schema files.
+- For retention-related failures, replace hardcoded timestamps with dynamic generation using `datetime.now(timezone.utc) - timedelta(...)`.
 
 **Section sources**
 - [browser-check-demo.sh:85-167](file://shared/platform-ops/e2e/browser-check-demo.sh#L85-L167)
@@ -360,12 +462,17 @@ Actionable tips:
 - [incident-demo.sh:63-132](file://shared/platform-ops/e2e/incident-demo.sh#L63-L132)
 - [test_execution_worker_client.py:117-205](file://products/agent-platform/tests/test_execution_worker_client.py#L117-L205)
 - [test_policy_engine.py:55-72](file://products/platform-gateway/tests/test_policy_engine.py#L55-L72)
+- [clock-sensitive-document-fixtures.md:18-33](file://docs/agentic-aiops-platform/release-notes/2026-09-27-clock-sensitive-document-fixtures.md#L18-L33)
 
 ## Conclusion
 The platform employs a layered testing strategy:
 - Fast, isolated unit tests with mocks for core logic and service boundaries.
 - Contract tests ensuring strict alignment between models and shared schemas/policies.
 - Deterministic E2E smoke tests validating authentication, authorization, policy enforcement, HITL approvals, tool execution, and audit durability.
+- Robust fixture management patterns that handle clock-sensitive data and retention policies to ensure test stability across different execution times.
+
 Following these patterns ensures reliability, safety, and maintainability across the microservices ecosystem.
+
+**Updated** The addition of clock-sensitive fixture management patterns ensures tests remain stable regardless of execution timing, preventing intermittent failures due to retention policy interactions.
 
 [No sources needed since this section summarizes without analyzing specific files]

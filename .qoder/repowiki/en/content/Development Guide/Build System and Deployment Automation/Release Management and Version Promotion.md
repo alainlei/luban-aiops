@@ -10,7 +10,19 @@
 - [deploy.sh](file://shared/platform-ops/gitops/dev-k8s/deploy.sh)
 - [2026-07-26-release-0-runtime-and-dev-k8s-overlays.md](file://docs/agentic-aiops-platform/release-notes/2026-07-26-release-0-runtime-and-dev-k8s-overlays.md)
 - [delivery-roadmap.md](file://docs/agentic-aiops-platform/delivery-roadmap.md)
+- [2026-09-27-clock-sensitive-document-fixtures.md](file://docs/agentic-aiops-platform/release-notes/2026-09-27-clock-sensitive-document-fixtures.md)
+- [VERSION](file://VERSION)
+- [validate_version.py](file://shared/shared-contracts/scripts/validate_version.py)
+- [test_documents.py](file://products/agent-platform/tests/test_documents.py)
+- [test_operation_documents.py](file://products/agent-platform/tests/test_operation_documents.py)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Added v0.43.1 patch release documentation focusing on test fixture stability improvements
+- Updated version coordination section to reflect the current 0.43.2 platform version
+- Enhanced test fixture stability guidance with specific examples from the clock-sensitive document fixtures fix
+- Updated verification gate documentation to include the complete validation suite for patch releases
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -25,7 +37,7 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document describes the release management, version promotion, automated releases, and deployment pipelines for the Agentic AIOps platform. It explains how versions are coordinated across products and images, how GitOps overlays render deployments, how secrets and configuration are synchronized, and how verification gates protect promotions. It also covers rollback strategies, hotfix handling, monitoring during releases, validation after deployment, auditability, and compliance considerations grounded in the repository’s current build and deploy tooling.
+This document describes the release management, version promotion, automated releases, and deployment pipelines for the Agentic AIOps platform. It explains how versions are coordinated across products and images, how GitOps overlays render deployments, how secrets and configuration are synchronized, and how verification gates protect promotions. It also covers rollback strategies, hotfix handling, monitoring during releases, validation after deployment, auditability, and compliance considerations grounded in the repository's current build and deploy tooling. The platform currently operates at version 0.43.2, with recent patch releases like v0.43.1 demonstrating the importance of test fixture stability and version coordination across all platform products.
 
 ## Project Structure
 The workspace is organized around product-oriented services under `products/`, shared contracts and operations under `shared/`, and documentation under `docs/`. The root Makefile orchestrates cross-cutting concerns: testing, linting, image building, policy validation, overlay rendering, and deployment to a Kubernetes cluster via GitOps overlays.
@@ -104,12 +116,12 @@ K8S-->>Dev : Services running with coordinated images
 
 ### Version Promotion and Tag Management
 - Single source of truth:
-  - The root VERSION file defines the platform version used to prefix coordinated image tags.
+  - The root VERSION file defines the platform version used to prefix coordinated image tags. Currently set to 0.43.2.
 - Tag computation:
   - Tags follow the pattern `<semver>-<prefix>[-<profile>]-<gitsha>[-dirty-<timestamp>]`.
   - Prefix/profile can be set via defaults; profile supports overlays like runtime profiles.
 - Lockstep enforcement:
-  - A dedicated target validates that the root version aligns with product metadata and portal references.
+  - A dedicated target validates that the root version aligns with product metadata and portal references using `validate_version.py`.
 - Image state:
   - After building, a `.images.env` file records the exact image references used for deployment, enabling reproducible rollouts and audits.
 
@@ -132,6 +144,7 @@ Validate --> End(["Ready for deploy/push"])
 - [Makefile:39-64](file://Makefile#L39-L64)
 - [Makefile:96-109](file://Makefile#L96-L109)
 - [Makefile:161-163](file://Makefile#L161-L163)
+- [VERSION:1-2](file://VERSION#L1-L2)
 
 ### Automated Releases and CI Gates
 - Pre-commit/pre-push gate:
@@ -165,6 +178,33 @@ SV --> |fail| GateFail
 - [Makefile:14-23](file://Makefile#L14-L23)
 - [Makefile:81-87](file://Makefile#L81-L87)
 - [Makefile:178-179](file://Makefile#L178-L179)
+
+### Test Fixture Stability and Patch Release Handling
+The v0.43.1 patch release demonstrates the critical importance of test fixture stability in release management. This patch addressed clock-sensitive test failures where hardcoded timestamps aged out due to retention policies.
+
+**Key lessons from v0.43.1:**
+- **Clock-relative fixtures**: Tests should derive timestamps from `datetime.now(timezone.utc)` rather than using hardcoded dates
+- **Retention awareness**: Understanding store sweep behavior (RETENTION_DAYS = 30) when writing test data
+- **Patch release scope**: Test-only fixes maintain version lockstep without affecting production behavior
+
+```mermaid
+flowchart TD
+TestFix["Test Fix Required"] --> Identify["Identify clock-sensitive fixtures"]
+Identify --> Analyze["Analyze retention sweep behavior"]
+Analyze --> Fix["Update to datetime.now(timezone.utc)"]
+Fix --> Verify["Verify full make verify gate"]
+Verify --> PatchRelease["Create patch release (v0.43.1)"]
+```
+
+**Diagram sources**
+- [2026-09-27-clock-sensitive-document-fixtures.md:9-16](file://docs/agentic-aiops-platform/release-notes/2026-09-27-clock-sensitive-document-fixtures.md#L9-L16)
+- [test_documents.py:281-285](file://products/agent-platform/tests/test_documents.py#L281-L285)
+- [test_operation_documents.py:143-148](file://products/agent-platform/tests/test_operation_documents.py#L143-L148)
+
+**Section sources**
+- [2026-09-27-clock-sensitive-document-fixtures.md:1-69](file://docs/agentic-aiops-platform/release-notes/2026-09-27-clock-sensitive-document-fixtures.md#L1-L69)
+- [test_documents.py:278-306](file://products/agent-platform/tests/test_documents.py#L278-L306)
+- [test_operation_documents.py:141-159](file://products/agent-platform/tests/test_operation_documents.py#L141-L159)
 
 ### Secrets Synchronization Across Environments
 - Deploy-time provisioning:
@@ -242,8 +282,6 @@ Deploy --> Pods["Services mount ConfigMap"]
   - For urgent fixes, rebuild images with a new tag and redeploy the overlay; use the same secret provisioning and configuration flow to maintain consistency.
 - Emergency release handling:
   - Use external secret injection flags to bypass local secret provisioning in CI while ensuring fail-closed behavior where applicable.
-
-[No sources needed since this section provides general guidance derived from existing build/deploy mechanics]
 
 ### Monitoring and Alerting During Releases
 - Observability integration:
@@ -333,8 +371,6 @@ KO --> CM["ConfigMaps"]
 - Kustomize overlay rendering is performed as part of verification to catch configuration errors early.
 - Auto-loading images into kind accelerates local iteration but should be disabled in CI to avoid overhead.
 
-[No sources needed since this section provides general guidance]
-
 ## Troubleshooting Guide
 - If `make verify` fails:
   - Check test output for failing product suites.
@@ -345,15 +381,16 @@ KO --> CM["ConfigMaps"]
   - Verify secret provisioning flags and environment variables.
   - Ensure the correct cluster context is active.
   - Check logs for services after rollout to identify misconfigurations.
+- Test fixture issues:
+  - Use clock-relative timestamps (`datetime.now(timezone.utc)`) instead of hardcoded dates.
+  - Understand retention policies (RETENTION_DAYS) when creating test data.
 
 **Section sources**
 - [Makefile:178-183](file://Makefile#L178-L183)
 - [deploy.sh:1-62](file://shared/platform-ops/gitops/dev-k8s/deploy.sh#L1-L62)
 
 ## Conclusion
-The platform uses a coordinated, GitOps-driven release model anchored by a single version source and deterministic image tagging. The verification gate enforces quality and policy compliance before promotion. Secrets and configuration are synchronized at deploy time, and audit trails provide traceability. Rollbacks and hotfixes leverage immutable image tags and overlay-based deployments, while e2e demos and overlay checks validate releases. This approach balances repeatability, safety, and operational clarity.
-
-[No sources needed since this section summarizes without analyzing specific files]
+The platform uses a coordinated, GitOps-driven release model anchored by a single version source and deterministic image tagging. The verification gate enforces quality and policy compliance before promotion. Secrets and configuration are synchronized at deploy time, and audit trails provide traceability. Rollbacks and hotfixes leverage immutable image tags and overlay-based deployments, while e2e demos and overlay checks validate releases. The v0.43.1 patch release exemplifies the importance of test fixture stability, demonstrating how clock-sensitive issues can be resolved through proper timestamp handling while maintaining version lockstep across all platform products. This approach balances repeatability, safety, and operational clarity.
 
 ## Appendices
 
@@ -367,3 +404,24 @@ The platform uses a coordinated, GitOps-driven release model anchored by a singl
 **Section sources**
 - [Makefile:77-129](file://Makefile#L77-L129)
 - [Makefile:178-204](file://Makefile#L178-L204)
+
+### Version Coordination Details
+- Current platform version: 0.43.2
+- Version validation script: `shared/shared-contracts/scripts/validate_version.py`
+- Enforced lockstep across all products and portal
+- Semantic versioning format: MAJOR.MINOR.PATCH
+
+**Section sources**
+- [VERSION:1-2](file://VERSION#L1-L2)
+- [validate_version.py:1-149](file://shared/shared-contracts/scripts/validate_version.py#L1-L149)
+- [Makefile:169-171](file://Makefile#L169-L171)
+
+### Patch Release Best Practices
+Based on v0.43.1 experience:
+- Test-only fixes maintain version lockstep without production changes
+- Clock-relative timestamps prevent future retention-related failures
+- Full verification gate must pass including all eight product suites
+- Documentation should clearly state patch scope and impact
+
+**Section sources**
+- [2026-09-27-clock-sensitive-document-fixtures.md:64-69](file://docs/agentic-aiops-platform/release-notes/2026-09-27-clock-sensitive-document-fixtures.md#L64-L69)

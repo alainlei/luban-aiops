@@ -10,15 +10,18 @@
 - [services/model_catalog.py](file://products/agent-platform/src/agent_service/services/model_catalog.py)
 - [services/agent_state_store.py](file://products/agent-platform/src/agent_service/services/agent_state_store.py)
 - [services/evidence_store.py](file://products/agent-platform/src/agent_service/services/evidence_store.py)
+- [services/operation_documents.py](file://products/agent-platform/src/agent_service/services/operation_documents.py)
 - [api/v2/routes.py](file://products/agent-platform/src/agent_service/api/v2/routes.py)
+- [tests/test_operation_documents.py](file://products/agent-platform/tests/test_operation_documents.py)
+- [tests/test_documents.py](file://products/agent-platform/tests/test_documents.py)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Updated System Prompt section to reflect enhanced skill-search triggering for operational requests
-- Added new subsection documenting the SPEC-062 enhancement for proactive skill discovery
-- Updated troubleshooting guide with new prompt behavior expectations
-- Enhanced examples to demonstrate improved operational request handling
+- Updated Operation Documents section to document the retention policy sweep mechanism and its impact on test data
+- Added new subsection documenting the clock-relative timestamp pattern for test stability
+- Enhanced troubleshooting guide with guidance on retention policy considerations
+- Updated examples to demonstrate proper timestamp handling for operation documents
 
 ## Table of Contents
 1. Introduction
@@ -41,6 +44,7 @@ The Agent Platform service lives under products/agent-platform/src/agent_service
 - Runtime kernel that orchestrates AgentScope agents, tools, middleware, and streaming
 - Provider registry and multi-model catalog
 - Session state and evidence stores with pluggable backends
+- Operation document repository with retention policies
 - Configuration and environment-driven settings
 
 ```mermaid
@@ -55,6 +59,7 @@ P["providers/__init__.py<br/>Provider registry"]
 C["services/model_catalog.py<br/>ModelCatalog"]
 SS["services/agent_state_store.py<br/>Session state store"]
 ES["services/evidence_store.py<br/>Evidence store"]
+OD["services/operation_documents.py<br/>Operation document store"]
 end
 M --> A --> R --> K
 K --> S
@@ -62,6 +67,7 @@ K --> P
 K --> C
 K --> SS
 K --> ES
+R --> OD
 ```
 
 **Diagram sources**
@@ -74,6 +80,7 @@ K --> ES
 - [services/model_catalog.py:236-331](file://products/agent-platform/src/agent_service/services/model_catalog.py#L236-L331)
 - [services/agent_state_store.py:276-324](file://products/agent-platform/src/agent_service/services/agent_state_store.py#L276-L324)
 - [services/evidence_store.py:504-551](file://products/agent-platform/src/agent_service/services/evidence_store.py#L504-L551)
+- [services/operation_documents.py:530-572](file://products/agent-platform/src/agent_service/services/operation_documents.py#L530-L572)
 
 **Section sources**
 - [main.py:1-22](file://products/agent-platform/src/agent_service/main.py#L1-L22)
@@ -85,23 +92,26 @@ K --> ES
 - Model catalog: Startup-curated series plus live discovery refresh; safe swap without invalidating references used by routes/kernel.
 - Session state store: Persists AgentState snapshots to memory or PostgreSQL; restores on agent creation.
 - Evidence store: Captures tool_call/tool_result frames per turn with size caps and budget eviction; persisted to memory or PostgreSQL.
-- API v2 routes: Chat, streaming chat, confirmation bridge, session management, model catalog exposure, and evidence retrieval.
+- Operation document repository: Manages typed operational documents (shift summaries, incident reports) with owner-scoped visibility, one-way publish lifecycle, and 30-day retention sweep.
+- API v2 routes: Chat, streaming chat, confirmation bridge, session management, model catalog exposure, evidence retrieval, and operation document CRUD.
 
 **Section sources**
 - [runtime_kernel.py:212-774](file://products/agent-platform/src/agent_service/runtime_kernel.py#L212-L774)
 - [services/model_catalog.py:1-331](file://products/agent-platform/src/agent_service/services/model_catalog.py#L1-L331)
 - [services/agent_state_store.py:1-324](file://products/agent-platform/src/agent_service/services/agent_state_store.py#L1-L324)
 - [services/evidence_store.py:1-551](file://products/agent-platform/src/agent_service/services/evidence_store.py#L1-L551)
+- [services/operation_documents.py:1-573](file://products/agent-platform/src/agent_service/services/operation_documents.py#L1-L573)
 - [api/v2/routes.py:276-800](file://products/agent-platform/src/agent_service/api/v2/routes.py#L276-L800)
 
 ## Architecture Overview
-The request flow starts at the Uvicorn entrypoint, which boots the FastAPI app. The app configures logging, metrics, telemetry, and includes the v2 router. Routes validate identity headers, resolve sessions and models, then delegate to the runtime kernel. The kernel constructs or reuses an AgentScope agent bound to a session, optionally restoring persisted state, and executes turns with middleware for permissions, evidence capture, tracing, and token budgets. Streaming responses are normalized to the shared v2 schema and emitted as Server-Sent Events.
+The request flow starts at the Uvicorn entrypoint, which boots the FastAPI app. The app configures logging, metrics, telemetry, and includes the v2 router. Routes validate identity headers, resolve sessions and models, then delegate to the runtime kernel. The kernel constructs or reuses an AgentScope agent bound to a session, optionally restoring persisted state, and executes turns with middleware for permissions, evidence capture, tracing, and token budgets. Streaming responses are normalized to the shared v2 schema and emitted as Server-Sent Events. Operation documents follow a separate lifecycle through the operation document repository with owner-scoped visibility and retention policies.
 
 ```mermaid
 sequenceDiagram
 participant Client as "Client"
 participant API as "FastAPI /api/v2"
 participant Kernel as "AgentKernel"
+participant DocStore as "OperationDocumentStore"
 participant Catalog as "ModelCatalog"
 participant Store as "State/Evidence Stores"
 Client->>API : POST /chat or GET /chat/stream
@@ -114,6 +124,10 @@ Kernel->>Kernel : Build toolkit (gateway tools if configured)
 Kernel->>Kernel : Execute turn with middlewares
 Kernel-->>API : Text or stream frames
 API-->>Client : Response or SSE frames
+Note over Client,DocStore : Operation documents follow separate lifecycle
+Client->>API : POST /api/v2/documents
+API->>DocStore : Create draft with retention-aware timestamps
+DocStore-->>API : Draft document (subject to 30-day sweep)
 ```
 
 **Diagram sources**
@@ -123,6 +137,7 @@ API-->>Client : Response or SSE frames
 - [services/model_catalog.py:236-331](file://products/agent-platform/src/agent_service/services/model_catalog.py#L236-L331)
 - [services/agent_state_store.py:276-324](file://products/agent-platform/src/agent_service/services/agent_state_store.py#L276-L324)
 - [services/evidence_store.py:504-551](file://products/agent-platform/src/agent_service/services/evidence_store.py#L504-L551)
+- [services/operation_documents.py:139-142](file://products/agent-platform/src/agent_service/services/operation_documents.py#L139-L142)
 
 ## Detailed Component Analysis
 
@@ -232,6 +247,58 @@ ReportNoMatch --> HonestRefusal["Honest refusal with explanation"]
 **Section sources**
 - [runtime_settings.py:8-58](file://products/agent-platform/src/agent_service/runtime_settings.py#L8-L58)
 
+### Operation Document Repository
+**Updated** The operation document repository manages typed operational documents (shift summaries, incident reports) with owner-scoped visibility, one-way publish lifecycle, and automatic retention policies. Documents are subject to a 30-day retention sweep that removes expired records on every write operation.
+
+Key features include:
+- **Retention Policy**: Automatic sweep of documents older than RETENTION_DAYS (30 days) on create operations
+- **Owner Scoping**: Drafts visible only to owners; published documents visible to all with `documents:read` capability
+- **One-way Lifecycle**: Documents transition from draft to published state (owner-only action)
+- **Per-owner Caps**: Maximum PER_OWNER_CAP (20) documents per owner with oldest-first eviction
+- **Clock-Relative Timestamps**: Test fixtures must use relative timestamps to avoid aging out during retention sweeps
+
+```mermaid
+flowchart TD
+Create["Create Document"] --> Insert["Insert into store"]
+Insert --> Evict["Evict over cap (oldest first)"]
+Evict --> Sweep["Sweep expired (>RETENTION_DAYS)"]
+Sweep --> Ready["Document ready"]
+Publish["Publish Document"] --> OneWay["One-way transition draft->published"]
+List["List Documents"] --> Filter{"Owner scope?"}
+Filter --> |Yes| OwnerOnly["Show drafts + published"]
+Filter --> |No| PublishedOnly["Show published only"]
+```
+
+**Diagram sources**
+- [services/operation_documents.py:139-142](file://products/agent-platform/src/agent_service/services/operation_documents.py#L139-L142)
+- [services/operation_documents.py:188-209](file://products/agent-platform/src/agent_service/services/operation_documents.py#L188-L209)
+- [services/operation_documents.py:425-459](file://products/agent-platform/src/agent_service/services/operation_documents.py#L425-L459)
+
+**Section sources**
+- [services/operation_documents.py:1-573](file://products/agent-platform/src/agent_service/services/operation_documents.py#L1-L573)
+
+### Clock-Relative Timestamp Pattern for Test Stability
+**New** Tests involving operation documents must use clock-relative timestamps instead of hardcoded dates to maintain stability across the 30-day retention window. Hardcoded dates like `2026-08-27` will age out once the wall clock passes the retention horizon, causing tests to fail unpredictably.
+
+The recommended pattern uses `datetime.now(timezone.utc)` minus a small offset to ensure test data stays within the retention window:
+
+```python
+def _iso(days_ago: int) -> str:
+    stamp = datetime.now(timezone.utc) - timedelta(days=days_ago)
+    return stamp.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+# Usage in tests:
+store.create(_doc("doc-1", created_at=_iso(2)))  # 2 days ago
+store.create(_doc("doc-2", created_at=_iso(1)))  # 1 day ago (newer)
+```
+
+This pattern preserves intended ordering while staying well inside the retention window, mirroring the approach already established in existing stable tests.
+
+**Section sources**
+- [tests/test_operation_documents.py:53-55](file://products/agent-platform/tests/test_operation_documents.py#L53-L55)
+- [tests/test_operation_documents.py:98-122](file://products/agent-platform/tests/test_operation_documents.py#L98-L122)
+- [tests/test_documents.py:278-300](file://products/agent-platform/tests/test_documents.py#L278-L300)
+
 ### Session Persistence and Evidence
 - Agent state: Persisted per session as JSON snapshots; restored on agent creation. Backends: in-memory (dev/CI) and PostgreSQL (deployed). TTL-aware reads keep rows alive during active sessions; opportunistic sweep reclaims expired rows.
 - Evidence: Captures tool_call and tool_result frames per turn with per-entry char caps and per-session byte budgets. Eviction nulls oldest result payloads while preserving metadata. Backends mirror the state store selection via AGENT_STATE_STORE_BACKEND and share AGENT_STATE_DB_URL.
@@ -311,12 +378,14 @@ API-->>Client : SSE frames continue
 - Application lifecycle: Uvicorn runs the FastAPI app created in app.py, which sets up logging, metrics, telemetry, and includes the v2 router.
 - Kernel dependencies: Uses provider registry, model catalog, runtime settings, state/evidence stores, and middleware services.
 - Route dependencies: Depends on runtime kernel, session services, model catalog, stores, and schemas.
+- Operation document dependencies: Routes depend on the operation document store singleton for document lifecycle management.
 
 ```mermaid
 graph LR
 Main["main.py"] --> App["app.py"]
 App --> Router["api/v2/routes.py"]
 Router --> Kernel["runtime_kernel.py"]
+Router --> DocStore["services/operation_documents.py"]
 Kernel --> Settings["runtime_settings.py"]
 Kernel --> Providers["providers/__init__.py"]
 Kernel --> Catalog["services/model_catalog.py"]
@@ -334,6 +403,7 @@ Kernel --> Evidence["services/evidence_store.py"]
 - [services/model_catalog.py:236-331](file://products/agent-platform/src/agent_service/services/model_catalog.py#L236-L331)
 - [services/agent_state_store.py:276-324](file://products/agent-platform/src/agent_service/services/agent_state_store.py#L276-L324)
 - [services/evidence_store.py:504-551](file://products/agent-platform/src/agent_service/services/evidence_store.py#L504-L551)
+- [services/operation_documents.py:530-572](file://products/agent-platform/src/agent_service/services/operation_documents.py#L530-L572)
 
 **Section sources**
 - [app.py:19-79](file://products/agent-platform/src/agent_service/app.py#L19-L79)
@@ -346,6 +416,7 @@ Kernel --> Evidence["services/evidence_store.py"]
 - Evidence sizing: Per-entry and per-session caps prevent unbounded storage growth; evictions preserve metadata for accurate cards.
 - Model discovery: Periodic refresh with timeouts avoids blocking startup; failures degrade gracefully.
 - **Enhanced Skill Search**: The proactive skill-search triggering adds minimal overhead but significantly improves operational request handling efficiency by preventing unnecessary refusals and guiding models toward appropriate skill discovery.
+- **Retention Policy Sweeps**: Operation document retention sweeps run opportunistically on writes with bounded limits (100 rows per sweep) to minimize performance impact while maintaining storage hygiene.
 
 ## Troubleshooting Guide
 - Unknown model id: Requests specifying an unrecognized model id fail closed with 422; verify the model exists in the catalog or remove the field to use pinned/default.
@@ -354,6 +425,8 @@ Kernel --> Evidence["services/evidence_store.py"]
 - State store fallback: If Postgres is unavailable, agent state falls back to in-memory; monitor metrics for fallback counts.
 - No tools available: When no operational tools are discovered, the kernel injects a system notice to prevent hallucinated infrastructure data.
 - **Operational Request Refusals**: If operational requests are still being refused despite having relevant skills, verify that skills.search is being triggered by checking for "named system, account, or target" patterns in the prompt. The enhanced prompt should proactively search skills before refusing requests lacking offhand grounding.
+- **Operation Document Retention Issues**: If operation documents disappear unexpectedly, check if they've aged beyond the 30-day retention window. Test fixtures should use clock-relative timestamps (`datetime.now(timezone.utc) - timedelta(...)`) instead of hardcoded dates to avoid this issue.
+- **Test Failures with Hardcoded Dates**: Tests using hardcoded dates like `2026-08-27` may fail due to retention policy sweeps. Replace with relative timestamps using the `_iso()` helper pattern to ensure test stability.
 
 **Section sources**
 - [api/v2/routes.py:202-243](file://products/agent-platform/src/agent_service/api/v2/routes.py#L202-L243)
@@ -361,6 +434,8 @@ Kernel --> Evidence["services/evidence_store.py"]
 - [api/v2/routes.py:733-748](file://products/agent-platform/src/agent_service/api/v2/routes.py#L733-L748)
 - [services/agent_state_store.py:276-324](file://products/agent-platform/src/agent_service/services/agent_state_store.py#L276-L324)
 - [runtime_kernel.py:94-119](file://products/agent-platform/src/agent_service/runtime_kernel.py#L94-L119)
+- [services/operation_documents.py:196-209](file://products/agent-platform/src/agent_service/services/operation_documents.py#L196-L209)
+- [tests/test_operation_documents.py:53-55](file://products/agent-platform/tests/test_operation_documents.py#L53-L55)
 
 ## Conclusion
-The Agent Platform provides a robust, observable, and durable orchestration layer for AIOPS workflows. It centralizes session lifecycle, supports dynamic model switching across multiple providers, enforces safety through HITL approvals and read-only modes, and captures rich evidence for transparency and replay. With pluggable persistence, streaming responses, and careful error handling, it scales to concurrent sessions while maintaining reliability and auditability. The enhanced system prompt now ensures that operational requests are handled more intelligently by proactively searching for relevant skills before refusing requests due to lack of immediate knowledge, improving both user experience and operational efficiency.
+The Agent Platform provides a robust, observable, and durable orchestration layer for AIOPS workflows. It centralizes session lifecycle, supports dynamic model switching across multiple providers, enforces safety through HITL approvals and read-only modes, and captures rich evidence for transparency and replay. With pluggable persistence, streaming responses, and careful error handling, it scales to concurrent sessions while maintaining reliability and auditability. The enhanced system prompt now ensures that operational requests are handled more intelligently by proactively searching for relevant skills before refusing requests due to lack of immediate knowledge, improving both user experience and operational efficiency. The addition of the operation document repository with retention policies provides durable operational documentation with automatic cleanup, while the clock-relative timestamp pattern ensures test stability across different deployment timelines.
