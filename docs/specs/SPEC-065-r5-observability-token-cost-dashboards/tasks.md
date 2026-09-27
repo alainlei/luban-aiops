@@ -12,39 +12,56 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 
 ## Stage 0: Plan-time investigations (read-only; recorded in `plan.md`)
 
-- [ ] Confirm where the locked agentscope 2.0.8 sources its **cost** so R-1's
+- [x] Confirm where the locked agentscope 2.0.8 sources its **cost** so R-1's
       dollar figure is a documented mirror of a provider-derived value, not an
       invented platform price table; record the finding in `plan.md`
       (`products/agent-platform/.venv/.../agentscope/` — the `gen_ai.usage.cost*`
-      path the tracing extractor writes)
-- [ ] Fix the exact **mirrored-family enumeration** for R-2 in `plan.md` (the
+      path the tracing extractor writes). **DONE 2026-09-27 — BLOCKING FINDING:**
+      agentscope 2.0.8 has **no** provider-derived cost. `ChatUsage`
+      (`model/_model_usage.py`) is tokens + `time` only; `ChatResponse`
+      (`model/_model_response.py`) has no cost field; the tracing span attributes
+      (`middleware/_tracing/_attributes.py`) define **no** `gen_ai.usage.cost*`;
+      the extractor (`_extractor.py:366-385`) writes tokens only; and `_budget.py`'s
+      "cost" is a synthetic weighted-token budget, not dollars. The `gen_ai.usage.cost*`
+      path referenced here **does not exist** in the locked source. R-1's
+      `agent_llm_cost_usd_total` therefore cannot be mirrored without inventing a
+      price table (forbidden). Recorded in `plan.md`; **operator decision required**
+      before R-1 (tokens-only vs. deferred price table vs. best-effort `metadata`).
+      The `agent_llm_tokens_total` counter is unaffected and fully sourceable.
+- [x] Fix the exact **mirrored-family enumeration** for R-2 in `plan.md` (the
       operator-facing subset at minimum), confirming each family's kind
-      (counter/gauge/histogram) and bounded label set
+      (counter/gauge/histogram) and bounded label set. **DONE 2026-09-27:**
+      recorded as a binding table in `plan.md` (11 families; kind + labels verified
+      against `products/*/src/*/core/metrics.py`). The R-1 cost family is deferred,
+      so not mirrored; `agent_model_discovery_models` is the subset's only gauge and
+      `http_request_duration_seconds` its only histogram
 
-## R-1: First-class LLM token and cost emission
+## R-1: First-class LLM token emission (cost deferred)
 
-- [ ] Add `agent_llm_tokens_total{provider,model,direction}` and
-      `agent_llm_cost_usd_total{provider,model}` counters + `record_*` helpers to
+- [ ] Add an `agent_llm_tokens_total{provider,model,direction}` counter + a
+      `record_*` helper to
       `products/agent-platform/src/agent_service/core/metrics.py` (module-level
-      objects; `direction ∈ {input,output,cache_input,cache_creation}`)
+      object; `direction ∈ {input,output,cache_input,cache_creation}`). **No cost
+      counter** — `agent_llm_cost_usd_total` is deferred (Stage-0 finding)
 - [ ] Add `TokenUsageMiddleware(MiddlewareBase)` implementing `on_model_call` in
       `products/agent-platform/src/agent_service/services/kernel_middleware.py`:
       resolve `{provider,model}` from `current_model` (bounded to the catalog;
       unknown → `model="unknown"` sentinel), `await next_handler(...)`, read
-      `result.usage` (+ cost) for a `ChatResponse`
+      `result.usage` for a `ChatResponse`
 - [ ] Make the middleware **streaming-aware**: wrap the `AsyncGenerator` and
       increment from the terminal chunk's `usage` (mirror the tracing middleware's
       generator wrapper)
-- [ ] Record **nothing** when a provider returns no `usage` / no cost (never
-      synthesize a zero-fill or a fabricated cost)
+- [ ] Record **nothing** when a provider returns no `usage` (never synthesize a
+      zero-fill estimate)
 - [ ] Register the middleware unconditionally in
       `runtime_kernel._build_middlewares()` (`runtime_kernel.py:531-565`), beside
       `GatewayPermissionMiddleware` / `ToolEvidenceMiddleware` — always-on, no knob
-- [ ] Test: non-streaming usage → correct `{provider,model,direction}` increments +
-      cost when reported (`products/agent-platform/tests/`)
+- [ ] Test: non-streaming usage → correct `{provider,model,direction}` increments
+      (`products/agent-platform/tests/`)
 - [ ] Test: streaming multi-chunk generator records terminal-chunk usage (a naive
       non-generator read records zero and must fail)
-- [ ] Test: usage-less response records nothing; cost-less response → tokens-only
+- [ ] Test: usage-less response records nothing; no cost counter is emitted
+      (deferred)
 - [ ] Test: `direction` enum bounded; unknown model → sentinel; emitted label set
       contains **no** `session_id`/`user_id`/`request_id`
 - [ ] Test: middleware is present in `_build_middlewares()` output with no opt-in
@@ -62,7 +79,7 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
       commit; `TelemetryParityTest`
       (`products/tool-gateway/tests/test_module_parity.py`) must pass byte-identical
 - [ ] Call the helper from each service's own `core/metrics.py` for its enumerated
-      families (incl. the R-1 token/cost family in agent-platform); record into
+      families (incl. the R-1 token family in agent-platform); record into
       both surfaces from the existing `record_*` call sites
 - [ ] Test: name + label parity between the prometheus family and the OTel instrument
 - [ ] Test: `OTEL_ENABLED=false` → no instrument created, `/metrics` unchanged
@@ -74,8 +91,9 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 
 - [ ] Add OpenObserve-importable dashboard JSON under
       `shared/platform-ops/dashboards/` (token by `{provider,model,direction}`;
-      cost by `{provider,model}`; RED; one governance/decision-chain view), querying
-      the OpenObserve **metrics** stream
+      RED; one governance/decision-chain view), querying
+      the OpenObserve **metrics** stream. A cost panel is deferred with the R-1
+      cost metric
 - [ ] Add a documented, repeatable apply/import script under `shared/platform-ops/`
 - [ ] Wire a dashboard import/render validation into `make verify` (analogous to
       `kustomize build` for overlays) so the artifact cannot silently rot
@@ -97,7 +115,7 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 
 ## R-5: Contract and living-doc updates
 
-- [ ] Update `shared/shared-contracts/observability-conventions.md`: the token/cost
+- [ ] Update `shared/shared-contracts/observability-conventions.md`: the token
       family + bounded labels; an additive "domain-metric OTel push" note under Two
       Surfaces (push-only visibility requires `OTEL_ENABLED`, ADR-0014); a
       dashboards-as-config-as-code pointer
@@ -115,14 +133,14 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 > criterion maps to at least one asserting test and the shipped live-check is
 > exercised. Mapping (criterion → asserting test):
 
-- [ ] **R-1** non-streaming increment → token/cost label test
+- [ ] **R-1** non-streaming increment → token label test
 - [ ] **R-1** streaming terminal-chunk → multi-chunk generator test
 - [ ] **R-1** bounded `direction` enum + model sentinel → label-bound test
 - [ ] **R-1** no forbidden labels → emitted-label-set assertion
-- [ ] **R-1** absent usage/cost → records-nothing / tokens-only tests
+- [ ] **R-1** absent usage → records-nothing test
 - [ ] **R-1** always-on registration → `_build_middlewares` presence test
-- [ ] **R-1** cost provenance is a mirror → Stage-0 finding + assertion the value
-      comes from provider-reported usage, not a platform price table
+- [ ] **R-1** cost deferred, no fabrication → Stage-0 finding recorded + assertion
+      that no cost counter is emitted (no platform price table)
 - [ ] **R-2** name/label parity → parity test
 - [ ] **R-2** `OTEL_ENABLED=false` no-op + `/metrics` unchanged → decoupling test
 - [ ] **R-2** fail-open → exporter-error test

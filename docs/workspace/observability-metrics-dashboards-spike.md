@@ -16,6 +16,24 @@ external `deepseek` provider (a real, billable single-word model call) to captur
 the test session was deleted afterward and no cluster state was mutated. Port-forwards to the
 identity-service, platform-gateway, and OpenObserve router were opened for the run and torn down.
 
+> **⚠️ Correction (2026-09-27, post-promotion, during SPEC-065 Stage-0).** This
+> memo's claim that agentscope emits a provider-derived **dollar cost**
+> (`gen_ai.usage.cost{,_input,_output}`) is **not supported** by the locked
+> agentscope 2.0.8 source and is **superseded**. Verified against
+> `products/agent-platform/.venv/.../agentscope/`: `ChatUsage`
+> (`model/_model_usage.py`) exposes only `input_tokens`, `output_tokens`, `time`,
+> and the two cache-token counts; `ChatResponse` (`model/_model_response.py`) has
+> no cost field; the tracing span attributes (`middleware/_tracing/_attributes.py`)
+> define **no** `gen_ai.usage.cost*`; and the extractor
+> (`middleware/_tracing/_extractor.py:366-385`) writes **only** the four token
+> attributes. The sole "cost" in agentscope is `middleware/_budget.py`'s synthetic
+> weighted-token budget (unitless, not dollars). The §6.5 cost table below
+> (`gen_ai_usage_cost = 0.0011781`, etc.) is therefore **not reproducible** from
+> 2.0.8's tracing path and must not be relied on. **Consequence for SPEC-065:** R-1
+> ships **tokens-only**; the dollar-cost metric is **deferred** to a follow-up. The
+> token findings (§2.3 token attributes, the 5,352-input-token observation) stand.
+> Inline markers below flag each superseded cost claim.
+
 ## 1. Question and recommendation
 
 > R5 promises "all core services ↔ dashboards and metrics" and "stronger reliability and
@@ -44,7 +62,7 @@ Findings, in one line each:
 
 Recommendation — two coherent, separable slices, A first:
 
-- **Slice A (emit): first-class LLM token/cost metric.** Add a bounded Prometheus counter
+- **Slice A (emit): first-class LLM token metric (cost deferred — see §7.4).** Add a bounded Prometheus counter
   `agent_llm_tokens_total{provider,model,direction}` captured from the provider-reported
   `ChatResponse.usage` via a small `MiddlewareBase.on_model_call` middleware — the identical
   supported-hook pattern SPEC-018 established and the very hook the tracing middleware already
@@ -143,9 +161,11 @@ So token-by-model **is already flowing into OpenObserve** whenever a chat turn r
 per-span attributes on the `traces` stream. It is queryable (SQL over the flattened span
 attributes) but it is **not aggregated, not a metric, and on no dashboard**. That is precisely
 the gap: the raw data exists, the operator-facing signal does not. **Live-confirmed** in §6.5 on a
-real `deepseek-v4-flash` turn, which also showed the span carries `gen_ai.usage.cost` (dollars)
-and the model/provider dimensions — so token **and** cost by model are both already present at the
-span level.
+real `deepseek-v4-flash` turn for the **token** dimensions.
+> **⚠️ Superseded (see correction at top):** the claim that the span also carries
+> `gen_ai.usage.cost` (dollars) is **not supported** by agentscope 2.0.8 — no such attribute is
+> defined or written. Only **token**-by-model is present at the span level; the cost metric is
+> deferred in SPEC-065.
 
 ### 2.4 The consumer gap: no scraper, no dashboard
 
@@ -215,14 +235,13 @@ Metric shape (bounded labels only, per the cardinality rules):
   not in metrics.
 - **Accuracy / anti-fabrication:** record the **provider-reported** `usage` only; never a local
   tokenizer estimate. If a provider returns no `usage`, record nothing (do not synthesize).
-- **Cost-in-dollars is already computed by agentscope** — the live span (§6.5) carries
-  `gen_ai.usage.cost`, `gen_ai.usage.cost_input`, and `gen_ai.usage.cost_output` beside the token
-  counts. So the dollar metric is a **mirror of an existing provider-derived value**, not a price
-  table the platform must own. Per decision §7.4 the spec emits both
-  (`agent_llm_tokens_total{…}` and a cost figure, e.g. `agent_llm_cost_usd_total{provider,model}`);
-  where a provider reports no cost, degrade to tokens-only rather than fabricate. The spike should
-  still confirm where agentscope sources its pricing so the dollar figure's provenance is
-  documented, not assumed.
+- **~~Cost-in-dollars is already computed by agentscope~~ — SUPERSEDED (see correction at top).**
+  Stage-0 verified agentscope 2.0.8 computes **no** dollar cost: there is no `gen_ai.usage.cost*`
+  attribute, `ChatUsage` is tokens + `time` only, and `_budget.py`'s "cost" is a synthetic token
+  weight. The dollar metric is therefore **not** a mirror of an existing value, and the platform
+  has no price table to build one from without fabricating. **SPEC-065 R-1 ships tokens-only**
+  (`agent_llm_tokens_total{…}`); `agent_llm_cost_usd_total` is **deferred** to a follow-up that
+  would add an explicit, reviewed price table labelled as an estimate.
 
 ## 4. Four-point adoption-gate check (SPEC-018)
 
@@ -296,14 +315,21 @@ makes a real model call and is therefore left as an explicit operator choice.
    | `gen_ai_usage_output_tokens` | `1` |
    | `gen_ai_usage_total_tokens` | `5353` |
    | `agentscope_usage_cache_input_tokens` | `5120` |
-   | `gen_ai_usage_cost` | `0.0011781` |
-   | `gen_ai_usage_cost_input` / `_output` | `0.00117744` / `6.6e-07` |
+   | ~~`gen_ai_usage_cost`~~ | ~~`0.0011781`~~ **⚠️ not emitted by 2.0.8** |
+   | ~~`gen_ai_usage_cost_input` / `_output`~~ | ~~`0.00117744` / `6.6e-07`~~ **⚠️ not emitted** |
 
-   Two conclusions the static reading could not reach: **(a)** agentscope already computes
-   **dollar cost** (`gen_ai.usage.cost{,_input,_output}`), so decision §7.4 is a *mirror* of an
-   existing value, not a price table to build; **(b)** a trivial one-word turn still consumed
+   > **⚠️ Superseded rows (see correction at top).** agentscope 2.0.8's extractor writes only
+   > `gen_ai_usage_input_tokens`, `gen_ai_usage_output_tokens`, and the two
+   > `agentscope_usage_cache_*` counts — it defines/writes **no** `gen_ai_usage_cost*` and **no**
+   > `gen_ai_usage_total_tokens`. The cost rows above (and any `total_tokens` row) are **not
+   > reproducible** from the locked source and must not be relied on.
+
+   Two conclusions the static reading could not reach: **(a)** ~~agentscope already computes
+   **dollar cost**~~ — **CORRECTED:** it does **not** (no cost attribute exists in 2.0.8), so
+   SPEC-065 R-1 ships **tokens-only** and defers the dollar metric rather than fabricate a price
+   table; **(b)** a trivial one-word turn still consumed
    **5,352 input tokens** (system prompt + the full ~30-tool schema, 5,120 of it cache-served) for
-   **1 output token** — precisely the per-model cost insight an aggregated metric + dashboard
+   **1 output token** — precisely the per-model **token** insight an aggregated metric + dashboard
    would surface and that raw per-span querying hides. After Slice A, the same numbers would appear
    as `agent_llm_tokens_total{provider="deepseek",model="deepseek-v4-flash",direction=…}` on
    `/metrics` and, under decision §7.1, as an OpenObserve metric stream.
@@ -315,15 +341,19 @@ makes a real model call and is therefore left as an explicit operator choice.
    the new token counter — into OpenObserve. Consistent with the "services only push OTLP;
    scraping is platform-ops" contract. A Prometheus scraper is not deployed.
 2. **First-spec scope → the full R5 observability theme**, provided it is planned and broken into
-   careful, detailed tasks (not one blob). Expect a multi-requirement spec: token/cost emission
-   (Slice A), OTel-instrument push of the domain metrics, the OpenObserve dashboard suite, and a
+   careful, detailed tasks (not one blob). Expect a multi-requirement spec: token emission
+   (Slice A; cost deferred per §7.4), OTel-instrument push of the domain metrics, the OpenObserve
+   dashboard suite, and a
    gated live-check — sequenced as separately verifiable tasks.
 3. **Live chat-turn leg → run against the external `deepseek` provider** (`deepseek-v4-flash`,
    paid), not the local Ollama, which is too slow for an interactive evidence run. Authorized as a
    real (billable) model call.
-4. **Cost → emit both tokens and dollars.** A per-model price table becomes an in-scope input; the
-   token counter is the durable provider-agnostic unit and the dollar figure is derived from it, so
-   a missing/unknown price degrades to tokens-only rather than failing or fabricating a cost.
+4. **Cost → emit both tokens and dollars.** _**⚠️ Superseded 2026-09-27 (SPEC-065 Stage-0):** this
+   decision rested on the (incorrect) belief that agentscope already computes dollars. Stage-0
+   proved 2.0.8 exposes **no** provider-derived cost and the platform has no price table, so the
+   operator revised it: **R-1 ships tokens-only**; a dollar-cost metric is **deferred** to a
+   follow-up that would add an explicit, reviewed price table labelled as an estimate. No cost is
+   fabricated in SPEC-065._
 5. **Token middleware → always-on** (pure observation; no opt-in knob), matching its
    read-only/no-execution character.
 
@@ -338,8 +368,8 @@ makes a real model call and is therefore left as an explicit operator choice.
   domain metrics curl-only. Slice B closes it and is where "all core services ↔ dashboards and
   metrics" is actually realized.
 - Recommendation: promote to a spec scoped to the **full R5 observability theme** (operator
-  decision §7.2), planned as carefully separated tasks — token+cost emission via an always-on
+  decision §7.2), planned as carefully separated tasks — token emission via an always-on
   `on_model_call` middleware, OTel-instrument push of the domain metrics, the OpenObserve
-  dashboard suite, and a gated live-check. The consumer path is OTel push (§7.1); cost is emitted
-  in both tokens and dollars (§7.4); the live chat-turn leg runs against the external `deepseek`
-  provider (§7.3).
+  dashboard suite, and a gated live-check. The consumer path is OTel push (§7.1); **token-only,
+  with cost deferred (§7.4 superseded)**; the live chat-turn leg runs against the external
+  `deepseek` provider (§7.3).

@@ -14,8 +14,9 @@ by keeping the SPEC-005 two-surface contract intact. It groups into four
 implementation stages that map to R-1..R-4, plus a documentation stage (R-5):
 
 1. **Emit** (R-1) — an always-on `TokenUsageMiddleware` on the supported
-   `on_model_call` hook records provider-reported token/cost into two new bounded
-   `agent-platform` counters.
+   `on_model_call` hook records provider-reported token usage into a new bounded
+   `agent-platform` counter (`agent_llm_tokens_total`). Cost is deferred (Stage-0
+   finding: agentscope 2.0.8 exposes no provider-derived cost).
 2. **Push** (R-2) — a mirror helper in the parity-guarded `core/telemetry.py`
    registers domain metrics as OTel instruments on the existing `MeterProvider`,
    so they reach OpenObserve with no scraper (ADR-0014).
@@ -35,7 +36,7 @@ being deployed to a cluster with `OTEL_ENABLED=true`.
 - **Capture point (R-1).** `MiddlewareBase.on_model_call` — the same supported
   hook the agentscope `TracingMiddleware` uses (`_trace.py:259-307`), reading
   `input_kwargs["current_model"]` for provider/model and `result.usage` for
-  tokens/cost. No private agentscope surface; matches the SPEC-018 "move onto
+  tokens. No private agentscope surface; matches the SPEC-018 "move onto
   supported hooks" discipline and the SPEC-064 `on_compress_context` precedent.
 - **Registration point (R-1).** `runtime_kernel._build_middlewares()`
   (`runtime_kernel.py:531-565`). The new middleware is appended to the **base**
@@ -76,48 +77,92 @@ being deployed to a cluster with `OTEL_ENABLED=true`.
   `setup_telemetry` completes (not a silently-dropped pre-provider no-op).
 - **Consumer path (R-2/R-3).** OTel-instrument push per ADR-0014; **no**
   Prometheus scraper, prometheus-operator, or Grafana is deployed.
-- **Cost provenance (R-1, investigation).** The spike observed
-  `gen_ai.usage.cost{,_input,_output}` on the live LLM span, i.e. agentscope
-  already computes dollars. **Plan-time task:** read the locked agentscope 2.0.8
-  source to confirm where it sources pricing (its model-price table / provider
-  response) and record the finding in this plan before implementation, so R-1's
-  cost is documented as a mirror of a provider-derived value and not an invented
-  platform price table. If agentscope's cost is unavailable for a provider, R-1
-  degrades to tokens-only (memo §7.4).
-- **Mirrored-family enumeration (R-2, investigation).** Minimum operator-facing
-  subset: R-1 `agent_llm_tokens_total` + `agent_llm_cost_usd_total`;
-  `agent_chat_requests_total`, `agent_sessions_created_total`;
-  `evidence_store_writes_total`, `evidence_frames_persisted_total`,
-  `evidence_frames_truncated_total`, `audit_emits_total`;
-  `agent_model_discovery_models` / `_refreshes_total`; the RED pair
-  (`http_requests_total`, `http_request_duration_seconds`). Each service mirrors
-  its own domain families the same way. The exact final list is fixed in this plan
-  at implementation time; mirroring is additive so it can grow without a contract
-  change.
+- **Cost provenance (R-1, investigation — DONE 2026-09-27; BLOCKING for the cost
+  counter).** Read the locked agentscope 2.0.8 source. **Finding: agentscope 2.0.8
+  surfaces no provider-derived dollar cost anywhere on the model-call path**, so
+  the spike §6.5 aside that the live span "carries `gen_ai.usage.cost` (dollars)"
+  is **not borne out** by the code. (Note the memo is internally inconsistent:
+  §2.3's own source-derived attribute list correctly shows tokens only.) Evidence:
+  - `model/_model_usage.py` — `ChatUsage` fields are `input_tokens`,
+    `output_tokens`, `time` (seconds), `cache_creation_input_tokens`,
+    `cache_input_tokens`, `type`, `metadata`. **No cost/price field.**
+  - `model/_model_response.py` — `ChatResponse` carries `usage: ChatUsage | None`
+    plus a free-form `metadata` dict; **no cost field.**
+  - `middleware/_tracing/_attributes.py` — the span attribute set defines
+    `GEN_AI_USAGE_INPUT_TOKENS`, `GEN_AI_USAGE_OUTPUT_TOKENS`, and
+    `agentscope.usage.cache_{input,creation_input}_tokens`. **No `gen_ai.usage.cost*`
+    attribute exists.**
+  - `middleware/_tracing/_extractor.py:366-385` — the extractor writes **only**
+    those four token attributes from `usage`; it writes no cost.
+  - The sole "cost" in agentscope is `middleware/_budget.py`'s
+    `ReplyBudgetControlMiddleware`: a **synthetic weighted-token budget**
+    (`input_token_weight*input_tokens + output_token_weight*output_tokens`) used to
+    force wrap-up — unitless, not dollars, not provider-derived.
+  **Consequence:** R-1's `agent_llm_cost_usd_total{provider,model}` cannot be a
+  "mirror of a provider-derived value" — there is no such value to mirror. Emitting
+  it would force the platform to invent a per-model $/token price table, which
+  tasks.md explicitly forbids. The token counter (`agent_llm_tokens_total`) is
+  **unaffected** and is fully sourced from `ChatUsage`. **Operator decision
+  (2026-09-27): option (a) — ship tokens-only now and defer cost.** R-1 emits only
+  `agent_llm_tokens_total`; `agent_llm_cost_usd_total` is dropped from this slice
+  and left to a follow-up that would add an explicit, reviewed price table labelled
+  as an estimate. Options (b) platform price table and (c) best-effort provider
+  `metadata` were considered and rejected for now — (b) invents the forbidden price
+  table, (c) is fragile/undocumented with spotty per-provider coverage. Recorded
+  here per the Stage-0 read-only mandate; no code changed by the investigation.
+- **Mirrored-family enumeration (R-2, investigation — DONE 2026-09-27).** Each
+  family's kind and bounded label set is confirmed against the source
+  (`products/*/src/*/core/metrics.py`). The operator-facing subset **fixed** for
+  this slice (the cost family is deferred, so not mirrored):
+
+  | family | kind | bounded labels |
+  |---|---|---|
+  | `agent_llm_tokens_total` (R-1, new) | counter | `provider, model, direction` |
+  | `agent_chat_requests_total` | counter | — (none) |
+  | `agent_sessions_created_total` | counter | — (none) |
+  | `evidence_store_writes_total` | counter | `result` |
+  | `evidence_frames_persisted_total` | counter | — (none) |
+  | `evidence_frames_truncated_total` | counter | `reason` |
+  | `audit_emits_total` | counter | `result` |
+  | `agent_model_discovery_refreshes_total` | counter | `provider, result` |
+  | `agent_model_discovery_models` | gauge | `provider` |
+  | `http_requests_total` (RED) | counter | `method, handler, status` |
+  | `http_request_duration_seconds` (RED) | histogram | `method, handler` |
+
+  R-2 maps each kind to an OTel instrument: counter → `create_counter`,
+  gauge → `create_gauge` (set/observable), histogram → `create_histogram`. Each
+  service mirrors its own domain families the same way (e.g. execution-runtime and
+  audit-service each carry the RED pair and their own `audit_emits_total`; the
+  store-backend families `session_store_*` / `agent_state_*` are in scope per
+  service too). Mirroring is additive, so the list can grow without a contract
+  change; this table is the binding minimum for the slice.
 
 ## Design Per Requirement
 
-### R-1: Token/cost emission
+### R-1: Token emission (cost deferred)
 
-- **Affected files:** `core/metrics.py` (two new `Counter`s + `record_*` helpers),
+- **Affected files:** `core/metrics.py` (one new `Counter` + a `record_*` helper),
   `services/kernel_middleware.py` (new `TokenUsageMiddleware(MiddlewareBase)`),
   `runtime_kernel.py` (register it in `_build_middlewares`), tests.
-- **Counters:**
+- **Counter:**
   - `agent_llm_tokens_total{provider,model,direction}` —
     `direction ∈ {input, output, cache_input, cache_creation}`.
-  - `agent_llm_cost_usd_total{provider,model}`.
-  - Both `_total`, `<service>_<noun>_<unit>` (`agent_` prefix per the conventions).
+  - `_total`, `<service>_<noun>_<unit>` (`agent_` prefix per the conventions).
+  - **No cost counter.** `agent_llm_cost_usd_total` is deferred (Stage-0 finding:
+    agentscope 2.0.8 exposes no provider-derived cost; the platform has no price
+    table). R-1 is tokens-only.
 - **Model/provider resolution:** from `current_model` (a `ChatModelBase`), coerced
   to the bounded SPEC-026/027 catalog enum; an uncatalogued model → `model="unknown"`
   sentinel so cardinality stays bounded. No `session_id`/`user_id`/`request_id`.
 - **Middleware logic:** resolve labels → `await next_handler(**input_kwargs)` →
-  if `ChatResponse`, read `result.usage` (+ cost) and increment; if
-  `AsyncGenerator`, return a wrapper that yields chunks and increments from the
-  terminal chunk's `usage`. Usage-less response → record nothing.
+  if `ChatResponse`, read `result.usage` and increment; if `AsyncGenerator`,
+  return a wrapper that yields chunks and increments from the terminal chunk's
+  `usage`. Usage-less response → record nothing.
 - **Alternatives rejected:** a local tokenizer estimate (forbidden — fabrication
-  risk); reading usage only on the non-streaming path (records zero on the real
-  streaming chat path); an opt-in knob (memo §7.5 chose always-on; observation is
-  not a mutation and needs no gate).
+  risk); a platform-invented $/token price table to emit cost now (forbidden —
+  fabrication/maintenance risk; cost is deferred instead); reading usage only on the
+  non-streaming path (records zero on the real streaming chat path); an opt-in knob
+  (memo §7.5 chose always-on; observation is not a mutation and needs no gate).
 
 ### R-2: Domain-metric OTel push
 
@@ -145,11 +190,11 @@ being deployed to a cluster with `OTEL_ENABLED=true`.
 - **Affected files:** `shared/platform-ops/dashboards/` (new; OpenObserve-importable
   JSON) + an apply script + a render/import validation wired into `make verify`
   (analogous to `kustomize build` for overlays) + operator-guide section.
-- **Panels:** (a) tokens over time by `{provider,model,direction}`; (b) cost over
-  time by `{provider,model}`; (c) RED (`http_requests_total` rate,
-  `http_request_duration_seconds` p50/p95); (d) a governance/decision-chain view
-  from already-emitted domain/audit signals (e.g. `audit_emits_total{result}`,
-  evidence counters).
+- **Panels:** (a) tokens over time by `{provider,model,direction}`; (b) RED
+  (`http_requests_total` rate, `http_request_duration_seconds` p50/p95); (c) a
+  governance/decision-chain view from already-emitted domain/audit signals (e.g.
+  `audit_emits_total{result}`, evidence counters). A cost-over-time panel is
+  deferred together with the R-1 cost metric.
 - **Query target:** the OpenObserve **metrics** stream (`FROM "default"` with
   `stream_type=metrics`, per the spike's stream-naming note).
 - **Alternatives rejected:** click-built dashboards living only in the cluster
@@ -194,8 +239,8 @@ being deployed to a cluster with `OTEL_ENABLED=true`.
 
 - **Unit (R-1):** non-streaming usage recorded with correct labels; streaming
   terminal-chunk usage recorded (naive read fails); absent usage records nothing;
-  absent cost → tokens-only; `direction` enum bounded; unknown model → sentinel;
-  no forbidden labels; middleware registered unconditionally.
+  no cost counter emitted (deferred); `direction` enum bounded; unknown model →
+  sentinel; no forbidden labels; middleware registered unconditionally.
 - **Unit (R-2):** parity of name+labels between the prometheus family and the OTel
   instrument; `OTEL_ENABLED=false` → no instrument, `/metrics` unchanged;
   exporter error fails open; `TelemetryParityTest` still passes byte-identical.
@@ -212,9 +257,9 @@ being deployed to a cluster with `OTEL_ENABLED=true`.
 - **Config/deploy:** R-1 is always-on code (no knob). R-2/R-3 visibility requires
   `OTEL_ENABLED=true` (already set in `dev-k8s`). Dashboards applied via the
   platform-ops script. No DB migration, no contract change.
-- **Backward compatibility:** purely additive — new counters and a mirror; the
+- **Backward compatibility:** purely additive — a new counter and a mirror; the
   `/metrics` pull surface and all existing families are unchanged. A cluster with
-  OTel off behaves exactly as before (minus two idle counter families).
+  OTel off behaves exactly as before (minus one idle counter family).
 - **Rollback:** revert the middleware registration (R-1) and/or stop calling the
   mirror helper (R-2); dashboards/live-check are platform-ops artifacts removable
   without a product redeploy. No state to migrate back.

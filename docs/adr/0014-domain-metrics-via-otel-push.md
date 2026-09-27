@@ -8,8 +8,8 @@
 - accepted: 2026-09-27
 - deciders: workspace operator, through explicit SPEC-065 scope approval
 - related specs: [SPEC-065](../specs/SPEC-065-r5-observability-token-cost-dashboards/spec.md)
-  (R5 observability — token/cost emission, domain-metric push, dashboards, gated
-  live-check); [SPEC-005](../specs/SPEC-005-observability-baseline/spec.md)
+  (R5 observability — token emission [cost deferred], domain-metric push,
+  dashboards, gated live-check); [SPEC-005](../specs/SPEC-005-observability-baseline/spec.md)
   (observability baseline — the two-surface contract this builds on)
 - evidence: `docs/workspace/observability-metrics-dashboards-spike.md`
   (2026-09-27), operator decision §7.1
@@ -34,7 +34,7 @@ found the consequence of that boundary: OpenObserve is deployed and the OTLP
 push is live, but the cluster runs **no Prometheus, no Grafana, and no
 prometheus-operator** (no `ServiceMonitor`/`PodMonitor` CRDs). So the
 `prometheus_client` domain counters — including the new
-`agent_llm_tokens_total` / `agent_llm_cost_usd_total` family SPEC-065 R-1 adds —
+`agent_llm_tokens_total` family SPEC-065 R-1 adds —
 have **no scraper and no dashboard**: they are a curl-only debug surface.
 OpenObserve receives only what the OTLP push sends (the OTel auto-instrumentation
 HTTP metrics, traces, mirrored logs); the two metric worlds never overlap.
@@ -61,7 +61,7 @@ OpenObserve. No Prometheus scraper is deployed.**
    high-cardinality dimension. Where a metric exists on both surfaces it must
    agree.
 4. Dashboards and the gated live-check consume the OpenObserve **metrics**
-   stream (`agent_llm_tokens_total`, `agent_llm_cost_usd_total`, and the mirrored
+   stream (`agent_llm_tokens_total` and the mirrored
    domain families), queried the same way the spike queried logs/traces.
 
 ## Alternatives Considered
@@ -80,7 +80,7 @@ OpenObserve. No Prometheus scraper is deployed.**
   collector reachable; the pull surface is the debug floor and the contract tests
   bind to it. The mirror is additive by design.
 - **Query token usage from raw trace spans instead of a metric** — rejected as
-  the operator-facing answer: the spike confirmed token/cost already land on LLM
+  the operator-facing answer: the spike confirmed token usage already lands on LLM
   spans as GenAI attributes, but per-span SQL is not aggregation and hides
   exactly the "tokens by model this week" signal a dashboard surfaces. The span
   data stays (it is the provenance), but a metric is the queryable, aggregatable
