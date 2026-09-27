@@ -38,33 +38,40 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 
 ## R-1: First-class LLM token emission (cost deferred)
 
-- [ ] Add an `agent_llm_tokens_total{provider,model,direction}` counter + a
+> **DONE 2026-09-27.** `agent_llm_tokens_total` counter + `record_llm_tokens`
+> helper in `core/metrics.py`; `TokenUsageMiddleware` (streaming-aware
+> `on_model_call`) in `services/kernel_middleware.py`; registered always-on in
+> `runtime_kernel._build_middlewares()`. Full agent-platform suite green
+> (1523 passed) — 8 new middleware tests + 1 `/metrics`-surface test, and the
+> composition test updated for the third always-on middleware. No cost counter.
+
+- [x] Add an `agent_llm_tokens_total{provider,model,direction}` counter + a
       `record_*` helper to
       `products/agent-platform/src/agent_service/core/metrics.py` (module-level
       object; `direction ∈ {input,output,cache_input,cache_creation}`). **No cost
       counter** — `agent_llm_cost_usd_total` is deferred (Stage-0 finding)
-- [ ] Add `TokenUsageMiddleware(MiddlewareBase)` implementing `on_model_call` in
+- [x] Add `TokenUsageMiddleware(MiddlewareBase)` implementing `on_model_call` in
       `products/agent-platform/src/agent_service/services/kernel_middleware.py`:
       resolve `{provider,model}` from `current_model` (bounded to the catalog;
       unknown → `model="unknown"` sentinel), `await next_handler(...)`, read
       `result.usage` for a `ChatResponse`
-- [ ] Make the middleware **streaming-aware**: wrap the `AsyncGenerator` and
+- [x] Make the middleware **streaming-aware**: wrap the `AsyncGenerator` and
       increment from the terminal chunk's `usage` (mirror the tracing middleware's
       generator wrapper)
-- [ ] Record **nothing** when a provider returns no `usage` (never synthesize a
+- [x] Record **nothing** when a provider returns no `usage` (never synthesize a
       zero-fill estimate)
-- [ ] Register the middleware unconditionally in
+- [x] Register the middleware unconditionally in
       `runtime_kernel._build_middlewares()` (`runtime_kernel.py:531-565`), beside
       `GatewayPermissionMiddleware` / `ToolEvidenceMiddleware` — always-on, no knob
-- [ ] Test: non-streaming usage → correct `{provider,model,direction}` increments
+- [x] Test: non-streaming usage → correct `{provider,model,direction}` increments
       (`products/agent-platform/tests/`)
-- [ ] Test: streaming multi-chunk generator records terminal-chunk usage (a naive
+- [x] Test: streaming multi-chunk generator records terminal-chunk usage (a naive
       non-generator read records zero and must fail)
-- [ ] Test: usage-less response records nothing; no cost counter is emitted
+- [x] Test: usage-less response records nothing; no cost counter is emitted
       (deferred)
-- [ ] Test: `direction` enum bounded; unknown model → sentinel; emitted label set
+- [x] Test: `direction` enum bounded; unknown model → sentinel; emitted label set
       contains **no** `session_id`/`user_id`/`request_id`
-- [ ] Test: middleware is present in `_build_middlewares()` output with no opt-in
+- [x] Test: middleware is present in `_build_middlewares()` output with no opt-in
       set; the family appears on `GET /metrics` with `_total` + naming conventions
 
 ## R-2: Domain metrics pushed as OTel instruments (ADR-0014)

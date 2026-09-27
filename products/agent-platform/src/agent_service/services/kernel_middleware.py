@@ -13,6 +13,10 @@ surface instead of private agentscope internals:
 - ``ToolEvidenceMiddleware`` (R-2) emits the ``tool_call`` / ``tool_result``
   evidence frames (SPEC-011 R-2 contract) into a request-scoped sink set by
   the runtime kernel; blocking turns with no sink emit nothing.
+- ``TokenUsageMiddleware`` (SPEC-065 R-1) records provider-reported LLM token
+  usage as ``agent_llm_tokens_total`` on the supported ``on_model_call`` hook —
+  always-on, streaming-aware, and pure observation (no cost; deferred per the
+  SPEC-065 Stage-0 finding that agentscope 2.0.8 exposes no provider cost).
 
 Admission, policy, and audit remain enforced by the tool-gateway on every
 invocation; this module only shapes kernel-local decisions and evidence.
@@ -23,7 +27,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
 from contextvars import ContextVar
 from typing import Any
 
@@ -32,6 +36,7 @@ from agentscope.middleware import MiddlewareBase
 from agentscope.permission import PermissionBehavior, PermissionDecision
 from agentscope.tool import ToolResponse
 
+from agent_service.core.metrics import record_llm_tokens
 from agent_service.services.flow_approvals import BROWSER_WRITE_TOOLS
 from agent_service.services.secret_params import redact_evidence_parameters, redact_result_data
 from agent_service.services.prose_redaction import (
@@ -626,3 +631,110 @@ class ToolEvidenceMiddleware(MiddlewareBase):
         except (TypeError, ValueError):
             return {}
         return parsed if isinstance(parsed, dict) else {}
+
+
+class TokenUsageMiddleware(MiddlewareBase):
+    """Records provider-reported LLM token usage as a metric (SPEC-065 R-1).
+
+    A pure-observation ``on_model_call`` middleware — always-on (no knob), since
+    reading a token count is not a mutation and needs no gate. It resolves a
+    bounded ``{provider, model}`` from ``current_model`` via the credential-gated
+    catalog (an uncatalogued model → the ``unknown`` sentinel, so label
+    cardinality stays bounded), delegates to ``next_handler``, then increments
+    ``agent_llm_tokens_total{provider,model,direction}`` from the provider's own
+    ``usage`` — the four token counts agentscope's ``ChatUsage`` exposes.
+
+    It is **streaming-aware**: the platform chat path streams, so ``next_handler``
+    returns an ``AsyncGenerator`` whose terminal chunk carries the cumulative
+    usage. A naive non-generator read would record zero, so the generator is
+    wrapped and usage read off the last chunk that carries it — mirroring the
+    tracing middleware's generator wrapper. A response with no ``usage`` records
+    nothing; tokens are never synthesized or estimated.
+
+    **No cost is recorded.** agentscope 2.0.8 exposes no provider-derived cost
+    and the platform holds no price table, so the dollar metric is deferred
+    rather than fabricated (SPEC-065 Stage-0 finding).
+    """
+
+    def __init__(self, catalog: Any | None = None) -> None:
+        # ``catalog`` exposes ``get(model_id) -> entry | None`` where an entry
+        # carries ``.provider`` (a bounded RuntimeProvider) and ``.model_name``.
+        # Defaults to the platform ``MODEL_CATALOG`` singleton; injectable so
+        # tests need no live catalog.
+        self._catalog = catalog
+
+    def _resolve_labels(self, current_model: Any) -> tuple[str, str]:
+        """Bounded ``{provider, model}`` labels for a model instance (R-1)."""
+        model_name = getattr(current_model, "model", None)
+        if not isinstance(model_name, str) or not model_name:
+            return ("unknown", "unknown")
+        catalog = self._catalog
+        if catalog is None:
+            from agent_service.services.model_catalog import MODEL_CATALOG
+
+            catalog = MODEL_CATALOG
+        entry = catalog.get(model_name)
+        if entry is None:
+            # Uncatalogued model → sentinel, keeping cardinality bounded to the
+            # credential-gated catalog rather than any string a provider echoes.
+            return ("unknown", "unknown")
+        return (str(entry.provider), str(entry.model_name))
+
+    async def on_model_call(
+        self,
+        agent: Any,
+        input_kwargs: dict,
+        next_handler: Any,
+    ) -> Any:
+        provider, model = self._resolve_labels(input_kwargs.get("current_model"))
+        result = await next_handler(**input_kwargs)
+        if isinstance(result, AsyncGenerator):
+            # Streaming chat path: usage lands on the terminal chunk, so wrap the
+            # generator and record once it is consumed (see class docstring).
+            return self._record_stream(result, provider, model)
+        self._record(getattr(result, "usage", None), provider, model)
+        return result
+
+    async def _record_stream(
+        self,
+        stream: AsyncGenerator,
+        provider: str,
+        model: str,
+    ) -> AsyncGenerator:
+        """Pass every chunk through untouched; record the last usage seen.
+
+        Recording in ``finally`` means an early close or a mid-stream error still
+        books whatever usage arrived (and nothing when none did) — the stream is
+        never altered, only observed.
+        """
+        last_usage = None
+        try:
+            async for chunk in stream:
+                usage = getattr(chunk, "usage", None)
+                if usage is not None:
+                    last_usage = usage
+                yield chunk
+        finally:
+            self._record(last_usage, provider, model)
+
+    @staticmethod
+    def _record(usage: Any, provider: str, model: str) -> None:
+        """Increment the token counter from a provider ``usage``, or nothing."""
+        if usage is None:
+            # Never synthesize a zero-fill estimate when a provider reports no
+            # usage (some streaming/edge responses omit it).
+            return
+        record_llm_tokens(
+            provider, model, "input", getattr(usage, "input_tokens", 0) or 0,
+        )
+        record_llm_tokens(
+            provider, model, "output", getattr(usage, "output_tokens", 0) or 0,
+        )
+        record_llm_tokens(
+            provider, model, "cache_input",
+            getattr(usage, "cache_input_tokens", 0) or 0,
+        )
+        record_llm_tokens(
+            provider, model, "cache_creation",
+            getattr(usage, "cache_creation_input_tokens", 0) or 0,
+        )

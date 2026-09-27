@@ -531,12 +531,13 @@ class AgentKernel:
     def _build_middlewares(self) -> list:
         """Compose the kernel middleware stack (SPEC-018).
 
-        Permission and evidence middlewares are always registered; OTel
-        kernel tracing (R-3) and the reply token budget (R-4) are opt-in
-        via settings and stay absent when unconfigured.
+        Permission, evidence, and LLM-token (SPEC-065 R-1) middlewares are
+        always registered; OTel kernel tracing (R-3) and the reply token budget
+        (R-4) are opt-in via settings and stay absent when unconfigured.
         """
         from agent_service.services.kernel_middleware import (
             GatewayPermissionMiddleware,
+            TokenUsageMiddleware,
             ToolEvidenceMiddleware,
         )
 
@@ -547,6 +548,10 @@ class AgentKernel:
                 data_summary_max_chars=settings.tool_data_summary_max_chars,
                 data_max_chars=settings.tool_data_max_chars,
             ),
+            # SPEC-065 R-1: always-on LLM token observation (no knob) — a pure
+            # ``on_model_call`` mirror of the provider's own usage into
+            # ``agent_llm_tokens_total``. Streaming-aware; records no cost.
+            TokenUsageMiddleware(),
         ]
         if settings.kernel_tracing:
             from agentscope.middleware import TracingMiddleware

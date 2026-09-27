@@ -14,6 +14,9 @@ from unittest.mock import patch
 
 import jsonschema
 
+from prometheus_client import REGISTRY
+
+from agent_service.core.metrics import LLM_TOKEN_DIRECTIONS
 from agent_service.services.kernel_middleware import (
     AUTO_ALLOW_ENV,
     AUTO_ALLOW_EXTRA_ENV,
@@ -24,6 +27,7 @@ from agent_service.services.kernel_middleware import (
     STRUCTURED_OUTPUT_TOOL_NAME,
     TOOL_EVIDENCE_SINK,
     GatewayPermissionMiddleware,
+    TokenUsageMiddleware,
     ToolEvidenceMiddleware,
     _load_auto_allowed_tools,
     _make_data_summary,
@@ -1154,12 +1158,15 @@ class MiddlewareCompositionTests(unittest.TestCase):
             settings=RuntimeSettings(api_key="test-key", **overrides),
         )
 
-    def test_default_stack_is_permission_and_evidence(self) -> None:
+    def test_default_stack_is_permission_evidence_and_tokens(self) -> None:
         kernel = self._kernel()
         middlewares = kernel._build_middlewares()
-        self.assertEqual(len(middlewares), 2)
+        # SPEC-065 R-1: the always-on token middleware joins the two SPEC-018
+        # base middlewares (permission + evidence) with no opt-in knob.
+        self.assertEqual(len(middlewares), 3)
         self.assertIsInstance(middlewares[0], GatewayPermissionMiddleware)
         self.assertIsInstance(middlewares[1], ToolEvidenceMiddleware)
+        self.assertIsInstance(middlewares[2], TokenUsageMiddleware)
 
     def test_kernel_tracing_adds_tracing_middleware(self) -> None:
         from agentscope.middleware import TracingMiddleware
@@ -1323,6 +1330,199 @@ class SecretReleasePermitGateTests(unittest.TestCase):
         finally:
             RELEASE_PERMITS.reset(ptoken)
             CURRENT_RUN_GUARD.reset(gtoken)
+
+
+# --- SPEC-065 R-1: LLM token usage middleware -------------------------------
+
+
+def _usage(
+    input_tokens=0,
+    output_tokens=0,
+    cache_input_tokens=0,
+    cache_creation_input_tokens=0,
+):
+    """Stand-in for agentscope's ChatUsage (attribute names match 2.0.8)."""
+    return SimpleNamespace(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_input_tokens=cache_input_tokens,
+        cache_creation_input_tokens=cache_creation_input_tokens,
+    )
+
+
+def _model_next_response(response):
+    """A ``next_handler`` returning a non-streaming ChatResponse stand-in."""
+
+    async def next_handler(**kwargs):
+        return response
+
+    return next_handler
+
+
+def _model_next_stream(chunks):
+    """A ``next_handler`` returning an async generator of chunks (streaming)."""
+
+    async def next_handler(**kwargs):
+        async def _gen():
+            for chunk in chunks:
+                yield chunk
+
+        return _gen()
+
+    return next_handler
+
+
+class _StubCatalog:
+    """Minimal ``MODEL_CATALOG`` stand-in: ``get(model_id) -> entry | None``."""
+
+    def __init__(self, entries):
+        self._entries = entries  # model_id -> (provider, model_name)
+
+    def get(self, model_id):
+        hit = self._entries.get(model_id)
+        if hit is None:
+            return None
+        provider, model_name = hit
+        return SimpleNamespace(provider=provider, model_name=model_name)
+
+
+def _tokens(provider, model, direction):
+    return REGISTRY.get_sample_value(
+        "agent_llm_tokens_total",
+        {"provider": provider, "model": model, "direction": direction},
+    ) or 0.0
+
+
+class TokenUsageMiddlewareTests(unittest.TestCase):
+    """SPEC-065 R-1: ``agent_llm_tokens_total`` via the ``on_model_call`` hook."""
+
+    def setUp(self):
+        self.catalog = _StubCatalog({"qwen-plus": ("dashscope", "qwen-plus")})
+        self.model = SimpleNamespace(model="qwen-plus")
+        self.agent = SimpleNamespace()
+        self.mw = TokenUsageMiddleware(catalog=self.catalog)
+
+    def _drive(self, next_handler, current_model=None):
+        """Run ``on_model_call`` and drain a stream in ONE loop.
+
+        Returns ``(result, drained_items_or_None)``.
+        """
+        model = self.model if current_model is None else current_model
+
+        async def _go():
+            result = await self.mw.on_model_call(
+                self.agent, {"current_model": model}, next_handler,
+            )
+            if hasattr(result, "__aiter__"):
+                return result, [item async for item in result]
+            return result, None
+
+        return asyncio.run(_go())
+
+    def test_non_streaming_records_all_directions(self):
+        response = SimpleNamespace(
+            usage=_usage(input_tokens=5352, output_tokens=1, cache_input_tokens=5120),
+        )
+        before = {
+            d: _tokens("dashscope", "qwen-plus", d)
+            for d in ("input", "output", "cache_input", "cache_creation")
+        }
+        result, drained = self._drive(_model_next_response(response))
+        self.assertIs(result, response)  # passthrough, unaltered
+        self.assertIsNone(drained)
+        self.assertEqual(_tokens("dashscope", "qwen-plus", "input"), before["input"] + 5352)
+        self.assertEqual(_tokens("dashscope", "qwen-plus", "output"), before["output"] + 1)
+        self.assertEqual(_tokens("dashscope", "qwen-plus", "cache_input"), before["cache_input"] + 5120)
+        # A zero cache_creation count records nothing (no empty-series churn).
+        self.assertEqual(_tokens("dashscope", "qwen-plus", "cache_creation"), before["cache_creation"])
+
+    def test_streaming_records_terminal_chunk_usage(self):
+        chunks = [
+            SimpleNamespace(usage=None),
+            SimpleNamespace(usage=None),
+            SimpleNamespace(usage=_usage(input_tokens=100, output_tokens=7)),
+        ]
+        before_in = _tokens("dashscope", "qwen-plus", "input")
+        before_out = _tokens("dashscope", "qwen-plus", "output")
+        result, drained = self._drive(_model_next_stream(chunks))
+        self.assertIsNotNone(drained)
+        self.assertEqual(len(drained), 3)  # every chunk passed through
+        self.assertEqual(drained, chunks)
+        self.assertEqual(_tokens("dashscope", "qwen-plus", "input"), before_in + 100)
+        self.assertEqual(_tokens("dashscope", "qwen-plus", "output"), before_out + 7)
+
+    def test_streaming_naive_nongenerator_read_records_nothing(self):
+        # The chat path streams: a naive read that treats the returned stream
+        # like a ChatResponse sees no ``.usage`` and records zero. Only draining
+        # the generator books the terminal-chunk usage.
+        chunks = [SimpleNamespace(usage=_usage(input_tokens=42, output_tokens=3))]
+        before = _tokens("dashscope", "qwen-plus", "input")
+
+        async def _go():
+            stream = await self.mw.on_model_call(
+                self.agent, {"current_model": self.model}, _model_next_stream(chunks),
+            )
+            naive = getattr(stream, "usage", None)  # the mistake
+            undrained = _tokens("dashscope", "qwen-plus", "input")
+            items = [chunk async for chunk in stream]  # the fix
+            return naive, undrained, len(items)
+
+        naive, undrained, count = asyncio.run(_go())
+        self.assertIsNone(naive)
+        self.assertEqual(undrained, before)  # nothing recorded before draining
+        self.assertEqual(count, 1)
+        self.assertEqual(_tokens("dashscope", "qwen-plus", "input"), before + 42)
+
+    def test_usage_less_response_records_nothing(self):
+        response = SimpleNamespace(usage=None)
+        before = {
+            d: _tokens("dashscope", "qwen-plus", d)
+            for d in ("input", "output", "cache_input", "cache_creation")
+        }
+        self._drive(_model_next_response(response))
+        for d in ("input", "output", "cache_input", "cache_creation"):
+            self.assertEqual(_tokens("dashscope", "qwen-plus", d), before[d])
+
+    def test_uncatalogued_model_uses_unknown_sentinel(self):
+        rogue = SimpleNamespace(model="some-uncatalogued-model")
+        response = SimpleNamespace(usage=_usage(input_tokens=9, output_tokens=1))
+        before = _tokens("unknown", "unknown", "input")
+        self._drive(_model_next_response(response), current_model=rogue)
+        self.assertEqual(_tokens("unknown", "unknown", "input"), before + 9)
+        # The uncatalogued model name must NOT leak into a label value.
+        self.assertEqual(_tokens("unknown", "some-uncatalogued-model", "input"), 0.0)
+
+    def test_model_without_a_name_is_unknown(self):
+        nameless = SimpleNamespace()  # no ``.model`` attribute
+        response = SimpleNamespace(usage=_usage(input_tokens=4, output_tokens=1))
+        before = _tokens("unknown", "unknown", "input")
+        self._drive(_model_next_response(response), current_model=nameless)
+        self.assertEqual(_tokens("unknown", "unknown", "input"), before + 4)
+
+    def test_label_set_is_bounded_and_carries_no_ids(self):
+        # Drive one recording so the family has a child series to introspect.
+        self._drive(_model_next_response(SimpleNamespace(usage=_usage(input_tokens=1))))
+        label_names = set()
+        directions = set()
+        for family in REGISTRY.collect():
+            for sample in family.samples:
+                if sample.name == "agent_llm_tokens_total":
+                    label_names = set(sample.labels.keys())
+                    directions.add(sample.labels["direction"])
+        # Exactly the bounded label set — and never a high-cardinality id.
+        self.assertEqual(label_names, {"provider", "model", "direction"})
+        for forbidden in ("session_id", "user_id", "request_id"):
+            self.assertNotIn(forbidden, label_names)
+        # Every emitted direction stays inside the declared enum.
+        self.assertTrue(directions.issubset(set(LLM_TOKEN_DIRECTIONS)))
+
+    def test_no_cost_metric_is_emitted(self):
+        # SPEC-065 Stage-0: cost is deferred; no cost counter may exist.
+        sample_names = {s.name for m in REGISTRY.collect() for s in m.samples}
+        self.assertFalse(
+            any(name.startswith("agent_llm_cost_usd") for name in sample_names),
+            "a cost metric must not be emitted (deferred per SPEC-065 Stage-0)",
+        )
 
 
 if __name__ == "__main__":

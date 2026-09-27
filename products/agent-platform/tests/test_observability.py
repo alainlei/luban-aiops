@@ -59,6 +59,21 @@ class DomainCounterTests(unittest.TestCase):
         self.assertEqual(_sample("agent_sessions_created_total"), before + 1)
 
 
+class LlmTokenMetricTests(unittest.TestCase):
+    """SPEC-065 R-1: the token family surfaces on GET /metrics with ``_total``."""
+
+    def test_token_family_appears_on_metrics_endpoint(self) -> None:
+        from agent_service.core.metrics import record_llm_tokens
+
+        # Recording a token creates the child series; the always-on /metrics
+        # surface then exposes it under the ``_total`` counter name (naming
+        # conventions), with the bounded direction label.
+        record_llm_tokens("dashscope", "qwen-plus", "input", 1)
+        body = TestClient(create_app()).get("/metrics").text
+        self.assertIn("agent_llm_tokens_total", body)
+        self.assertIn('direction="input"', body)
+
+
 class LoggingConfigTests(unittest.TestCase):
     def test_defaults_to_info_so_audit_events_survive(self) -> None:
         env = {k: v for k, v in os.environ.items() if k != "LOG_LEVEL"}

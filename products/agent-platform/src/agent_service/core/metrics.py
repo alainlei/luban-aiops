@@ -221,3 +221,33 @@ def record_model_discovery_refresh(provider: str, result: str) -> None:
 
 def record_model_discovery_models(provider: str, count: int) -> None:
     MODEL_DISCOVERY_MODELS.labels(provider=provider).set(count)
+
+
+# --- LLM token usage (SPEC-065 R-1) ---
+
+# Bounded ``direction`` label set: the four token counts agentscope's ChatUsage
+# exposes (input/output plus the two cache counts). There is deliberately NO
+# cost counter or direction here — agentscope 2.0.8 reports no provider-derived
+# cost and the platform holds no price table, so R-1 is tokens-only and the
+# dollar metric is deferred (SPEC-065 plan.md Stage-0 finding). Nothing is ever
+# estimated or synthesized: a provider that reports no usage records nothing.
+LLM_TOKEN_DIRECTIONS = ("input", "output", "cache_input", "cache_creation")
+
+LLM_TOKENS = Counter(
+    "agent_llm_tokens_total",
+    "Provider-reported LLM token usage by model and direction.",
+    ["provider", "model", "direction"],
+)
+
+
+def record_llm_tokens(provider: str, model: str, direction: str, amount: int) -> None:
+    """Record provider-reported token usage for one direction (SPEC-065 R-1).
+
+    ``amount`` is a provider-reported count; a non-positive amount records
+    nothing (never synthesize or estimate a value). Labels stay bounded:
+    ``provider``/``model`` resolve to the credential-gated catalog (else the
+    ``unknown`` sentinel) and ``direction`` is one of ``LLM_TOKEN_DIRECTIONS``.
+    """
+    if amount <= 0:
+        return
+    LLM_TOKENS.labels(provider=provider, model=model, direction=direction).inc(amount)
