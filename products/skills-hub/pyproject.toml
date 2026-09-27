@@ -1,6 +1,6 @@
 [project]
 name = "skills-hub"
-version = "0.43.2"
+version = "0.44.0"
 description = "Federated skills ingestion and retrieval service for Luban AIOps (SPEC-014)."
 requires-python = ">=3.11"
 dependencies = [

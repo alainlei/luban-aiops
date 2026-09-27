@@ -13,6 +13,17 @@ Release 1 entries are grouped retrospectively under 0.1.0.
 
 ## Unreleased
 
+## 0.44.0 — 2026-09-27
+
+Feature release: opt-in agent-driven context compression in the agent-platform
+kernel, adopting the first of the two agentscope 2.0.8 surfaces that the v0.43.2
+dependency refresh pinned but deliberately left unwired. Delivered under
+[SPEC-064](docs/specs/SPEC-064-agentscope-compression-and-goal-pipeline/spec.md);
+see the
+[release note](docs/agentic-aiops-platform/release-notes/2026-09-27-agent-driven-context-compression.md).
+No new route, action, contract, schema, audit event type, or execution path; the
+capability is default-off, so unset deployments are byte-identical to 0.43.2.
+
 ### Added
 
 - **Opt-in agent-driven context compression (`CompressContext`, SPEC-064 R-2).**
@@ -31,8 +42,11 @@ Release 1 entries are grouped retrospectively under 0.1.0.
   or evidence frame — `on_acting` emits only for gateway tools, and `CompressContext` has no
   `gateway_tool_name`. Default-off, so unset deployments are byte-identical to 0.43.2. See
   [SPEC-064](docs/specs/SPEC-064-agentscope-compression-and-goal-pipeline/spec.md) and the
-  [spike memo](docs/workspace/agentscope-compression-goal-pipeline-spike.md). Not yet released
-  (VERSION/tag deferred).
+  [spike memo](docs/workspace/agentscope-compression-goal-pipeline-spike.md).
+
+  `GoalPipeline`, the second deferred 2.0.8 surface, is **kept out** (no code): it has no
+  platform caller and its executor/verifier loop fails the four-point adoption gate against
+  ADR-0011 and the governed dispatch path.
 
 ## 0.43.2 — 2026-09-27
 

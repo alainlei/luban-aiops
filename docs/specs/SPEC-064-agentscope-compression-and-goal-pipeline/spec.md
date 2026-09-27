@@ -2,10 +2,11 @@
 
 ## Status
 
-- status: `approved`
+- status: `delivered`
 - owner: luban-platform-team
 - created: 2026-09-27
 - approved: 2026-09-27
+- delivered: 2026-09-27 (v0.44.0)
 - release slice: R5 — hardening / Exploration Backlog (agentscope adoption family)
 - related ADRs: [ADR-0006](../../adr/0006-contract-purpose-invariant-enforcement.md)
   (kernel exploitation follows SPEC-018's four-point adoption gate),
@@ -23,8 +24,9 @@
 > resolved all five Open Questions and produced per-surface verdicts: `CompressContext`
 > **clears** the four-point adoption gate (adopt, opt-in) and `GoalPipeline` is **kept
 > out**. This approval authorizes the R-2 opt-in wiring for `CompressContext` only; the
-> R-3 `GoalPipeline` reconciliation tasks stay N/A under the keep-out verdict. Advancing
-> to `delivered` (VERSION bump, release note, tag) is a separate operator decision.
+> R-3 `GoalPipeline` reconciliation tasks stay N/A under the keep-out verdict. R-2 shipped
+> as **v0.44.0** on 2026-09-27 (VERSION bump, release note, annotated tag); the spec is now
+> `delivered`.
 
 ## Summary
 
@@ -268,12 +270,19 @@ operator to approve or reject.
   `KERNEL_LOCAL_TOOL_NAMES`; do not wire the `offloader`). **Implemented 2026-09-27** under
   this spec's `approved` status: the knob, kernel-config wiring, `KERNEL_LOCAL_TOOL_NAMES`
   membership, and the `trigger_ratio > context_buffer_ratio` startup guard are in place with
-  tests; the offloader stays unwired (memo §2.6). Not yet released (VERSION/tag deferred).
+  tests; the offloader stays unwired (memo §2.6). **Delivered as v0.44.0** (2026-09-27).
 - **`GoalPipeline`: kept out.** No code; the audit row is resolved to "Kept out (SPEC-064)".
 
 
 ## Changelog
 
+- 2026-09-27: **Delivered as v0.44.0.** Cut the release: VERSION + the eight-product
+  lockstep (pyproject / `metadata.py` / `__init__.py` / `uv.lock`) bumped to `0.44.0`,
+  `make validate-version` green, the CHANGELOG `Unreleased` section closed into `## 0.44.0`,
+  and the [release note](../../agentic-aiops-platform/release-notes/2026-09-27-agent-driven-context-compression.md)
+  written. Status flipped `approved` → `delivered`; `docs/specs/README.md` and the
+  delivery-roadmap Exploration Backlog row updated to match. Annotated tag `v0.44.0` on the
+  release commit.
 - 2026-09-27: **Advanced `draft` → `approved`; R-2 opt-in `CompressContext` wiring
   implemented.** Approved the R-1 verdicts: adopt `CompressContext` (opt-in, default-off),
   keep `GoalPipeline` out. Implemented the R-2 adoption in the agent-platform kernel —

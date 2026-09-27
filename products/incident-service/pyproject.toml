@@ -1,6 +1,6 @@
 [project]
 name = "incident-service"
-version = "0.43.2"
+version = "0.44.0"
 description = "Incident intake, agent-driven triage, and collaboration dispatch for Luban AIOps (SPEC-015)."
 requires-python = ">=3.11"
 dependencies = [

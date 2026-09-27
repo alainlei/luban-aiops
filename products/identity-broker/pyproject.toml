@@ -1,6 +1,6 @@
 [project]
 name = "identity-service"
-version = "0.43.2"
+version = "0.44.0"
 description = "Identity broker for Luban AIOps."
 requires-python = ">=3.11"
 dependencies = [

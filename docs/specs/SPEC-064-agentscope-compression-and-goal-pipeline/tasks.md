@@ -96,10 +96,16 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 
 ## Delivery Gate
 
-- [ ] all acceptance criteria in `spec.md` verified (a `keep out` verdict for both
-      surfaces satisfies R-1/R-4 with no product diff)
-- [ ] living state docs updated (see spec `Impact` section)
-- [ ] `CHANGELOG.md` entry added referencing the spec ID (only if a surface is adopted)
-- [ ] spec index in `docs/specs/README.md` updated
-- [ ] `make verify` green with the shipped diff (no product diff on the keep-out path)
-- [ ] spec status set to `delivered`
+- [x] all acceptance criteria in `spec.md` verified (R-2 `CompressContext` adopted
+      opt-in/default-off; R-3 `GoalPipeline` keep-out discharged by the memo)
+- [x] living state docs updated (see spec `Impact` section) — config-reference knob +
+      Feature Activation Matrix, delivery-roadmap backlog row, utilization-audit rows
+- [x] `CHANGELOG.md` entry added referencing the spec ID (`## 0.44.0` — `CompressContext`
+      adopted; `GoalPipeline` kept out)
+- [x] spec index in `docs/specs/README.md` updated (`delivered`)
+- [x] `make verify` green with the shipped diff — full root gate at 0.44.0: all eight
+      product suites, Kustomize overlays, policy + policy-scenario + version-lockstep +
+      secret-vocabulary + password-policy validations, the local secret-delivery demo, the
+      operator-portal vitest suite (494) + production build, and the SPEC-063 real-Postgres
+      campaign (**791 passed, 2 deselected, exit 0**); no environmental re-run needed
+- [x] spec status set to `delivered` (v0.44.0, 2026-09-27)

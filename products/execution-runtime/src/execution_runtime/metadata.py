@@ -1,5 +1,5 @@
 SERVICE_NAME = "execution-runtime"
 SERVICE_TITLE = "execution-runtime"
-SERVICE_VERSION = "0.43.2"
+SERVICE_VERSION = "0.44.0"
 DEFAULT_HTTP_HOST = "0.0.0.0"
 DEFAULT_HTTP_PORT = 8000
