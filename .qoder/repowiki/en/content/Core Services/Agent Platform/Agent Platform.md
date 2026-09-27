@@ -22,11 +22,11 @@
 
 ## Update Summary
 **Changes Made**
-- Added new section documenting the optional context compression feature through CompressContext tool (SPEC-064)
-- Updated Runtime Settings section to include AGENTSCOPE_COMPRESS_CONTEXT_ENABLED configuration
-- Enhanced Kernel Configuration section with compression tool integration details
-- Updated Troubleshooting Guide with compression-related guidance
-- Added references to SPEC-064 implementation and testing patterns
+- Enhanced Optional Context Compression section with detailed implementation details from SPEC-064
+- Updated Kernel Configuration section with specific CompressContext tool integration
+- Added comprehensive troubleshooting guidance for compression-related issues
+- Updated Performance Considerations with compression-specific insights
+- Enhanced Security and Safety sections with compression tool governance details
 
 ## Table of Contents
 1. Introduction
@@ -42,7 +42,7 @@
 ## Introduction
 The Agent Platform is the orchestration engine of the Luban AIOps platform. It owns agent sessions, coordinates LLM model switching at runtime, drives tool execution via the Tool Gateway, and persists evidence for replay and audit. It exposes a FastAPI-based v2 contract that streams chat events, manages human-in-the-loop approvals, and integrates with session persistence backends (in-memory or PostgreSQL). The service also supports live model discovery and a credential-gated multi-model catalog so operators can switch models mid-conversation without losing conversation history.
 
-**Updated** The platform now includes an optional context compression feature through the CompressContext tool (SPEC-064), which allows agents to proactively compress their working context between tasks while maintaining backward compatibility when disabled.
+**Updated** The platform includes an optional context compression feature through the CompressContext tool (SPEC-064), which allows agents to proactively compress their working context between tasks while maintaining full backward compatibility when disabled. This feature was delivered in v0.44.0 as an opt-in, default-off capability that preserves all existing security and governance boundaries.
 
 ## Project Structure
 The Agent Platform service lives under products/agent-platform/src/agent_service and is organized into:
@@ -118,7 +118,7 @@ R --> OD
 ## Architecture Overview
 The request flow starts at the Uvicorn entrypoint, which boots the FastAPI app. The app configures logging, metrics, telemetry, and includes the v2 router. Routes validate identity headers, resolve sessions and models, then delegate to the runtime kernel. The kernel constructs or reuses an AgentScope agent bound to a session, optionally restoring persisted state, and executes turns with middleware for permissions, evidence capture, tracing, and token budgets. Streaming responses are normalized to the shared v2 schema and emitted as Server-Sent Events. Operation documents follow a separate lifecycle through the operation document repository with owner-scoped visibility and retention policies.
 
-**Updated** The kernel now supports optional context compression through the CompressContext tool, which can be enabled via the AGENTSCOPE_COMPRESS_CONTEXT_ENABLED environment variable. When enabled, agents can proactively compress their working context between tasks using the same underlying mechanism as threshold-based compression.
+**Updated** The kernel now supports optional context compression through the CompressContext tool, which can be enabled via the AGENTSCOPE_COMPRESS_CONTEXT_ENABLED environment variable. When enabled, agents can proactively compress their working context between tasks using the same underlying mechanism as threshold-based compression, providing better control over long-running sessions.
 
 ```mermaid
 sequenceDiagram
@@ -166,7 +166,7 @@ The kernel is the central coordinator:
 - Streams prose redaction safely, flushing held-back tails before terminal events.
 - Persists evidence best-effort with size caps and session budgets.
 
-**Updated** The kernel now supports optional context compression through ContextConfig.compression_tool_enabled, which is controlled by the AGENTSCOPE_COMPRESS_CONTEXT_ENABLED setting. When enabled, the CompressContext tool becomes available to agents for proactive context compression between tasks.
+**Updated** The kernel now supports optional context compression through ContextConfig.compression_tool_enabled, which is controlled by the AGENTSCOPE_COMPRESS_CONTEXT_ENABLED setting. When enabled, the CompressContext tool becomes available to agents for proactive context compression between tasks, operating exclusively on internal agent state without external system access.
 
 ```mermaid
 flowchart TD
@@ -193,15 +193,15 @@ Cache --> ReturnCached
 - [runtime_kernel.py:212-774](file://products/agent-platform/src/agent_service/runtime_kernel.py#L212-L774)
 
 ### Optional Context Compression (SPEC-064)
-**New** The Agent Platform now supports optional agent-driven context compression through the CompressContext tool, implemented according to SPEC-064. This feature allows agents to proactively compress their working context between tasks while maintaining full backward compatibility when disabled.
+**Enhanced** The Agent Platform implements agent-driven context compression through the CompressContext tool, fully specified in SPEC-064 and delivered in v0.44.0. This feature provides agents with proactive control over their working context while maintaining strict security and governance boundaries.
 
-Key features include:
-- **Opt-in Configuration**: Enabled via `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` environment variable (default: false)
-- **Kernel-local Tool**: CompressContext is registered as a KERNEL_LOCAL_TOOL_NAME, bypassing the permission gate since it only manipulates internal agent state
-- **State-only Operations**: Compression operates exclusively on `state.summary` and `state.context`, never touching external systems or network resources
-- **Durability Preservation**: Compression state survives session persistence through the existing SPEC-017 snapshot/restore mechanism
-- **Coexistence with Threshold Compression**: Works alongside existing `ContextConfig(trigger_ratio, tool_result_limit)` hard compression without conflicts
-- **Startup Validation**: Requires `AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2` (agentscope's context_buffer_ratio) to prevent configuration conflicts
+Key implementation details include:
+- **Opt-in Configuration**: Enabled via `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` environment variable (default: false), following the established pattern of other kernel features like `AGENTSCOPE_TASK_TOOLS_ENABLED`.
+- **Kernel-local Tool**: CompressContext is registered as a KERNEL_LOCAL_TOOL_NAME, bypassing the permission gate since it only manipulates internal agent state (`state.summary` and `state.context`) without touching external systems.
+- **State-only Operations**: Compression operates exclusively on kernel-owned agent state, never accessing external systems, network resources, or filesystems. The offloader feature is deliberately unwired to avoid split-brain scenarios across pod replicas.
+- **Durability Preservation**: Compression state survives session persistence through the existing SPEC-017 snapshot/restore mechanism, stored in `state.summary` and `state.context` fields.
+- **Coexistence with Threshold Compression**: Works alongside existing `ContextConfig(trigger_ratio, tool_result_limit)` hard compression without conflicts, firing ahead of threshold limits to prevent context overflow.
+- **Startup Validation**: Requires `AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2` (agentscope's context_buffer_ratio) to prevent configuration conflicts and ensure proper ordering.
 
 ```mermaid
 flowchart TD
@@ -217,16 +217,21 @@ StateUpdate --> Persist["Persists via SPEC-017 snapshot"]
 ```
 
 **Diagram sources**
-- [runtime_settings.py:177-185](file://products/agent-platform/src/agent_service/runtime_settings.py#L177-L185)
 - [runtime_settings.py:319-328](file://products/agent-platform/src/agent_service/runtime_settings.py#L319-L328)
 - [runtime_kernel.py:597-610](file://products/agent-platform/src/agent_service/runtime_kernel.py#L597-L610)
 - [kernel_middleware.py:105-117](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L105-L117)
 
+**Security and Governance**
+- **No Execution Surface**: The tool performs no infrastructure or tool access, maintaining the tool-gateway as the sole execution surface.
+- **Identity Unchanged**: Compression path carries identity only via existing delegated-token contextvar; introduces no new identity edge.
+- **Contract Boundary Preserved**: No agentscope types leak through the v2 contract; `agent-stream-event.schema.json` remains byte-stable.
+- **Audit Disposition**: No new audit event type is introduced since `on_acting` emits frames only for tools carrying a `gateway_tool_name`, which CompressContext lacks.
+
 **Section sources**
-- [runtime_settings.py:177-185](file://products/agent-platform/src/agent_service/runtime_settings.py#L177-L185)
 - [runtime_settings.py:319-328](file://products/agent-platform/src/agent_service/runtime_settings.py#L319-L328)
 - [runtime_kernel.py:597-610](file://products/agent-platform/src/agent_service/runtime_kernel.py#L597-L610)
 - [kernel_middleware.py:105-117](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L105-L117)
+- [tests/test_runtime_settings.py:637-678](file://products/agent-platform/tests/test_runtime_settings.py#L637-L678)
 
 ### Multi-Model Provider Registry and Catalog
 - Providers: The registry returns a provider adapter based on the active profile or catalog entry. Supported providers include dashscope, deepseek, openai, and luban.
@@ -239,7 +244,6 @@ class ModelCatalog {
 +entries() tuple
 +get(model_id) ModelCatalogEntry
 +default_entry() ModelCatalogEntry
-+public_models() dict
 -_swap(entries, aliases) void
 }
 class ModelCatalogEntry {
@@ -473,7 +477,8 @@ Kernel --> Middleware["services/kernel_middleware.py"]
 - Model discovery: Periodic refresh with timeouts avoids blocking startup; failures degrade gracefully.
 - **Enhanced Skill Search**: The proactive skill-search triggering adds minimal overhead but significantly improves operational request handling efficiency by preventing unnecessary refusals and guiding models toward appropriate skill discovery.
 - **Retention Policy Sweeps**: Operation document retention sweeps run opportunistically on writes with bounded limits (100 rows per sweep) to minimize performance impact while maintaining storage hygiene.
-- **Context Compression**: When enabled, CompressContext provides proactive context management that can improve long-running session performance by reducing context size before reaching threshold limits.
+- **Context Compression Benefits**: When enabled, CompressContext provides proactive context management that can improve long-running session performance by reducing context size before reaching threshold limits, potentially reducing LLM processing costs and improving response times for extended conversations.
+- **Compression Overhead**: The compression tool itself has minimal overhead since it reuses the existing `_compress_context_impl` mechanism and operates only on in-memory state.
 
 ## Troubleshooting Guide
 - Unknown model id: Requests specifying an unrecognized model id fail closed with 422; verify the model exists in the catalog or remove the field to use pinned/default.
@@ -486,6 +491,8 @@ Kernel --> Middleware["services/kernel_middleware.py"]
 - **Test Failures with Hardcoded Dates**: Tests using hardcoded dates like `2026-08-27` may fail due to retention policy sweeps. Replace with relative timestamps using the `_iso()` helper pattern to ensure test stability.
 - **Context Compression Startup Errors**: If enabling AGENTSCOPE_COMPRESS_CONTEXT_ENABLED causes startup failures, verify that AGENTSCOPE_CONTEXT_TRIGGER_RATIO is set above 0.2 (the agentscope context_buffer_ratio default). The error message will indicate the required relationship between these settings.
 - **Compression Tool Not Available**: If CompressContext doesn't appear in the toolkit despite being enabled, verify that the environment variable is properly set and that the kernel is built with the correct configuration. The tool is only registered when ContextConfig.compression_tool_enabled is true.
+- **Compression Configuration Conflicts**: Ensure that AGENTSCOPE_CONTEXT_TRIGGER_RATIO is greater than 0.2 when enabling compression. The startup validation enforces this constraint to maintain proper ordering between agent-driven and threshold-based compression.
+- **Performance Impact Assessment**: Monitor session duration and context size when enabling compression to assess its effectiveness. The feature should reduce context growth and improve long-running session performance.
 
 **Section sources**
 - [api/v2/routes.py:202-243](file://products/agent-platform/src/agent_service/api/v2/routes.py#L202-L243)
@@ -496,9 +503,9 @@ Kernel --> Middleware["services/kernel_middleware.py"]
 - [services/operation_documents.py:196-209](file://products/agent-platform/src/agent_service/services/operation_documents.py#L196-L209)
 - [tests/test_operation_documents.py:53-55](file://products/agent-platform/tests/test_operation_documents.py#L53-L55)
 - [runtime_settings.py:319-328](file://products/agent-platform/src/agent_service/runtime_settings.py#L319-L328)
-- [tests/test_runtime_settings.py:655-668](file://products/agent-platform/tests/test_runtime_settings.py#L655-L668)
+- [tests/test_runtime_settings.py:637-678](file://products/agent-platform/tests/test_runtime_settings.py#L637-L678)
 
 ## Conclusion
 The Agent Platform provides a robust, observable, and durable orchestration layer for AIOPS workflows. It centralizes session lifecycle, supports dynamic model switching across multiple providers, enforces safety through HITL approvals and read-only modes, and captures rich evidence for transparency and replay. With pluggable persistence, streaming responses, and careful error handling, it scales to concurrent sessions while maintaining reliability and auditability. 
 
-**Updated** The addition of optional context compression through the CompressContext tool (SPEC-064) enhances the platform's ability to manage long-running sessions efficiently while maintaining full backward compatibility. The enhanced system prompt now ensures that operational requests are handled more intelligently by proactively searching for relevant skills before refusing requests due to lack of immediate knowledge, improving both user experience and operational efficiency. The addition of the operation document repository with retention policies provides durable operational documentation with automatic cleanup, while the clock-relative timestamp pattern ensures test stability across different deployment timelines. The optional compression feature represents a significant advancement in agent autonomy while preserving the platform's security and governance principles.
+**Updated** The addition of optional context compression through the CompressContext tool (SPEC-064) represents a significant advancement in agent autonomy while preserving the platform's security and governance principles. Delivered in v0.44.0 as an opt-in, default-off feature, it enables agents to proactively manage their working context without introducing new execution surfaces or compromising existing safety boundaries. The enhanced system prompt now ensures that operational requests are handled more intelligently by proactively searching for relevant skills before refusing requests due to lack of immediate knowledge, improving both user experience and operational efficiency. The addition of the operation document repository with retention policies provides durable operational documentation with automatic cleanup, while the clock-relative timestamp pattern ensures test stability across different deployment timelines. Together, these enhancements demonstrate the platform's commitment to balancing agent capability with operational safety and governance.
