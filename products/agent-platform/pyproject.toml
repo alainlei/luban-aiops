@@ -1,6 +1,6 @@
 [project]
 name = "agent-service"
-version = "0.43.0"
+version = "0.43.1"
 description = "Runtime service for the Luban AIOps agent platform."
 requires-python = ">=3.11"
 dependencies = [

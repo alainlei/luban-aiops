@@ -11,6 +11,28 @@ portal is enforced by `make validate-version`.
 Versions prior to 0.1.0 were not numbered; Release 0 foundation work and
 Release 1 entries are grouped retrospectively under 0.1.0.
 
+## 0.43.1 — 2026-09-27
+
+Test-only patch fixing two clock-sensitive operation-document fixtures that
+began failing on 2026-09-27, one day after v0.43.0 shipped. No product code,
+contract, policy, schema, audit, or execution-path change; the seven products
+not under test move on version lockstep only.
+
+### Fixed
+
+- Two agent-platform document tests hardcoded a `created_at` of
+  `2026-08-27T…Z`. The operation-document store sweeps rows older than
+  `RETENTION_DAYS` (30) on every write, so once the wall clock passed
+  2026-09-26 those fixtures aged out of the retention window and the
+  listing/ordering assertions saw an empty result
+  (`test_legacy_record_degrades_without_summary`,
+  `test_list_for_owner_is_owner_scoped_and_newest_first`). Both now derive
+  their timestamps relative to `datetime.now(timezone.utc)`, matching the
+  existing `test_cap_evicts_oldest_per_owner` pattern, so they are stable
+  regardless of run date. The incident-bundle provenance dates and the
+  Postgres fake-driver mapping asserts are inert (they never pass through the
+  retention sweep) and are unchanged.
+
 ## 0.43.0 — 2026-09-26
 
 Crash-safe execution and outcome reconciliation (SPEC-063), per ADR-0013. The

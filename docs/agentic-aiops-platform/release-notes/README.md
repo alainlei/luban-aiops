@@ -7,6 +7,19 @@ waves and validation outcomes rather than published product releases.
 
 ## Available Notes
 
+- `2026-09-27-clock-sensitive-document-fixtures.md`
+  - patch (v0.43.1) — a test-only fix for two agent-platform operation-document
+    tests that hardcoded a `created_at` of `2026-08-27`. The store sweeps rows
+    older than `RETENTION_DAYS` (30) on every write, so once the wall clock
+    passed 2026-09-26 (the day v0.43.0 shipped) the fixtures aged out of
+    retention and the listing/ordering assertions saw an empty result. Both now
+    derive timestamps relative to `datetime.now(timezone.utc)`, matching the
+    existing `test_cap_evicts_oldest_per_owner` pattern. The failures were
+    pre-existing and clock-sensitive, not dependency-induced. The incident-bundle
+    provenance dates and the Postgres fake-driver mapping asserts never pass
+    through the sweep and are unchanged. No product code, contract, policy,
+    schema, audit, or execution-path change; the seven products not under test
+    move on version lockstep only.
 - `2026-09-20-spec-057-skill-composition-runbooks.md`
   - delivers SPEC-057 in v0.40.0 (nineteenth R5 slice; roadmap row 346's item
     **(b)**): a third, additive skill `kind: composition` — an ordered

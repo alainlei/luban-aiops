@@ -97,8 +97,26 @@ class TestInMemoryStore:
 
     def test_list_for_owner_is_owner_scoped_and_newest_first(self) -> None:
         store = InMemoryOperationDocumentStore()
-        store.create(_doc("doc-1", created_at="2026-08-27T08:00:00Z"))
-        store.create(_doc("doc-2", created_at="2026-08-27T09:00:00Z"))
+        # Timestamps must be relative to now: create() sweeps rows older than
+        # RETENTION_DAYS, so a hardcoded date silently ages out once the wall
+        # clock passes it. doc-2 stays newer than doc-1 for the ordering assert.
+        now = datetime.now(timezone.utc)
+        store.create(
+            _doc(
+                "doc-1",
+                created_at=(now - timedelta(minutes=2)).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                ),
+            )
+        )
+        store.create(
+            _doc(
+                "doc-2",
+                created_at=(now - timedelta(minutes=1)).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                ),
+            )
+        )
         store.create(_doc("doc-9", owner="bob"))
         rows = store.list_for_owner("alice")
         assert [row["document_id"] for row in rows] == ["doc-2", "doc-1"]

@@ -9,6 +9,7 @@ and contract validation against operation-document.schema.json.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import jsonschema
@@ -277,6 +278,11 @@ class TestDocumentSummary:
     def test_legacy_record_degrades_without_summary(self) -> None:
         app_client = TestClient(create_app())
         # Records created before SPEC-041 carry no summary key at all.
+        # created_at must be relative to now: the store sweeps rows older than
+        # RETENTION_DAYS on write, so a hardcoded date silently ages out.
+        recent = (datetime.now(timezone.utc) - timedelta(minutes=1)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
         OPERATION_DOCUMENT_STORE.create(
             {
                 "document_id": "doc-legacy",
@@ -284,7 +290,7 @@ class TestDocumentSummary:
                 "state": "draft",
                 "owner_user_id": "alice",
                 "label": "legacy shift",
-                "created_at": "2026-08-27T08:00:00Z",
+                "created_at": recent,
                 "published_at": None,
                 "provenance": {"sessions": []},
                 "digest": {"sessions": []},

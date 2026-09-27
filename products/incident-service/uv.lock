@@ -498,7 +498,7 @@ wheels = [
 
 [[package]]
 name = "incident-service"
-version = "0.43.0"
+version = "0.43.1"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
