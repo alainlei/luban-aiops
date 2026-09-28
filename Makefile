@@ -199,6 +199,15 @@ overlays: ## Render every GitOps overlay (kustomize build check)
 validate-dashboards: ## Validate the OpenObserve dashboards are importable and reference emitted metrics (SPEC-065 R-3)
 	@python3 $(DASHBOARDS_DIR)/validate_dashboards.py
 
+# SPEC-065 R-4: the observability live-check reproduces spike §6. The default
+# (--local) runs the mocked-I/O pytest proof of the pipeline logic — no cluster,
+# no network, no paid call — which is also collected by `make test`. LIVE=1 runs
+# the read-only cluster pre-flight; LIVE=1 DRIVE_TURN=1 additionally fires the
+# single gated, billable read-only chat turn and correlates it by trace_id.
+.PHONY: observability-livecheck
+observability-livecheck: ## Observability live-check (SPEC-065 R-4): mocked proof by default; LIVE=1 read-only cluster pre-flight; LIVE=1 DRIVE_TURN=1 the gated billable one-turn correlation
+	@LUBAN_OBS_DRIVE_PAID_TURN="$(DRIVE_TURN)" sh $(E2E_DIR)/observability-livecheck.sh $(if $(LIVE),--live,--local)
+
 .PHONY: secret-delivery-demo
 secret-delivery-demo: ## Run the local sample handoff proof (uv + installed portal npm dependencies; no cluster)
 	@sh $(SAMPLES_DIR)/acme-admin/password-reset/demo/demo.sh --secret-delivery-local
@@ -257,7 +266,7 @@ e2e: ## Run the e2e demo scripts against the deployed dev cluster
 	@echo "The acme-admin suite additionally needs 'make deploy-sample-app' and"
 	@echo "'make deploy-samples' to have been run; it fails loudly naming them if not."
 	@status=0; \
-	for script in $(E2E_DIR)/skills-demo.sh $(E2E_DIR)/incident-demo.sh $(E2E_DIR)/mutating-demo.sh $(E2E_DIR)/http-check-demo.sh $(E2E_DIR)/secret-delivery-demo.sh $(SAMPLES_DIR)/acme-admin/demo-suite.sh; do \
+	for script in $(E2E_DIR)/skills-demo.sh $(E2E_DIR)/incident-demo.sh $(E2E_DIR)/mutating-demo.sh $(E2E_DIR)/http-check-demo.sh $(E2E_DIR)/secret-delivery-demo.sh $(E2E_DIR)/observability-livecheck.sh $(SAMPLES_DIR)/acme-admin/demo-suite.sh; do \
 		echo "==> $$script"; \
 		sh $$script || status=1; \
 	done; \

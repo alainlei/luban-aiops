@@ -47,7 +47,9 @@ wired into `make verify`.
 `apply-dashboards.sh` idempotently imports every `*.dashboard.json` into
 OpenObserve, matching by `dashboardId` (update if present, else create). It is a
 live, state-mutating call, so it is **not** part of `make verify`; run it as an
-operator step or from the SPEC-065 R-4 gated live-check.
+operator step. It fails loudly on the first dashboard OpenObserve rejects, so a
+clean run is the live import proof. (The SPEC-065 R-4 `observability-livecheck.sh`
+confirms the metric/trace pipeline that feeds the panels — not the import.)
 
 ```sh
 # 1. Reach the OpenObserve router.
@@ -72,7 +74,7 @@ Then open the OpenObserve UI → **Dashboards** → folder `default`.
   stable, importable shape shared by current OpenObserve community dashboards.
   The envelope is forward-compatible with newer instances (they migrate on
   import); the exact live import against the deployed backend is confirmed by
-  the R-4 live-check.
+  running `apply-dashboards.sh` (it fails loudly on a rejected dashboard).
 - To add or edit a dashboard: change the JSON (or build it in the UI and export
   it here), give it a unique `dashboardId` and `title`, then run
   `make validate-dashboards` before applying. Keep every metric reference within

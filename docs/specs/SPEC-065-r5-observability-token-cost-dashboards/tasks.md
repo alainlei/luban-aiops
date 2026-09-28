@@ -142,17 +142,47 @@ with R-1). `make validate-dashboards` green (3 dashboards, 36 panels, 51 familie
 
 ## R-4: Gated observability live-check
 
-- [ ] Add a live-check script under `shared/platform-ops/` reproducing spike §6
+- [x] Add a live-check script under `shared/platform-ops/` reproducing spike §6
       (assert `OTEL_ENABLED`/`AGENTSCOPE_KERNEL_TRACING`; inspect `/metrics` for
       `agent_llm_tokens_total`; port-forward OpenObserve; query metrics/traces
       correlated by `trace_id`)
 - [ ] Drive **one** read-only chat turn against external `deepseek`
       (`deepseek-v4-flash`, authorized billable per memo §7.3); delete the test
       session; no mutation/tool/HITL
-- [ ] Make the script idempotent, loud on a missing signal, and invoked from the
+      — **leg implemented + mocked-tested; the live billable run is GATED and NOT
+      yet fired** (needs a deployed cluster + explicit operator authorization for
+      the paid call; tracked by the Delivery Gate "authorized live paid leg run
+      and evidenced" below).
+- [x] Make the script idempotent, loud on a missing signal, and invoked from the
       demo/e2e entrypoint (`make` list) so it cannot be skipped silently
-- [ ] Add a mocked-I/O execution of the script (no live paid call) to the ordinary
+- [x] Add a mocked-I/O execution of the script (no live paid call) to the ordinary
       test suite; keep the paid live leg an explicitly gated, authorized step
+
+**DONE 2026-09-27 (authoring; live paid leg gated)** —
+`shared/platform-ops/e2e/observability-livecheck.sh` reproduces spike §6 with
+three escalating legs: `--local` (default) runs the mocked-I/O pytest proof;
+`--live` is a read-only cluster pre-flight (asserts `OTEL_ENABLED` +
+`AGENTSCOPE_KERNEL_TRACING` on the agent pod, `agent_llm_tokens_total` registered
+on `/metrics`, OpenObserve reachable); `--live` with `LUBAN_OBS_DRIVE_PAID_TURN=1`
+additionally drives ONE read-only `deepseek` turn, correlates it in OpenObserve by
+`trace_id` (the LLM span carrying `gen_ai_usage_input_tokens` + the
+`agent_llm_tokens_total` metric stream), then deletes the throwaway session (no
+mutation/tool/HITL). The turn sends no `X-Request-ID`, so the gateway bridges the
+SSE `request_id` to the active OTel `trace_id`
+(`request_context.resolve_request_id`) — the correlation key. Idempotent
+(read-only checks; the turn leg creates + deletes its own session) and loud on any
+missing signal (single-line, secret-free failure; non-zero exit). Wired into the
+`make e2e` list (cannot be skipped silently) + a discoverable
+`make observability-livecheck` target (`LIVE=1` / `DRIVE_TURN=1` escalate). The
+mocked-I/O execution lives in the ordinary suite as
+`products/agent-platform/tests/test_observability_livecheck.py` (a 7-scenario
+matrix: read-only ok, turn ok, missing OTel env, missing token metric,
+OpenObserve unreachable, missing trace, bad trace-id — asserting the sentinels,
+session cleanup, the no-`X-Request-ID` invariant, and a secret-free failure),
+collected by `make test` / `make verify`; agent-platform suite **1537 passed**.
+**The live billable leg has NOT been fired** (a separate authorization boundary
+that also needs a deployed cluster); it remains the Delivery Gate's "authorized
+live paid leg run and evidenced" step.
 
 ## R-5: Contract and living-doc updates
 

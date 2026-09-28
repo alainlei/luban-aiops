@@ -100,12 +100,37 @@ the services actually emit** (cross-checked against each service's
 
 ## Verifying the pipeline end to end
 
-The gated live-check (SPEC-065 R-4) reproduces the observability spike: it
-asserts `OTEL_ENABLED`, confirms `agent_llm_tokens_total` on `/metrics`, drives
-one read-only chat turn, and queries OpenObserve for the correlated metric and
-trace. See the
+`observability-livecheck.sh` (SPEC-065 R-4) reproduces the observability spike
+as a repeatable, idempotent check that is loud on any missing signal. It has
+three escalating legs:
+
+```sh
+# 1. Mocked-I/O proof of the pipeline logic — no cluster, no network, no paid
+#    call. This leg is collected by the agent-platform suite (so it runs on every
+#    `make verify`) and is also in the `make e2e` list, so it cannot be skipped.
+make observability-livecheck
+
+# 2. Read-only cluster pre-flight: asserts OTEL_ENABLED=true and
+#    AGENTSCOPE_KERNEL_TRACING=true on the agent pod, agent_llm_tokens_total on
+#    /metrics (R-1), and that OpenObserve is reachable. Fires no model call.
+#    Needs the OpenObserve port-forward plus OO_ROOT_USER_EMAIL/OO_ROOT_USER_PASSWORD.
+make observability-livecheck LIVE=1
+
+# 3. The gated, BILLABLE leg: additionally drives ONE read-only deepseek chat
+#    turn, correlates it in OpenObserve by trace_id (the LLM span carrying
+#    gen_ai token usage + the agent_llm_tokens_total metric stream), then deletes
+#    the throwaway session. No mutation, no tool call, no HITL.
+make observability-livecheck LIVE=1 DRIVE_TURN=1
+```
+
+The paid turn never fires by default — it requires the explicit `DRIVE_TURN=1`
+gate (equivalently `LUBAN_OBS_DRIVE_PAID_TURN=1` with `--live`), matching the
+operator authorization for a real, billable model call (spike memo §7.3). The
+turn sends no `X-Request-ID`, so the gateway bridges the SSE `request_id` to the
+active OTel `trace_id` — the correlation key the check queries OpenObserve by.
+See the
 [observability spike memo](../workspace/observability-metrics-dashboards-spike.md)
-for the manual procedure.
+for the underlying manual procedure.
 
 ## Related
 
