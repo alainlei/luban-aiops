@@ -21,6 +21,7 @@ Luban AIOps platform.
 | [Luban-Hosted Small Model Guide](luban-llm-guide.md) | Self-hosting a small LLM (Ollama/vLLM/llama.cpp) with token auth, platform wiring, K8s hosting |
 | [Architecture Overview](architecture-overview.md) | Service topology, request flow, trust chain, RBAC model |
 | [Execution Cutover and Restore](execution-cutover-restore.md) | Gated execution-runtime downgrade, database-restore interlock, external epoch rotation, and the old-validity wait (SPEC-063 R-7b) |
+| [Observability Dashboards](observability-dashboards.md) | The config-as-code OpenObserve dashboards (RED, LLM tokens, governance): reaching, reading, applying, and editing them |
 | [Troubleshooting](troubleshooting.md) | Symptom-based diagnostics for common deployment and runtime issues |
 
 ## Quick Start
@@ -39,3 +40,4 @@ Luban AIOps platform.
 - [Authorization Matrix](../agentic-aiops-platform/authorization-matrix.md) — role-to-action mapping
 - [Spec Index](../specs/README.md) — implementation specs and their delivery status
 - [Dev K8s Overlay](../../shared/platform-ops/gitops/dev-k8s/README.md) — deployer's reference
+- [OpenObserve Dashboards](../../shared/platform-ops/dashboards/README.md) — config-as-code dashboard artifacts, validation, and apply script

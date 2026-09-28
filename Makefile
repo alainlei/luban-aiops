@@ -22,6 +22,10 @@ GITOPS_DIR := shared/platform-ops/gitops
 # End-to-end demo scripts run against a deployed cluster via `make e2e`.
 E2E_DIR := shared/platform-ops/e2e
 
+# Config-as-code OpenObserve dashboards validated by `make validate-dashboards`
+# (SPEC-065 R-3) — the offline analog of the `overlays` kustomize render check.
+DASHBOARDS_DIR := shared/platform-ops/dashboards
+
 # Self-contained tutorial samples; installed into the dev cluster out-of-band
 # via `make deploy-samples` so the base overlay never names a sample (SPEC-050 R-11).
 SAMPLES_DIR := samples
@@ -187,6 +191,14 @@ overlays: ## Render every GitOps overlay (kustomize build check)
 		kustomize build --load-restrictor LoadRestrictionsNone $(GITOPS_DIR)/$$o >/dev/null || exit 1; \
 	done
 
+# SPEC-065 R-3: the config-as-code dashboards are validated offline (parse +
+# envelope/panel schema + every metric reference resolves to an emitted
+# OTEL_MIRROR_FAMILIES stream), so the artifact cannot silently rot between
+# deploys. The live import itself is the operator/R-4 apply-dashboards.sh step.
+.PHONY: validate-dashboards
+validate-dashboards: ## Validate the OpenObserve dashboards are importable and reference emitted metrics (SPEC-065 R-3)
+	@python3 $(DASHBOARDS_DIR)/validate_dashboards.py
+
 .PHONY: secret-delivery-demo
 secret-delivery-demo: ## Run the local sample handoff proof (uv + installed portal npm dependencies; no cluster)
 	@sh $(SAMPLES_DIR)/acme-admin/password-reset/demo/demo.sh --secret-delivery-local
@@ -209,7 +221,7 @@ portal-test: ## Run the operator-portal SPA unit suite and production build (vit
 	@$(MAKE) -C products/operator-portal web-build || exit 1
 
 .PHONY: verify
-verify: test overlays validate-policy validate-policy-scenarios validate-version validate-secret-vocabulary validate-password-policy secret-delivery-demo portal-test execution-failure-test ## Verification gate: product, contract, policy, overlay, portal, secret-delivery, and execution failure proofs
+verify: test overlays validate-dashboards validate-policy validate-policy-scenarios validate-version validate-secret-vocabulary validate-password-policy secret-delivery-demo portal-test execution-failure-test ## Verification gate: product, contract, policy, overlay, dashboard, portal, secret-delivery, and execution failure proofs
 
 .PHONY: deploy
 deploy: ## Deploy the dev-k8s overlay to the current cluster (wraps deploy.sh)

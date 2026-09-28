@@ -109,15 +109,36 @@ gauge has no increment, so the push gauge takes the authoritative value from
 
 ## R-3: OpenObserve dashboard suite (config-as-code)
 
-- [ ] Add OpenObserve-importable dashboard JSON under
+- [x] Add OpenObserve-importable dashboard JSON under
       `shared/platform-ops/dashboards/` (token by `{provider,model,direction}`;
       RED; one governance/decision-chain view), querying
       the OpenObserve **metrics** stream. A cost panel is deferred with the R-1
       cost metric
-- [ ] Add a documented, repeatable apply/import script under `shared/platform-ops/`
-- [ ] Wire a dashboard import/render validation into `make verify` (analogous to
+- [x] Add a documented, repeatable apply/import script under `shared/platform-ops/`
+- [x] Wire a dashboard import/render validation into `make verify` (analogous to
       `kustomize build` for overlays) so the artifact cannot silently rot
-- [ ] Document the dashboards + how to reach them in the operator guide
+- [x] Document the dashboards + how to reach them in the operator guide
+
+**DONE 2026-09-27** — three OpenObserve `version: 5` dashboard JSON files under
+`shared/platform-ops/dashboards/` (Service Health/RED, LLM Token Consumption,
+Governance & Decision Chain; 36 panels total), querying the per-metric
+OpenObserve **metrics** streams via PromQL (`irate`/`sum … by (…)`, and
+`histogram_quantile` over the `http_request_duration_seconds_bucket` stream for
+p50/p95). Note: the spike's `FROM "default"` stream-naming applies to logs/traces;
+metrics land one stream per metric name, so panels reference the OTel instrument
+name directly (= the Prometheus exposed name). `apply-dashboards.sh` imports
+idempotently by `dashboardId` (update-if-exists, else create) — a live
+operator/R-4 step, deliberately not in `make verify`. `validate_dashboards.py` is
+the offline render/import gate wired into `make verify` as `validate-dashboards`
+(the `kustomize build` analog): it validates the envelope/panel schema and
+cross-references every metric against the eight services' `OTEL_MIRROR_FAMILIES`
+(AST-parsed, no import), so a renamed metric fails the gate. Negative-tested
+(unknown metric / unknown panel type / duplicate panel id / empty query /
+duplicate dashboardId all caught; no false positives on `service_name` or PromQL
+functions). Docs: operator guide `docs/guides/observability-dashboards.md`
+(registered in the guides index) + `dashboards/README.md`. No cost panel (deferred
+with R-1). `make validate-dashboards` green (3 dashboards, 36 panels, 51 families).
+
 
 ## R-4: Gated observability live-check
 
