@@ -10,6 +10,13 @@ which matches the OpenObserve ingest contract ``/api/{org}/v1/{signal}``.
 Authentication rides on OTEL_EXPORTER_OTLP_HEADERS, provisioned into the
 runtime secrets (never committed). Conventions:
 shared/shared-contracts/observability-conventions.md.
+
+SPEC-065 R-2: ``MetricsMirror`` additionally re-emits each service's own
+prometheus domain families as OTel instruments (same exposed name, same
+bounded label set) so they reach dashboards over the OTLP push path
+(ADR-0014) instead of via a scraper. It stays generic — byte-identical
+across all eight services (TelemetryParityTest) — so it names no
+service-specific metric: the caller supplies the family list.
 """
 
 from __future__ import annotations
@@ -130,3 +137,113 @@ def current_trace_id() -> str | None:
     except Exception:
         return None
     return None
+
+
+class MetricsMirror:
+    """Re-emit prometheus domain families as OTel instruments (SPEC-065 R-2).
+
+    The always-on ``prometheus_client`` ``/metrics`` surface stays the source of
+    truth (SPEC-005). When ``OTEL_ENABLED`` this mirror *additionally* pushes the
+    same families — same exposed name, same bounded label set — as OTel
+    instruments on the meter from the provider :func:`setup_telemetry` installed,
+    so domain metrics reach dashboards over the OTLP push path (ADR-0014) instead
+    of via a scraper.
+
+    Constraints honoured here:
+
+    * **Lazy.** Instruments are built on the first record, never at import time,
+      because ``setup_metrics`` runs before ``setup_telemetry`` sets the
+      ``MeterProvider``. ``meter_provider`` may be injected (tests); production
+      passes ``None`` and uses the global provider.
+    * **No-op when disabled.** With ``OTEL_ENABLED`` false no instrument is
+      created and ``/metrics`` is untouched (SPEC-005 always-on guarantee).
+    * **Fail-open.** Any OTel error is logged and swallowed; it never propagates
+      into the request path.
+    * **Generic.** Byte-identical across all eight services, so it references no
+      service-specific metric name: the caller supplies ``(name, kind, labels)``.
+
+    ``kind`` is one of ``counter`` / ``histogram`` / ``gauge``; ``labels`` is the
+    bounded label-name tuple (possibly empty). ``name`` is the exposed prometheus
+    sample name (counters keep their ``_total`` suffix) so both surfaces agree.
+    """
+
+    def __init__(self, meter_name, families, meter_provider=None):
+        self._meter_name = meter_name
+        self._meter_provider = meter_provider
+        self._families = tuple(
+            (str(name), str(kind), tuple(labels))
+            for (name, kind, labels) in families
+        )
+        # None = not built yet; {} = built empty (disabled-after-failure).
+        self._instruments = None
+
+    def _build(self):
+        if self._meter_provider is not None:
+            meter = self._meter_provider.get_meter(self._meter_name)
+        else:
+            from opentelemetry import metrics as otel_metrics
+
+            meter = otel_metrics.get_meter(self._meter_name)
+        instruments = {}
+        for name, kind, _labels in self._families:
+            if kind == "counter":
+                instruments[name] = meter.create_counter(name)
+            elif kind == "histogram":
+                instruments[name] = meter.create_histogram(name)
+            elif kind == "gauge":
+                instruments[name] = meter.create_gauge(name)
+        return instruments
+
+    def _ensure(self):
+        if self._instruments is not None:
+            return self._instruments
+        if not is_enabled():
+            return None
+        try:
+            self._instruments = self._build()
+        except Exception:
+            LOGGER.exception(
+                "otel metrics mirror setup failed; continuing without push"
+            )
+            self._instruments = {}
+        return self._instruments
+
+    def _instrument(self, name):
+        instruments = self._ensure()
+        if not instruments:
+            return None
+        return instruments.get(name)
+
+    @staticmethod
+    def _attributes(labels):
+        return {k: v for k, v in (labels or {}).items() if v is not None}
+
+    def count(self, name, amount, labels=None):
+        """Mirror a counter increment beside the prometheus ``.inc()``."""
+        instrument = self._instrument(name)
+        if instrument is None:
+            return
+        try:
+            instrument.add(amount, self._attributes(labels))
+        except Exception:
+            LOGGER.exception("otel counter mirror failed for %s", name)
+
+    def observe(self, name, value, labels=None):
+        """Mirror a histogram observation beside the prometheus ``.observe()``."""
+        instrument = self._instrument(name)
+        if instrument is None:
+            return
+        try:
+            instrument.record(value, self._attributes(labels))
+        except Exception:
+            LOGGER.exception("otel histogram mirror failed for %s", name)
+
+    def set_gauge(self, name, value, labels=None):
+        """Mirror a gauge set beside the prometheus ``.set()``."""
+        instrument = self._instrument(name)
+        if instrument is None:
+            return
+        try:
+            instrument.set(value, self._attributes(labels))
+        except Exception:
+            LOGGER.exception("otel gauge mirror failed for %s", name)

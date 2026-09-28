@@ -20,6 +20,32 @@ from prometheus_client import (
     generate_latest,
 )
 
+from execution_runtime.core.telemetry import MetricsMirror
+
+# SPEC-065 R-2: every prometheus family in this module is mirrored to an OTel
+# instrument of the same exposed name + bounded label set when OTEL_ENABLED, so
+# domain metrics reach dashboards over the OTLP push path (ADR-0014) with no
+# scraper. The mirror is lazy, fail-open, and a no-op when disabled (see
+# core/telemetry.py). Names are exposed sample names (counters keep ``_total``).
+OTEL_MIRROR_FAMILIES = (
+    ("http_requests_total", "counter", ("method", "handler", "status")),
+    ("http_request_duration_seconds", "histogram", ("method", "handler")),
+    ("execution_handoffs_total", "counter", ()),
+    ("execution_handoff_rejections_total", "counter", ("reason",)),
+    ("execution_completions_total", "counter", ("status",)),
+    ("execution_late_completions_total", "counter", ()),
+    ("audit_emits_total", "counter", ("result",)),
+    ("execution_duplicate_claims_total", "counter", ()),
+    ("execution_conflicts_total", "counter", ("kind",)),
+    ("execution_store_write_failures_total", "counter", ()),
+    ("execution_admission_available", "gauge", ()),
+    ("execution_unresolved_count", "gauge", ()),
+    ("execution_unresolved_oldest_age_seconds", "gauge", ()),
+    ("execution_drain_state", "gauge", ()),
+)
+
+_MIRROR = MetricsMirror("execution_runtime", OTEL_MIRROR_FAMILIES)
+
 HTTP_REQUESTS = Counter(
     "http_requests_total",
     "HTTP requests processed.",
@@ -121,14 +147,24 @@ def setup_metrics(app: FastAPI) -> None:
         response = await call_next(request)
         handler = _handler_label(request)
         if handler != "/metrics":
+            elapsed = time.perf_counter() - started_at
+            status = str(response.status_code)
             HTTP_REQUESTS.labels(
-                method=request.method,
-                handler=handler,
-                status=str(response.status_code),
+                method=request.method, handler=handler, status=status
             ).inc()
             HTTP_REQUEST_DURATION.labels(
                 method=request.method, handler=handler
-            ).observe(time.perf_counter() - started_at)
+            ).observe(elapsed)
+            _MIRROR.count(
+                "http_requests_total",
+                1,
+                {"method": request.method, "handler": handler, "status": status},
+            )
+            _MIRROR.observe(
+                "http_request_duration_seconds",
+                elapsed,
+                {"method": request.method, "handler": handler},
+            )
         return response
 
     @app.get("/metrics", include_in_schema=False)
@@ -144,43 +180,54 @@ def setup_metrics(app: FastAPI) -> None:
 
 def record_handoff() -> None:
     EXECUTION_HANDOFFS.inc()
+    _MIRROR.count("execution_handoffs_total", 1)
 
 
 def record_rejection(reason: str) -> None:
     EXECUTION_REJECTIONS.labels(reason=reason).inc()
+    _MIRROR.count("execution_handoff_rejections_total", 1, {"reason": reason})
 
 
 def record_completion(status: str) -> None:
     EXECUTION_COMPLETIONS.labels(status=status).inc()
+    _MIRROR.count("execution_completions_total", 1, {"status": status})
 
 
 def record_late_completion() -> None:
     EXECUTION_LATE_COMPLETIONS.inc()
+    _MIRROR.count("execution_late_completions_total", 1)
 
 
 def record_audit_emit(result: str) -> None:
     """Record an audit emission outcome (``ok`` or ``error``)."""
     AUDIT_EMITS.labels(result=result).inc()
+    _MIRROR.count("audit_emits_total", 1, {"result": result})
 
 
 def record_duplicate() -> None:
     """A handoff answered metadata-only from an existing single-use claim."""
     EXECUTION_DUPLICATE_CLAIMS.inc()
+    _MIRROR.count("execution_duplicate_claims_total", 1)
 
 
 def record_conflict(kind: str) -> None:
     """Record a refused conflict; ``kind`` is a bounded enum, never identity."""
-    EXECUTION_CONFLICTS.labels(kind=kind if kind in _CONFLICT_KINDS else "identity").inc()
+    bounded = kind if kind in _CONFLICT_KINDS else "identity"
+    EXECUTION_CONFLICTS.labels(kind=bounded).inc()
+    _MIRROR.count("execution_conflicts_total", 1, {"kind": bounded})
 
 
 def record_store_write_failure() -> None:
     """A durable ledger write failed or was left unconfirmed."""
     EXECUTION_STORE_WRITE_FAILURES.inc()
+    _MIRROR.count("execution_store_write_failures_total", 1)
 
 
 def record_drain_state(draining: bool) -> None:
     """Publish the in-process drain state (1 while refusing new handoffs)."""
-    EXECUTION_DRAIN_STATE.set(1 if draining else 0)
+    value = 1 if draining else 0
+    EXECUTION_DRAIN_STATE.set(value)
+    _MIRROR.set_gauge("execution_drain_state", value)
 
 
 def refresh_ledger_gauges(ledger, draining: bool) -> None:
@@ -208,4 +255,15 @@ def refresh_ledger_gauges(ledger, draining: bool) -> None:
     EXECUTION_UNRESOLVED_COUNT.set(int(snapshot.get("unresolved_count", 0)))
     EXECUTION_UNRESOLVED_OLDEST_AGE_SECONDS.set(
         float(snapshot.get("oldest_unresolved_age_seconds", 0.0))
+    )
+    _MIRROR.set_gauge(
+        "execution_admission_available",
+        1 if snapshot.get("admission_available") else 0,
+    )
+    _MIRROR.set_gauge(
+        "execution_unresolved_count", int(snapshot.get("unresolved_count", 0))
+    )
+    _MIRROR.set_gauge(
+        "execution_unresolved_oldest_age_seconds",
+        float(snapshot.get("oldest_unresolved_age_seconds", 0.0)),
     )

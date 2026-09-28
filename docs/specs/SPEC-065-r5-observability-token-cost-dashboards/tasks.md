@@ -76,23 +76,36 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 
 ## R-2: Domain metrics pushed as OTel instruments (ADR-0014)
 
-- [ ] Add a mirror helper to the **canonical**
+- [x] Add a mirror helper to the **canonical**
       `products/agent-platform/src/agent_service/core/telemetry.py` that, when
       `OTEL_ENABLED`, obtains a meter from the already-set `MeterProvider` and
       creates OTel instruments of the **same name + bounded labels** for a family
       list passed in by the caller (no service-specific name inside the guarded
       module)
-- [ ] Replicate the edited `telemetry.py` to all **eight** services in the same
+- [x] Replicate the edited `telemetry.py` to all **eight** services in the same
       commit; `TelemetryParityTest`
       (`products/tool-gateway/tests/test_module_parity.py`) must pass byte-identical
-- [ ] Call the helper from each service's own `core/metrics.py` for its enumerated
+- [x] Call the helper from each service's own `core/metrics.py` for its enumerated
       families (incl. the R-1 token family in agent-platform); record into
       both surfaces from the existing `record_*` call sites
-- [ ] Test: name + label parity between the prometheus family and the OTel instrument
-- [ ] Test: `OTEL_ENABLED=false` → no instrument created, `/metrics` unchanged
+- [x] Test: name + label parity between the prometheus family and the OTel instrument
+- [x] Test: `OTEL_ENABLED=false` → no instrument created, `/metrics` unchanged
       (SPEC-005 decoupling + always-on hold)
-- [ ] Test: exporter error fails open (never raises into the request path)
-- [ ] Test: `TelemetryParityTest` still green after the eight-copy edit
+- [x] Test: exporter error fails open (never raises into the request path)
+- [x] Test: `TelemetryParityTest` still green after the eight-copy edit
+
+**DONE 2026-09-27** — `MetricsMirror` added to the canonical `telemetry.py`
+(lazy, fail-open, no-op when disabled; injectable `meter_provider` so tests never
+touch the process-global provider), replicated byte-identical to all eight
+services (shasum-verified; `TelemetryParityTest` 5 passed). Each service's
+`core/metrics.py` declares `OTEL_MIRROR_FAMILIES` and mirrors beside every
+`record_*`/RED site (agent-platform incl. `agent_llm_tokens_total`). Tests:
+per-service declaration-parity (8) + agent-platform behavioural suite (emission
+name/label parity, disabled no-op, build+record fail-open, end-to-end token
+mirror). All eight suites green (3004 passed). One deliberate exception:
+audit-service `record_store_growth` stays prometheus-only — an OTel synchronous
+gauge has no increment, so the push gauge takes the authoritative value from
+`set_store_size` on every retention sweep.
 
 ## R-3: OpenObserve dashboard suite (config-as-code)
 

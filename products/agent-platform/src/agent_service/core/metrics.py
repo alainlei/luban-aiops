@@ -20,6 +20,36 @@ from prometheus_client import (
     generate_latest,
 )
 
+from agent_service.core.telemetry import MetricsMirror
+
+# SPEC-065 R-2: every prometheus family in this module is mirrored to an OTel
+# instrument of the same exposed name + bounded label set when OTEL_ENABLED, so
+# domain metrics reach dashboards over the OTLP push path (ADR-0014) with no
+# scraper. The mirror is lazy, fail-open, and a no-op when disabled (see
+# core/telemetry.py). Names are exposed sample names (counters keep ``_total``).
+# MetricsMirrorTests pins this list to the prometheus objects declared below.
+OTEL_MIRROR_FAMILIES = (
+    ("http_requests_total", "counter", ("method", "handler", "status")),
+    ("http_request_duration_seconds", "histogram", ("method", "handler")),
+    ("agent_sessions_created_total", "counter", ()),
+    ("agent_chat_requests_total", "counter", ()),
+    ("session_store_backend", "gauge", ("backend",)),
+    ("session_store_errors_total", "counter", ("operation",)),
+    ("session_store_fallbacks_total", "counter", ()),
+    ("agent_state_backend", "gauge", ("backend",)),
+    ("agent_state_errors_total", "counter", ("operation",)),
+    ("agent_state_fallbacks_total", "counter", ()),
+    ("evidence_store_writes_total", "counter", ("result",)),
+    ("evidence_frames_persisted_total", "counter", ()),
+    ("evidence_frames_truncated_total", "counter", ("reason",)),
+    ("audit_emits_total", "counter", ("result",)),
+    ("agent_model_discovery_refreshes_total", "counter", ("provider", "result")),
+    ("agent_model_discovery_models", "gauge", ("provider",)),
+    ("agent_llm_tokens_total", "counter", ("provider", "model", "direction")),
+)
+
+_MIRROR = MetricsMirror("agent_service", OTEL_MIRROR_FAMILIES)
+
 HTTP_REQUESTS = Counter(
     "http_requests_total",
     "HTTP requests processed.",
@@ -58,14 +88,24 @@ def setup_metrics(app: FastAPI) -> None:
         response = await call_next(request)
         handler = _handler_label(request)
         if handler != "/metrics":
+            elapsed = time.perf_counter() - started_at
+            status = str(response.status_code)
             HTTP_REQUESTS.labels(
-                method=request.method,
-                handler=handler,
-                status=str(response.status_code),
+                method=request.method, handler=handler, status=status
             ).inc()
             HTTP_REQUEST_DURATION.labels(
                 method=request.method, handler=handler
-            ).observe(time.perf_counter() - started_at)
+            ).observe(elapsed)
+            _MIRROR.count(
+                "http_requests_total",
+                1,
+                {"method": request.method, "handler": handler, "status": status},
+            )
+            _MIRROR.observe(
+                "http_request_duration_seconds",
+                elapsed,
+                {"method": request.method, "handler": handler},
+            )
         return response
 
     @app.get("/metrics", include_in_schema=False)
@@ -75,10 +115,12 @@ def setup_metrics(app: FastAPI) -> None:
 
 def record_session_created() -> None:
     SESSIONS_CREATED.inc()
+    _MIRROR.count("agent_sessions_created_total", 1)
 
 
 def record_chat_request() -> None:
     CHAT_REQUESTS.inc()
+    _MIRROR.count("agent_chat_requests_total", 1)
 
 
 # --- Session store observability (SPEC-006 R-3/R-4) ---
@@ -104,17 +146,19 @@ SESSION_STORE_FALLBACKS = Counter(
 def record_session_store_backend(backend: str) -> None:
     """Set the active backend gauge (1 for active, 0 for others)."""
     for label in ("redis", "memory", "postgres"):
-        SESSION_STORE_BACKEND_GAUGE.labels(backend=label).set(
-            1 if label == backend else 0
-        )
+        value = 1 if label == backend else 0
+        SESSION_STORE_BACKEND_GAUGE.labels(backend=label).set(value)
+        _MIRROR.set_gauge("session_store_backend", value, {"backend": label})
 
 
 def record_session_store_error(operation: str) -> None:
     SESSION_STORE_ERRORS.labels(operation=operation).inc()
+    _MIRROR.count("session_store_errors_total", 1, {"operation": operation})
 
 
 def record_session_store_fallback() -> None:
     SESSION_STORE_FALLBACKS.inc()
+    _MIRROR.count("session_store_fallbacks_total", 1)
 
 
 # --- Agent state store observability (SPEC-017 R-5) ---
@@ -140,17 +184,19 @@ AGENT_STATE_FALLBACKS = Counter(
 def record_agent_state_backend(backend: str) -> None:
     """Set the active backend gauge (1 for active, 0 for others)."""
     for label in ("memory", "postgres"):
-        AGENT_STATE_BACKEND_GAUGE.labels(backend=label).set(
-            1 if label == backend else 0
-        )
+        value = 1 if label == backend else 0
+        AGENT_STATE_BACKEND_GAUGE.labels(backend=label).set(value)
+        _MIRROR.set_gauge("agent_state_backend", value, {"backend": label})
 
 
 def record_agent_state_error(operation: str) -> None:
     AGENT_STATE_ERRORS.labels(operation=operation).inc()
+    _MIRROR.count("agent_state_errors_total", 1, {"operation": operation})
 
 
 def record_agent_state_fallback() -> None:
     AGENT_STATE_FALLBACKS.inc()
+    _MIRROR.count("agent_state_fallbacks_total", 1)
 
 
 # --- Evidence store observability (SPEC-025 R-4) ---
@@ -175,14 +221,17 @@ EVIDENCE_FRAMES_TRUNCATED = Counter(
 
 def record_evidence_write(result: str) -> None:
     EVIDENCE_STORE_WRITES.labels(result=result).inc()
+    _MIRROR.count("evidence_store_writes_total", 1, {"result": result})
 
 
 def record_evidence_frames_persisted(count: int) -> None:
     EVIDENCE_FRAMES_PERSISTED.inc(count)
+    _MIRROR.count("evidence_frames_persisted_total", count)
 
 
 def record_evidence_frame_truncated(reason: str) -> None:
     EVIDENCE_FRAMES_TRUNCATED.labels(reason=reason).inc()
+    _MIRROR.count("evidence_frames_truncated_total", 1, {"reason": reason})
 
 
 # --- Audit emission observability (SPEC-037 R-5) ---
@@ -197,6 +246,7 @@ AUDIT_EMITS = Counter(
 def record_audit_emit(result: str) -> None:
     """Record an audit emission outcome (``ok`` or ``error``)."""
     AUDIT_EMITS.labels(result=result).inc()
+    _MIRROR.count("audit_emits_total", 1, {"result": result})
 
 
 # --- Model discovery observability (SPEC-027) ---
@@ -217,10 +267,18 @@ MODEL_DISCOVERY_MODELS = Gauge(
 def record_model_discovery_refresh(provider: str, result: str) -> None:
     """result in {override, disabled, live, memory, cache, curated}."""
     MODEL_DISCOVERY_REFRESHES.labels(provider=provider, result=result).inc()
+    _MIRROR.count(
+        "agent_model_discovery_refreshes_total",
+        1,
+        {"provider": provider, "result": result},
+    )
 
 
 def record_model_discovery_models(provider: str, count: int) -> None:
     MODEL_DISCOVERY_MODELS.labels(provider=provider).set(count)
+    _MIRROR.set_gauge(
+        "agent_model_discovery_models", count, {"provider": provider}
+    )
 
 
 # --- LLM token usage (SPEC-065 R-1) ---
@@ -251,3 +309,8 @@ def record_llm_tokens(provider: str, model: str, direction: str, amount: int) ->
     if amount <= 0:
         return
     LLM_TOKENS.labels(provider=provider, model=model, direction=direction).inc(amount)
+    _MIRROR.count(
+        "agent_llm_tokens_total",
+        amount,
+        {"provider": provider, "model": model, "direction": direction},
+    )

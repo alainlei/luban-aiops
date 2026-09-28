@@ -22,6 +22,24 @@ from prometheus_client import (
     generate_latest,
 )
 
+from tool_gateway.core.telemetry import MetricsMirror
+
+# SPEC-065 R-2: every prometheus family in this module is mirrored to an OTel
+# instrument of the same exposed name + bounded label set when OTEL_ENABLED, so
+# domain metrics reach dashboards over the OTLP push path (ADR-0014) with no
+# scraper. The mirror is lazy, fail-open, and a no-op when disabled (see
+# core/telemetry.py). Names are exposed sample names (counters keep ``_total``).
+OTEL_MIRROR_FAMILIES = (
+    ("http_requests_total", "counter", ("method", "handler", "status")),
+    ("http_request_duration_seconds", "histogram", ("method", "handler")),
+    ("gateway_policy_decisions_total", "counter", ("action", "decision")),
+    ("gateway_token_verification_total", "counter", ("result",)),
+    ("gateway_tool_redacted_spans_total", "counter", ("tool",)),
+    ("audit_emits_total", "counter", ("result",)),
+)
+
+_MIRROR = MetricsMirror("tool_gateway", OTEL_MIRROR_FAMILIES)
+
 HTTP_REQUESTS = Counter(
     "http_requests_total",
     "HTTP requests processed.",
@@ -74,14 +92,24 @@ def setup_metrics(app: FastAPI) -> None:
         response = await call_next(request)
         handler = _handler_label(request)
         if handler != "/metrics":
+            elapsed = time.perf_counter() - started_at
+            status = str(response.status_code)
             HTTP_REQUESTS.labels(
-                method=request.method,
-                handler=handler,
-                status=str(response.status_code),
+                method=request.method, handler=handler, status=status
             ).inc()
             HTTP_REQUEST_DURATION.labels(
                 method=request.method, handler=handler
-            ).observe(time.perf_counter() - started_at)
+            ).observe(elapsed)
+            _MIRROR.count(
+                "http_requests_total",
+                1,
+                {"method": request.method, "handler": handler, "status": status},
+            )
+            _MIRROR.observe(
+                "http_request_duration_seconds",
+                elapsed,
+                {"method": request.method, "handler": handler},
+            )
         return response
 
     @app.get("/metrics", include_in_schema=False)
@@ -91,17 +119,23 @@ def setup_metrics(app: FastAPI) -> None:
 
 def record_policy_decision(action: str, decision: str) -> None:
     POLICY_DECISIONS.labels(action=action, decision=decision).inc()
+    _MIRROR.count(
+        "gateway_policy_decisions_total", 1, {"action": action, "decision": decision}
+    )
 
 
 def record_token_verification(result: str) -> None:
     TOKEN_VERIFICATIONS.labels(result=result).inc()
+    _MIRROR.count("gateway_token_verification_total", 1, {"result": result})
 
 
 def record_redacted_spans(tool: str, spans: int) -> None:
     if spans > 0:
         TOOL_REDACTED_SPANS.labels(tool=tool).inc(spans)
+        _MIRROR.count("gateway_tool_redacted_spans_total", spans, {"tool": tool})
 
 
 def record_audit_emit(result: str) -> None:
     """Record an audit emission outcome (``ok`` or ``error``)."""
     AUDIT_EMITS.labels(result=result).inc()
+    _MIRROR.count("audit_emits_total", 1, {"result": result})

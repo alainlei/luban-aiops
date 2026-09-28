@@ -20,6 +20,24 @@ from prometheus_client import (
     generate_latest,
 )
 
+from incident_service.core.telemetry import MetricsMirror
+
+# SPEC-065 R-2: every prometheus family in this module is mirrored to an OTel
+# instrument of the same exposed name + bounded label set when OTEL_ENABLED, so
+# domain metrics reach dashboards over the OTLP push path (ADR-0014) with no
+# scraper. The mirror is lazy, fail-open, and a no-op when disabled (see
+# core/telemetry.py). Names are exposed sample names (counters keep ``_total``).
+OTEL_MIRROR_FAMILIES = (
+    ("http_requests_total", "counter", ("method", "handler", "status")),
+    ("http_request_duration_seconds", "histogram", ("method", "handler")),
+    ("incident_intakes_total", "counter", ("source", "result")),
+    ("incident_triages_total", "counter", ("result",)),
+    ("incident_connector_dispatches_total", "counter", ("connector", "result")),
+    ("incidents_open", "gauge", ()),
+)
+
+_MIRROR = MetricsMirror("incident_service", OTEL_MIRROR_FAMILIES)
+
 HTTP_REQUESTS = Counter(
     "http_requests_total",
     "HTTP requests processed.",
@@ -71,14 +89,24 @@ def setup_metrics(app: FastAPI) -> None:
         response = await call_next(request)
         handler = _handler_label(request)
         if handler != "/metrics":
+            elapsed = time.perf_counter() - started_at
+            status = str(response.status_code)
             HTTP_REQUESTS.labels(
-                method=request.method,
-                handler=handler,
-                status=str(response.status_code),
+                method=request.method, handler=handler, status=status
             ).inc()
             HTTP_REQUEST_DURATION.labels(
                 method=request.method, handler=handler
-            ).observe(time.perf_counter() - started_at)
+            ).observe(elapsed)
+            _MIRROR.count(
+                "http_requests_total",
+                1,
+                {"method": request.method, "handler": handler, "status": status},
+            )
+            _MIRROR.observe(
+                "http_request_duration_seconds",
+                elapsed,
+                {"method": request.method, "handler": handler},
+            )
         return response
 
     @app.get("/metrics", include_in_schema=False)
@@ -88,15 +116,23 @@ def setup_metrics(app: FastAPI) -> None:
 
 def record_intake(source: str, result: str) -> None:
     INCIDENTS_INTAKES.labels(source=source, result=result).inc()
+    _MIRROR.count("incident_intakes_total", 1, {"source": source, "result": result})
 
 
 def record_triage(result: str) -> None:
     INCIDENT_TRIAGES.labels(result=result).inc()
+    _MIRROR.count("incident_triages_total", 1, {"result": result})
 
 
 def record_dispatch(connector: str, result: str) -> None:
     INCIDENT_DISPATCHES.labels(connector=connector, result=result).inc()
+    _MIRROR.count(
+        "incident_connector_dispatches_total",
+        1,
+        {"connector": connector, "result": result},
+    )
 
 
 def set_open_incidents(count: int) -> None:
     INCIDENTS_OPEN.set(count)
+    _MIRROR.set_gauge("incidents_open", count)

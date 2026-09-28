@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 from fastapi import FastAPI
 
+import audit_service.core.metrics as metrics_module
 import audit_service.core.telemetry as telemetry
 
 
@@ -60,6 +61,25 @@ class TelemetryGatingTests(unittest.TestCase):
         self.assertTrue(self._root_has_bridge())
         # OTel's own loggers must not recurse back through the root bridge.
         self.assertFalse(logging.getLogger("opentelemetry").propagate)
+
+
+class MetricsMirrorParityTest(unittest.TestCase):
+    """SPEC-065 R-2: the OTel mirror list matches this service's prometheus families."""
+
+    def test_declared_families_match_prometheus_objects(self) -> None:
+        from prometheus_client.metrics import MetricWrapperBase
+
+        prom: dict[str, tuple[str, tuple[str, ...]]] = {}
+        for obj in vars(metrics_module).values():
+            if isinstance(obj, MetricWrapperBase):
+                kind = obj._type
+                exposed = obj._name + "_total" if kind == "counter" else obj._name
+                prom[exposed] = (kind, tuple(obj._labelnames))
+        declared = {
+            name: (kind, tuple(labels))
+            for (name, kind, labels) in metrics_module.OTEL_MIRROR_FAMILIES
+        }
+        self.assertEqual(declared, prom)
 
 
 if __name__ == "__main__":
