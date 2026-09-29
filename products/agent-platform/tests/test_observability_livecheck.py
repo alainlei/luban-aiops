@@ -17,7 +17,7 @@ import time
 import urllib.request
 from pathlib import Path
 from types import SimpleNamespace
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -28,8 +28,8 @@ SCRIPT = (Path(__file__).resolve().parents[3]
 PASSWORD = "fixture-oo-secret"
 
 # Scenarios that set LUBAN_OBS_DRIVE_PAID_TURN=1 (the gated paid leg).
-_TURN_SCENARIOS = {"live-turn", "missing-trace", "bad-trace-id"}
-_SUCCESS = {"live-readonly", "live-turn"}
+_TURN_SCENARIOS = {"live-turn", "missing-trace", "bad-trace-id", "metric-cold-start"}
+_SUCCESS = {"live-readonly", "live-turn", "metric-cold-start"}
 
 
 def _pipeline_source() -> str:
@@ -62,7 +62,7 @@ def _sse(frames: list[dict]) -> str:
 
 @pytest.mark.parametrize("scenario", [
     "live-readonly", "live-turn", "missing-otel-env", "missing-token-metric",
-    "openobserve-unreachable", "missing-trace", "bad-trace-id",
+    "openobserve-unreachable", "missing-trace", "bad-trace-id", "metric-cold-start",
 ])
 def test_observability_livecheck_pipeline(scenario, monkeypatch, capsys) -> None:
     compiled = compile(_pipeline_source(), str(SCRIPT), "exec")
@@ -105,6 +105,11 @@ def test_observability_livecheck_pipeline(scenario, monkeypatch, capsys) -> None
                                             "gen_ai_usage_input_tokens": 5352,
                                             "gen_ai_usage_output_tokens": 1}]})
             if stream_type == "metrics":
+                # Cold cluster: the token stream is not ingested until the first
+                # export lands, so the opening metrics _search answers 400. The
+                # script must tolerate it and retry rather than fail outright.
+                if scenario == "metric-cold-start" and searches.count("metrics") == 1:
+                    raise HTTPError(request.full_url, 400, "stream not found", {}, None)
                 return _Response({"hits": [{"provider": "deepseek",
                                             "model": "deepseek-v4-flash",
                                             "direction": "input", "value": 5352}]})
@@ -147,6 +152,10 @@ def test_observability_livecheck_pipeline(scenario, monkeypatch, capsys) -> None
             assert "OBSERVABILITY_LIVECHECK_TURN_OK" in out and TRACE_ID in out
             assert len(deletes) == 1  # the throwaway session is always cleaned up
             assert "traces" in searches and "metrics" in searches
+            if scenario == "metric-cold-start":
+                # The opening 400 (stream not yet ingested) must be tolerated and
+                # retried to success, not surfaced as a failure.
+                assert searches.count("metrics") >= 2
             # The turn must NOT pin an X-Request-ID, so the gateway bridges the
             # request_id to the active OTel trace_id (the correlation invariant).
             assert chat_requests and chat_requests[0].get_header("X-request-id") is None

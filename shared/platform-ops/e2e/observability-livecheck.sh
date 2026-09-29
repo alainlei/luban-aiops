@@ -179,10 +179,20 @@ def main():
     start = end - (900 * 1_000_000)
 
     def search(stream_type, sql):
-        status, _, body = http(
-            "POST", endpoint + "/api/" + org + "/_search?type=" + stream_type,
-            body={"query": {"sql": sql, "start_time": start, "end_time": end}},
-            auth=oo_auth)
+        # A stream does not exist in OpenObserve until its first sample is
+        # ingested, so an early _search answers 400 ("stream not found"). The
+        # token metric stream is created lazily on the first turn's export, so
+        # treat a 400 as "not ready yet" and let the retry loop below wait it
+        # out; any other HTTP error is genuine and surfaces immediately.
+        try:
+            status, _, body = http(
+                "POST", endpoint + "/api/" + org + "/_search?type=" + stream_type,
+                body={"query": {"sql": sql, "start_time": start, "end_time": end}},
+                auth=oo_auth)
+        except HTTPError as error:
+            if error.code == 400:
+                return []
+            raise
         require(status == 200, "OpenObserve %s search answered HTTP %s" % (stream_type, status))
         return json.loads(body).get("hits", [])
 
@@ -198,8 +208,11 @@ def main():
             "no LLM span carrying gen_ai token usage found in OpenObserve for "
             "trace_id=%s after the turn" % trace_id)
 
+    # The metric reader exports on a ~60s period, so on a cold cluster the
+    # token stream can lag the turn by up to one interval plus ingest lag;
+    # wait out two intervals before declaring the push mirror broken.
     metric_ok = False
-    for _ in range(15):
+    for _ in range(60):
         if search("metrics", "SELECT * FROM \"agent_llm_tokens_total\" LIMIT 5"):
             metric_ok = True
             break
