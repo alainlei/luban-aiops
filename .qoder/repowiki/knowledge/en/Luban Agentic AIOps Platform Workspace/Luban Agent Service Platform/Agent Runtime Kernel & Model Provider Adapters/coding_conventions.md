@@ -1,0 +1,5 @@
+- Provider adapters subclass `AgentScopeProvider` from `base.py` and register themselves by name in `registry._PROVIDERS`, with `get_provider` raising `ProviderConfigurationError` for unknown names.
+- Long-running or side-effecting work (toolkit discovery, agent building, recovery store access) is lazily imported inside the method that needs it to avoid cold-start dependencies on heavy SDKs.
+- Best-effort persistence (state snapshots, evidence writes, error recording) is wrapped in try/except blocks that log warnings and never raise, so failures degrade durability without breaking the turn.
+- User-visible text emitted by the kernel goes through `redact_assistant_text` / `redact_user_text` / `StreamingProseRedactor` using collected credential literals before reaching the caller.
+- SPEC references (e.g. SPEC-024 R-3, SPEC-018 R-5, SPEC-063 R-2) are embedded in docstrings and comments to tie implementation decisions back to requirements.

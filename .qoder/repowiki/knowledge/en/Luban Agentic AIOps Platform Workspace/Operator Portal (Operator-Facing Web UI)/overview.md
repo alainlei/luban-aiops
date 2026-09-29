@@ -1,0 +1,1 @@
+Operator-facing React SPA that provides chat, approval queue, audit trail, incidents, permissions, tools/skills inventory and session workspace, served by nginx behind the platform gateway.

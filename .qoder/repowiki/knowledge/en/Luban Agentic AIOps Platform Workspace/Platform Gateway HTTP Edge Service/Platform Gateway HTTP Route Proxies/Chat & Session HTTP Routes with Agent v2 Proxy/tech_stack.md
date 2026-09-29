@@ -1,0 +1,1 @@
+FastAPI routers + httpx async HTTP client against the agent-service's `/api/v2/` contract; SSE streaming via `StreamingResponse` and `response.aiter_lines()`.

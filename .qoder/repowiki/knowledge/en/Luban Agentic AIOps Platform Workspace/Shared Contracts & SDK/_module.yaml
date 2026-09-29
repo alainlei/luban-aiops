@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: shared_contracts_and_sdk
+title: Shared Contracts & SDK
+scope:
+    - shared/shared-contracts/
+    - shared/shared-sdk/
+source_files: []
+depends_on: []
+related_to: []

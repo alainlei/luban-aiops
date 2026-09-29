@@ -1,7 +1,14 @@
 schema_version: 1
 module_path: ""
 title: Luban Agentic AIOps Platform Workspace
-scope: []
+scope:
+    - README.md
+    - CONTRIBUTING.md
+    - SECURITY.md
+    - .gitignore
+    - .gitattributes
+    - .dockerignore
+    - Makefile
 source_files: []
 depends_on: []
 related_to: []

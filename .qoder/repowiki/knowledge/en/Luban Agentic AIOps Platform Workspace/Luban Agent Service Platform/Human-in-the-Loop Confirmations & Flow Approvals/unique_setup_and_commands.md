@@ -1,0 +1,1 @@
+Production requires `AGENT_STATE_STORE_BACKEND=postgres` and `AGENT_STATE_DB_URL`; the Postgres backend self-initializes DDL and closes pending rows older than `AGENT_HITL_CONFIRM_TIMEOUT` seconds at startup. Default `memory` backend is used when the env var is unset or Postgres is unreachable (fallback path logs a warning and returns the in-memory store).

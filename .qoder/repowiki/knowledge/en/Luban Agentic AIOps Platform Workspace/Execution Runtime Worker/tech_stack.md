@@ -1,0 +1,1 @@
+Python ≥3.11, FastAPI + Uvicorn ASGI server, httpx for async tool-gateway calls, psycopg3 for PostgreSQL, jsonschema Draft202012 with a referencing registry for cross-referenced schemas, OpenTelemetry SDK with OTLP HTTP exporter and FastAPI/httpx instrumentation, Prometheus client, built with uv_build.

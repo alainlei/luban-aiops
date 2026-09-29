@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: tool_gateway
+title: Tool Gateway — Connector & Tool Invocation Service
+scope:
+    - products/tool-gateway/
+source_files: []
+depends_on: []
+related_to:
+    - path: agent_platform/runtime_kernel_and_providers
+    - path: agent_platform/shared_infrastructure
+    - path: audit_service
+    - path: platform_gateway/route_proxies/documents_tools_skills_routes

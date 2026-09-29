@@ -1,0 +1,1 @@
+React 19 + TypeScript + Vite 8 build, antd 6 / Ant Design X UI kit, Vitest 4 + jsdom for unit tests, Node 22+ engine, Docker image built from `node:22-alpine` then `nginxinc/nginx-unprivileged:1.27-alpine` serving hashed bundles with immutable cache headers.

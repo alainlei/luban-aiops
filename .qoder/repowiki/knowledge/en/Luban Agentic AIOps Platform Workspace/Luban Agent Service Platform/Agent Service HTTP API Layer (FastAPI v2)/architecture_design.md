@@ -1,0 +1,7 @@
+Two cooperating sub-packages form a thin HTTP boundary over `agent_service.services`:
+- `schemas/` holds pure Pydantic models (`v2.py`, legacy `api.py`) that are the single source of truth for request/response shapes; `v2.py` is validated against JSON Schema files in `shared/shared-contracts/schemas/agent-*.schema.json`.
+- `api/v2/routes.py` defines one `APIRouter(prefix="/api/v2")` with endpoints under `/chat`, `/sessions`, `/models`, health, skill graduation, and operations-document routes. Route handlers import only from `agent_service.schemas.v2` and `agent_service.services.*` — no AgentScope types leak through signatures or response bodies.
+
+Identity flows via headers (`X-User-ID`, `x-request-id`, gateway-forwarded `Authorization: Bearer`); bodies never carry identity. The router layer performs policy-adjacent preconditions (model resolution order request > pinned > default, parked-session rejection, skill-target scoping) before delegating to services like `session_service`, `get_runtime_kernel()`, `MODEL_CATALOG`, `CONFIRMATION_RECORD_STORE`, and `EVIDENCE_STORE`. Streaming chat and confirm endpoints return FastAPI `StreamingResponse` with SSE frames produced by `_normalize_stream_event`, which coerces raw kernel chunks into the typed `AgentStreamEvent` contract.
+
+Dependency direction is strictly inward: `api` → `schemas` + `services`; `schemas` has no runtime dependency on `api`.

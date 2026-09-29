@@ -1,5 +1,4 @@
-- Each product follows a uniform layout of `src/<service_name>/` with `api/`, `core/`, `schemas/`, `services/`, optional `policies/` or `tools/`, plus `app.py`, `main.py`, and `metadata.py` entry points.
-- Cross-service boundaries are expressed as schema and contract modules under `shared/shared-contracts/schemas/` and `policies/`, with consumers importing those types rather than reaching into sibling product sources.
-- Policy bundles are authored once as canonical YAML in `shared/shared-contracts/policies/` and copied into consumers via `make sync-policy`, keeping platform-gateway and tool-gateway policy files in lockstep.
-- Product versions are synchronized across `VERSION`, each product's package metadata, and the portal through the `make validate-version` script rather than ad-hoc bumping.
-- Spec-driven development is enforced by requiring every feature to be described in a `docs/specs/SPEC-NNN-<slug>/` triplet of `plan.md`, `spec.md`, and `tasks.md`.
+- Each product lives under `products/<name>/` with its own `Makefile` exposing `sync`, `test`, `lint`, `build`, and `push` targets consumed by the root Makefile.
+- Cross-service contracts (JSON schemas, policy bundles, skill format) are authored once in `shared/shared-contracts/` and copied into consumers via `make sync-policy` rather than duplicated.
+- All product images share a single coordinated `IMAGE_TAG` derived from the root `VERSION` file plus git SHA, ensuring release lockstep across the platform.
+- Samples are kept out of the base Kustomize overlay and installed separately via `make deploy-samples`, so production deployments never reference tutorial content.

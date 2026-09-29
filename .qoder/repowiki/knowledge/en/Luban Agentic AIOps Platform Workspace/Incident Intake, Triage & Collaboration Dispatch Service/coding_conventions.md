@@ -1,0 +1,6 @@
+- Configuration is modeled as frozen `dataclass` objects loaded from `INCIDENT_*` environment variables via a `from_env()` classmethod and cached with `@lru_cache(maxsize=1)`.
+- External collaborators (stores, connectors) are exposed as async protocols with a factory function returning instances, and registered in a module-level dict registry keyed by a string name selected from settings.
+- Route handlers return uniform `JSONResponse` payloads built through a local `_error(status_code, code, message)` helper rather than raising FastAPI exceptions directly.
+- Every handler begins by calling `authenticate_caller(settings, request)` and converts raised `QueryAuthError` into a 401 JSON error before proceeding to business logic.
+- Side effects (intake counts, connector dispatch outcomes, incident lifecycle events) are emitted through `record_*` metric functions and `log_event(LOGGER, event_name, ...)` rather than ad-hoc print/log statements.
+- Startup-time configuration failures (unknown connector names, malformed settings) raise dedicated exception types (`ConnectorConfigError`, `SettingsError`) so misconfiguration fails fast during `lifespan`.

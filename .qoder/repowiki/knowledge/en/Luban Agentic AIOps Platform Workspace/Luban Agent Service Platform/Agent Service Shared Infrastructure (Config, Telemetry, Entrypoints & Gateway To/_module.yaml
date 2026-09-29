@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: agent_platform/shared_infrastructure
+title: Agent Service Shared Infrastructure (Config, Telemetry, Entrypoints & Gateway Tools)
+scope:
+    - products/agent-platform/src/agent_service/core/
+    - products/agent-platform/src/agent_service/entrypoints/
+    - products/agent-platform/src/agent_service/tools/
+source_files: []
+depends_on: []
+related_to:
+    - path: tool_gateway

@@ -1,0 +1,1 @@
+Gateway-side services that resolve request identity via local JWT verification, enforce policy decisions, proxy upstream auth/session/document/chat calls, and exchange user tokens for short-lived delegated tokens.

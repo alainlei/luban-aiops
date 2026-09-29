@@ -1,0 +1,1 @@
+Built with `uv_build` (see `pyproject.toml` `[build-system]`). The package installs an `incident-service` console script that calls `incident_service.main:run`. Container image and Python tooling targets are provided through shared fragments included from `../../mk/image.mk` and `../../mk/python.mk` via the local `Makefile`.

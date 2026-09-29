@@ -1,0 +1,1 @@
+Built on top of `agentscope` (Agent, Toolkit, ReActConfig, ContextConfig, TracingMiddleware, ReplyBudgetControlMiddleware) and integrates with platform services for state/evidence/audit; provider adapters wrap vendor SDKs (DashScope, DeepSeek, OpenAI, internal Luban).

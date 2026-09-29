@@ -1,0 +1,1 @@
+Python FastAPI service that exposes the agent platform's HTTP surface, wiring session lifecycle, skill authoring, execution orchestration, HITL approvals, evidence stores, and pluggable LLM providers behind a shared runtime kernel.

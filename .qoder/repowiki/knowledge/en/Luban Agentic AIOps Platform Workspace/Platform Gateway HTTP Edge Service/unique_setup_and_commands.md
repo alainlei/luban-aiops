@@ -1,0 +1,1 @@
+`uv run main:run` starts the service with host/port driven by `GatewayRunSettings.from_env()`; `make test` runs the pytest suite under `.venv`.

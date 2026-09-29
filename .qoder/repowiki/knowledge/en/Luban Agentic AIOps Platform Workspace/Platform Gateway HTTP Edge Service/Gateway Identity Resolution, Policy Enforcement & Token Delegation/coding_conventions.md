@@ -1,0 +1,5 @@
+- Upstream HTTP proxies follow a uniform error posture: upstream 4xx are re-raised as FastAPI `HTTPException` with status unchanged, while any `httpx.HTTPError` or upstream 5xx is mapped to HTTP 502 with a human-readable detail.
+- Per-request metrics are recorded before raising or returning — e.g. `record_token_verification` is called for every branch of `resolve_request_identity`, and `record_policy_decision` is called inside `enforce_policy`.
+- Module-level singletons expose a `*_state()` reset helper (`reset_delegation_state`, `reset_verifier_state`) so tests can clear process-scoped caches without reloading modules.
+- Audit trails are emitted through `build_audit_event` + `emit_audit_event` rather than direct logging, with structured fields (`request_id`, `subject`, `action`, `decision`, `matched_rule_ids`) passed as `details`.
+- Dev-only behavior (synthetic identity, delegated-token signing) is gated on settings (`require_auth`, `dev_user`, `dev_signing_key_path`, `workload_token_path`) and logged with `synthetic=True` / fallback warnings instead of bypassing policy.

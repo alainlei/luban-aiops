@@ -1,0 +1,1 @@
+Orchestrates session creation, ownership, listing, deletion and transcript reconstruction behind a pluggable in-memory/Redis/Postgres backend selected by environment.

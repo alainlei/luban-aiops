@@ -1,0 +1,1 @@
+FastAPI routers and Pydantic contract schemas exposing the platform-owned /api/v2 surface of the transitional agent service, bridging HTTP requests to the AgentScope kernel.

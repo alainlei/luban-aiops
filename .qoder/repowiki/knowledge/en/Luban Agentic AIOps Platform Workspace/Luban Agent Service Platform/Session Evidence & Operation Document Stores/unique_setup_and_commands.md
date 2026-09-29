@@ -1,0 +1,1 @@
+Both stores read `AGENT_STATE_STORE_BACKEND` (default `memory`) and `AGENT_STATE_DB_URL`; when set to `postgres`, `AGENT_STATE_TTL_SECONDS` controls the evidence-store sweep interval. Postgres tables (`session_evidence`, `operation_documents`) are created lazily via `initialize()` on first use.

@@ -1,0 +1,1 @@
+GNU make fragments targeting Docker (container images), hadolint (Dockerfile linting), and uv (Python dependency manager + test runner); pinned base image `luban-aiops/base-uv` built on Amazon Linux 2023 with Python 3.12 and uv 0.12.1.

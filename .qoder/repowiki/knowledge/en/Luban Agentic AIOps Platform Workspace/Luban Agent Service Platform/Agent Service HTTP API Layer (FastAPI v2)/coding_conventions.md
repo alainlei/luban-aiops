@@ -1,0 +1,6 @@
+- Request/response payloads are declared as Pydantic `BaseModel` classes in `schemas/v2.py` and imported by route handlers rather than being defined inline at endpoint boundaries.
+- Every route handler extracts identity from `X-User-ID` / `x-request-id` headers via shared helpers (`_user_id`, `_bearer_token`) instead of reading them per-endpoint.
+- Kernel stream chunks are normalized through `_normalize_stream_event` plus dedicated coercers (`_coerce_pending_calls`, `_coerce_flow_summary`, `_coerce_data_summary`) so unknown or malformed fields degrade safely instead of raising.
+- External store calls (evidence, confirmation records, execution records) are wrapped in try/except blocks that log a warning and return `None`/empty defaults so unreadable backends degrade gracefully rather than producing 500s.
+- Each public model and route carries a docstring referencing its governing SPEC number (e.g. `SPEC-024 R-3`, `SPEC-020 R-1`, `SPEC-055 R-4`), tying the implementation to the external contract specification.
+- Optional display-only fields use `dict[str, Any] | None` typed fields with explicit `Field(description=...)` documenting the SPEC rationale, keeping additive schema evolution backward-compatible.

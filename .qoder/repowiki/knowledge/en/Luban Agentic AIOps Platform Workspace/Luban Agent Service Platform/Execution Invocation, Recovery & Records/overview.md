@@ -1,0 +1,1 @@
+Agent-side durable orchestration for approved mutating tool calls: the v3 invocation coordinator, the PostgreSQL-backed execution ledger with recovery projections, and the best-effort signed request/receipt record store.

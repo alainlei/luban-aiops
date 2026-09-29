@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: agent_platform
+title: Luban Agent Service Platform
+scope:
+    - products/agent-platform/
+source_files: []
+depends_on: []
+related_to: []

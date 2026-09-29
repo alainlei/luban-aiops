@@ -1,0 +1,1 @@
+`make` targets are defined in `Makefile`; the package exposes a CLI entrypoint `identity-service = identity_service.main:run` via pyproject.scripts. The service reads `IDENTITY_SERVICE_HOST` / `IDENTITY_SERVICE_PORT`, optionally persists an RSA private key at `jwt_private_key_path` (generated on first boot if missing), and requires `uv` as the dependency/build tool.

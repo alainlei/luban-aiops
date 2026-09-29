@@ -1,0 +1,1 @@
+Reusable GNU make fragments that provide container image build/push targets and a uv-based Python sync/test target, plus the single source of overridable build defaults.

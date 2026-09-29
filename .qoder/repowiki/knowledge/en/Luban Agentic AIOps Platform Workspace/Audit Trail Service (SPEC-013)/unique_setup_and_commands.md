@@ -1,0 +1,1 @@
+Package entry point is `audit-service` (from `pyproject.toml [project.scripts]`), built with `uv_build`. Tests use pytest under `.venv`; run via `pytest` after installing dev dependencies from `pyproject.toml [dependency-groups.dev]`.

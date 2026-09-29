@@ -1,0 +1,5 @@
+- Feature folders group a view or domain module with its colocated `__tests__/` directory next to the source file rather than under a top-level `tests/` tree.
+- Role-based visibility is expressed through named `*_ROLES` arrays in `roles.ts` and checked via `hasAnyRole(roles, ...)` at every menu entry and feature gate.
+- API access goes through thin typed modules under `api/` wrapping `client.ts`, keeping HTTP verbs and URL paths away from React components.
+- Streaming chat state is encapsulated in hooks (`useChatStream`, `usePendingDecisionPoll`, `useRecoveryPoll`) that own polling lifecycles and return plain data to components.
+- Build-time constants (`PLATFORM_VERSION`, locked React/antd versions) are injected via Vite `define` from files resolved relative to `vite.config.ts`, never hard-coded in application code.

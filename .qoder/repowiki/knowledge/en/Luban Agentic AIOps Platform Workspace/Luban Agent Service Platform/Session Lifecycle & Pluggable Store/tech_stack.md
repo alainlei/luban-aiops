@@ -1,0 +1,1 @@
+Python `typing.Protocol` + `@runtime_checkable` for backend polymorphism; `psycopg` for Postgres (lazy-imported inside `_default_connect`); `redis` client with `socket_timeout`/`socket_connect_timeout`; Pydantic `SessionRecord` model serialized via `model_dump_json`/`model_validate_json`.

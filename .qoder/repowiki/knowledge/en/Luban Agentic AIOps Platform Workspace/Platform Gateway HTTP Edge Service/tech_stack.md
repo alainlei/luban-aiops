@@ -1,0 +1,1 @@
+FastAPI + Uvicorn for HTTP serving; Pydantic for request/response schemas; Prometheus client for metrics; optional OpenTelemetry push pipeline; YAML-backed policy bundles loaded at runtime.

@@ -1,0 +1,16 @@
+schema_version: 1
+module_path: platform_gateway/route_proxies/incidents_runtime_routes
+title: Incidents, Audit & Policy Runtime Route Proxies
+scope:
+    - products/platform-gateway/src/platform_gateway/api/routes/incidents.py
+    - products/platform-gateway/src/platform_gateway/api/routes/runtime.py
+    - products/platform-gateway/src/platform_gateway/api/routes/approvals.py
+    - products/platform-gateway/src/platform_gateway/api/routes/audit.py
+    - products/platform-gateway/src/platform_gateway/api/routes/policy.py
+    - products/platform-gateway/src/platform_gateway/api/routes/health.py
+    - products/platform-gateway/src/platform_gateway/services/incident_client.py
+source_files: []
+depends_on: []
+related_to:
+    - path: audit_service
+    - path: incident_service

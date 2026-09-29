@@ -1,0 +1,1 @@
+FastAPI route modules exposing the gateway's documents CRUD, tools catalog proxy, and skills inventory endpoints with policy enforcement and observability.

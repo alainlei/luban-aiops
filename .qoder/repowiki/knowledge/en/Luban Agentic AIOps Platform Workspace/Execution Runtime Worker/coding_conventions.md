@@ -1,0 +1,5 @@
+- Wire payloads are validated through the centralized `validate()` / `validate_metadata()` helpers backed by cached Draft202012 validators loaded from `contracts/*.schema.json`, never ad-hoc dict checks.
+- All protocol-level failures raise `ProtocolError(reason_code)` with closed reason strings, which routes translate into typed JSON responses rather than leaking exception messages.
+- Long-running or blocking work (DB access, ledger mutations) is dispatched off the event loop via `asyncio.to_thread` wrapped in `owned_thread` / `database_budget` from `execution_io.py`.
+- Signed protocol envelopes carry a `signature` field produced by `sign_envelope` / `verify_envelope` and are validated end-to-end (request, observation, receipt) before any side effect.
+- Service configuration is exposed as frozen dataclasses with a `from_env` classmethod reading explicit environment variables, keeping mutable app state out of module globals.

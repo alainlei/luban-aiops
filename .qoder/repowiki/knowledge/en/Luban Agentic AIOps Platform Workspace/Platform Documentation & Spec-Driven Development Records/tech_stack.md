@@ -1,0 +1,1 @@
+Plain Markdown with a structured spec-driven development workflow; no build tooling inside this module — verification is delegated to the repository root `Makefile` (`make verify`, `make policy-diff`).

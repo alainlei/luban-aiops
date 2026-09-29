@@ -1,0 +1,1 @@
+FastAPI (`APIRouter`, `Header`, `HTTPException`, `StreamingResponse`) with Pydantic v2 models (`BaseModel`, `Field`, `model_validator`, `model_serializer`).

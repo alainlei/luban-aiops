@@ -1,0 +1,6 @@
+- Configuration is modeled as frozen `dataclass` fields parsed from `AUDIT_*` environment variables via a classmethod `from_env()` and cached through an `@lru_cache(maxsize=1)` accessor.
+- Persistence backends implement the `AuditStore` `Protocol` and are selected at startup by a `build_audit_store(settings)` factory rather than conditional imports.
+- Background work (retention eviction) is wrapped in a class with explicit `start()`/`stop()` lifecycle methods driven by the FastAPI lifespan, using `asyncio.create_task` and cancelling on shutdown.
+- All SQL strings (DDL, INSERT, WHERE clauses) are defined as module-level constants and parameterized with named `%(... )s` placeholders to avoid injection.
+- Structured observability goes through `core.observability.log_event` with keyword extras (service, request_id, duration_ms) instead of raw `print` or unstructured log calls.
+- Cursor-based pagination uses a shared `encode_cursor`/`decode_cursor` pair that base64-encodes `(occurred_at|event_id)` tuples consistently between in-memory and Postgres backends.

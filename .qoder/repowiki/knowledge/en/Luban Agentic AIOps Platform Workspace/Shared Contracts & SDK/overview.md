@@ -1,0 +1,1 @@
+Defines the workspace-wide JSON Schema contracts, policy bundles, and skill format consumed by all product services, plus a placeholder SDK for shared client helpers.

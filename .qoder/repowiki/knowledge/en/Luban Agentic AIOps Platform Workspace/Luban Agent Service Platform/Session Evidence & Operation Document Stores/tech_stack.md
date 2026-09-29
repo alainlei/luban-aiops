@@ -1,0 +1,1 @@
+PostgreSQL via synchronous `psycopg` driver with JSONB columns; Python `typing.Protocol` + `@runtime_checkable` for backend interfaces; AgentScope `Msg`/`TextBlock` for LLM prompt construction.

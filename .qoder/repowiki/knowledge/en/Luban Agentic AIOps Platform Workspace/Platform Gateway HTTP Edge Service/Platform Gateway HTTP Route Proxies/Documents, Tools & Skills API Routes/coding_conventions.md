@@ -1,0 +1,4 @@
+- Every route handler follows the same four-step sequence: resolve request id, resolve caller identity, enforce a policy action constant, then call a service-layer function.
+- Structured audit logging is performed after the service call via `log_event` with a verb-named event key (e.g. `document_created`, `tools_catalog_proxied`) carrying `request_id`, `user_id`, and `roles`.
+- Cross-cutting dependencies are injected as FastAPI `Depends(get_settings)` for `PlatformGatewaySettings` and `Header(default=None)` for the optional `x-request-id` header.
+- Policy actions are imported as named constants from `platform_gateway.services.policy_engine` (e.g. `ACTION_DOCUMENTS_CREATE`, `ACTION_TOOLS_LIST`) rather than string literals.

@@ -3,13 +3,379 @@ schema_version: 1
 locale: en-US
 branch: main
 nodes_managed: true
-exported_at: "2026-09-27T11:05:43Z"
+exported_at: "2026-09-29T04:30:50Z"
 modules:
     "":
         dir_name: Luban Agentic AIOps Platform Workspace
         title: Luban Agentic AIOps Platform Workspace
-        scope: []
+        scope:
+            - README.md
+            - CONTRIBUTING.md
+            - SECURITY.md
+            - .gitignore
+            - .gitattributes
+            - .dockerignore
+            - Makefile
+        source_files: []
+        children:
+            - agent_platform
+            - audit_service
+            - build_helpers
+            - documentation
+            - execution_runtime
+            - identity_broker
+            - incident_service
+            - operator_portal
+            - platform_gateway
+            - platform_ops
+            - samples
+            - shared_contracts_and_sdk
+            - skills_hub
+            - tool_gateway
+        depends_on: []
+        related_to: []
+    agent_platform:
+        dir_name: Luban Agent Service Platform
+        title: Luban Agent Service Platform
+        scope:
+            - products/agent-platform/
+        source_files: []
+        children:
+            - agent_platform/api_layer
+            - agent_platform/documents_and_evidence
+            - agent_platform/execution_orchestration
+            - agent_platform/hitl_and_flow_approvals
+            - agent_platform/runtime_kernel_and_providers
+            - agent_platform/session_management
+            - agent_platform/shared_infrastructure
+            - agent_platform/skill_authoring_and_graduation
+        depends_on: []
+        related_to: []
+    agent_platform/api_layer:
+        dir_name: Agent Service HTTP API Layer (FastAPI v2)
+        title: Agent Service HTTP API Layer (FastAPI v2)
+        scope:
+            - products/agent-platform/src/agent_service/api/
+            - products/agent-platform/src/agent_service/schemas/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: incident_service
+            - path: platform_gateway/route_proxies/chat_sessions_routes
+    agent_platform/documents_and_evidence:
+        dir_name: Session Evidence & Operation Document Stores
+        title: Session Evidence & Operation Document Stores
+        scope:
+            - products/agent-platform/src/agent_service/services/evidence_store.py
+            - products/agent-platform/src/agent_service/services/operation_documents.py
+            - products/agent-platform/src/agent_service/services/document_prose.py
         source_files: []
         children: []
         depends_on: []
         related_to: []
+    agent_platform/execution_orchestration:
+        dir_name: Execution Invocation, Recovery & Records
+        title: Execution Invocation, Recovery & Records
+        scope:
+            - products/agent-platform/src/agent_service/services/execution_invocation.py
+            - products/agent-platform/src/agent_service/services/execution_recovery.py
+            - products/agent-platform/src/agent_service/services/execution_records.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: execution_runtime
+    agent_platform/hitl_and_flow_approvals:
+        dir_name: Human-in-the-Loop Confirmations & Flow Approvals
+        title: Human-in-the-Loop Confirmations & Flow Approvals
+        scope:
+            - products/agent-platform/src/agent_service/services/hitl_confirmations.py
+            - products/agent-platform/src/agent_service/services/flow_approvals.py
+            - products/agent-platform/src/agent_service/services/confirmation_records.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    agent_platform/runtime_kernel_and_providers:
+        dir_name: Agent Runtime Kernel & Model Provider Adapters
+        title: Agent Runtime Kernel & Model Provider Adapters
+        scope:
+            - products/agent-platform/src/agent_service/runtime_kernel.py
+            - products/agent-platform/src/agent_service/providers/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: tool_gateway
+    agent_platform/session_management:
+        dir_name: Session Lifecycle & Pluggable Store
+        title: Session Lifecycle & Pluggable Store
+        scope:
+            - products/agent-platform/src/agent_service/services/session_service.py
+            - products/agent-platform/src/agent_service/services/session_store.py
+            - products/agent-platform/src/agent_service/services/session_transcript.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    agent_platform/shared_infrastructure:
+        dir_name: Agent Service Shared Infrastructure (Config, Telemetry, Entrypoints & Gateway To
+        title: Agent Service Shared Infrastructure (Config, Telemetry, Entrypoints & Gateway Tools)
+        scope:
+            - products/agent-platform/src/agent_service/core/
+            - products/agent-platform/src/agent_service/entrypoints/
+            - products/agent-platform/src/agent_service/tools/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: tool_gateway
+    agent_platform/skill_authoring_and_graduation:
+        dir_name: Skill Authoring & Graduation Pipeline
+        title: Skill Authoring & Graduation Pipeline
+        scope:
+            - products/agent-platform/src/agent_service/services/skill_draft.py
+            - products/agent-platform/src/agent_service/services/skill_graduation.py
+            - products/agent-platform/src/agent_service/services/authoring_trace.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    audit_service:
+        dir_name: Audit Trail Service (SPEC-013)
+        title: Audit Trail Service (SPEC-013)
+        scope:
+            - products/audit-service/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: incident_service
+            - path: platform_gateway/route_proxies/incidents_runtime_routes
+            - path: tool_gateway
+    build_helpers:
+        dir_name: Shared Makefile Fragments (Image & Python Build Helpers)
+        title: Shared Makefile Fragments (Image & Python Build Helpers)
+        scope:
+            - mk/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    documentation:
+        dir_name: Platform Documentation & Spec-Driven Development Records
+        title: Platform Documentation & Spec-Driven Development Records
+        scope:
+            - docs/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    execution_runtime:
+        dir_name: Execution Runtime Worker
+        title: Execution Runtime Worker
+        scope:
+            - products/execution-runtime/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: agent_platform/execution_orchestration
+    identity_broker:
+        dir_name: Identity Broker Service
+        title: Identity Broker Service
+        scope:
+            - products/identity-broker/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: platform_gateway/auth_delegation
+    incident_service:
+        dir_name: Incident Intake, Triage & Collaboration Dispatch Service
+        title: Incident Intake, Triage & Collaboration Dispatch Service
+        scope:
+            - products/incident-service/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: agent_platform/api_layer
+            - path: audit_service
+            - path: platform_gateway/route_proxies/incidents_runtime_routes
+    operator_portal:
+        dir_name: Operator Portal (Operator-Facing Web UI)
+        title: Operator Portal (Operator-Facing Web UI)
+        scope:
+            - products/operator-portal/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    platform_gateway:
+        dir_name: Platform Gateway HTTP Edge Service
+        title: Platform Gateway HTTP Edge Service
+        scope:
+            - products/platform-gateway/
+        source_files: []
+        children:
+            - platform_gateway/auth_delegation
+            - platform_gateway/gateway_core
+            - platform_gateway/policy_engine
+            - platform_gateway/route_proxies
+        depends_on: []
+        related_to: []
+    platform_gateway/auth_delegation:
+        dir_name: Gateway Identity Resolution, Policy Enforcement & Token Delegation
+        title: Gateway Identity Resolution, Policy Enforcement & Token Delegation
+        scope:
+            - products/platform-gateway/src/platform_gateway/services/gateway_service.py
+            - products/platform-gateway/src/platform_gateway/services/delegation_client.py
+            - products/platform-gateway/src/platform_gateway/services/token_verifier.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: identity_broker
+    platform_gateway/gateway_core:
+        dir_name: Gateway Core App Bootstrap, Configuration & Observability
+        title: 'Gateway Core: App Bootstrap, Configuration & Observability'
+        scope:
+            - products/platform-gateway/src/platform_gateway/core/
+            - products/platform-gateway/src/platform_gateway/schemas/
+            - products/platform-gateway/src/platform_gateway/app.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    platform_gateway/policy_engine:
+        dir_name: Platform Gateway Policy Engine & Permission Matrix
+        title: Platform Gateway Policy Engine & Permission Matrix
+        scope:
+            - products/platform-gateway/src/platform_gateway/services/policy_engine.py
+            - products/platform-gateway/src/platform_gateway/services/policy_matrix.py
+            - products/platform-gateway/src/platform_gateway/policies/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    platform_gateway/route_proxies:
+        dir_name: Platform Gateway HTTP Route Proxies
+        title: Platform Gateway HTTP Route Proxies
+        scope:
+            - products/platform-gateway/src/platform_gateway/api/
+            - products/platform-gateway/src/platform_gateway/services/agent_client.py
+            - products/platform-gateway/src/platform_gateway/services/incident_client.py
+        source_files: []
+        children:
+            - platform_gateway/route_proxies/chat_sessions_routes
+            - platform_gateway/route_proxies/documents_tools_skills_routes
+            - platform_gateway/route_proxies/identity_auth_routes
+            - platform_gateway/route_proxies/incidents_runtime_routes
+        depends_on: []
+        related_to: []
+    platform_gateway/route_proxies/chat_sessions_routes:
+        dir_name: Chat & Session HTTP Routes with Agent v2 Proxy
+        title: Chat & Session HTTP Routes with Agent v2 Proxy
+        scope:
+            - products/platform-gateway/src/platform_gateway/api/routes/chat.py
+            - products/platform-gateway/src/platform_gateway/api/routes/sessions.py
+            - products/platform-gateway/src/platform_gateway/services/agent_client.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: agent_platform/api_layer
+    platform_gateway/route_proxies/documents_tools_skills_routes:
+        dir_name: Documents, Tools & Skills API Routes
+        title: Documents, Tools & Skills API Routes
+        scope:
+            - products/platform-gateway/src/platform_gateway/api/routes/documents.py
+            - products/platform-gateway/src/platform_gateway/api/routes/tools.py
+            - products/platform-gateway/src/platform_gateway/api/routes/skills.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: skills_hub
+            - path: tool_gateway
+    platform_gateway/route_proxies/identity_auth_routes:
+        dir_name: Identity & Authentication API Routes
+        title: Identity & Authentication API Routes
+        scope:
+            - products/platform-gateway/src/platform_gateway/api/routes/identity.py
+            - products/platform-gateway/src/platform_gateway/api/routes/auth.py
+            - products/platform-gateway/src/platform_gateway/api/router.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    platform_gateway/route_proxies/incidents_runtime_routes:
+        dir_name: Incidents, Audit & Policy Runtime Route Proxies
+        title: Incidents, Audit & Policy Runtime Route Proxies
+        scope:
+            - products/platform-gateway/src/platform_gateway/api/routes/incidents.py
+            - products/platform-gateway/src/platform_gateway/api/routes/runtime.py
+            - products/platform-gateway/src/platform_gateway/api/routes/approvals.py
+            - products/platform-gateway/src/platform_gateway/api/routes/audit.py
+            - products/platform-gateway/src/platform_gateway/api/routes/policy.py
+            - products/platform-gateway/src/platform_gateway/api/routes/health.py
+            - products/platform-gateway/src/platform_gateway/services/incident_client.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: audit_service
+            - path: incident_service
+    platform_ops:
+        dir_name: Platform Operations & GitOps Deployment Assets
+        title: Platform Operations & GitOps Deployment Assets
+        scope:
+            - shared/platform-ops/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    samples:
+        dir_name: Tutorial Samples & ACME Admin Demo Suite
+        title: Tutorial Samples & ACME Admin Demo Suite
+        scope:
+            - samples/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    shared_contracts_and_sdk:
+        dir_name: Shared Contracts & SDK
+        title: Shared Contracts & SDK
+        scope:
+            - shared/shared-contracts/
+            - shared/shared-sdk/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    skills_hub:
+        dir_name: Skills Hub — Federated Skill Ingestion & Retrieval Service
+        title: Skills Hub — Federated Skill Ingestion & Retrieval Service
+        scope:
+            - products/skills-hub/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: platform_gateway/route_proxies/documents_tools_skills_routes
+    tool_gateway:
+        dir_name: Tool Gateway — Connector & Tool Invocation Service
+        title: Tool Gateway — Connector & Tool Invocation Service
+        scope:
+            - products/tool-gateway/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: agent_platform/runtime_kernel_and_providers
+            - path: agent_platform/shared_infrastructure
+            - path: audit_service
+            - path: platform_gateway/route_proxies/documents_tools_skills_routes

@@ -1,0 +1,7 @@
+Layered FastAPI application under `src/audit_service/`:
+- Entry point: `main.py` exposes the `audit-service` CLI script; `app.create_app()` wires lifespan, HTTP middleware, router, metrics and telemetry.
+- API layer (`api/routes/`) splits endpoints by concern — health, ingest, query, summary, export — mounted through a single `router.APIRouter`.
+- Services layer (`services/`) implements domain logic: `audit_store.AuditStore` Protocol with `InMemoryAuditStore` and `PostgresAuditStore` backends selected via `build_audit_store(settings.store_backend)`; `retention.RetentionTask` runs a bounded periodic eviction loop over the store; `ingest_auth` handles client credentials and workload token validation.
+- Core layer (`core/`) provides shared infrastructure: frozen `AuditSettings` dataclass loaded from `AUDIT_*` env vars, Prometheus metrics, OpenTelemetry logging/tracing setup, request-id context resolution, and runtime settings.
+- Schemas (`schemas/`) define Pydantic models for `AuditEvent`, `AuditQuery`, and `AuditSummary` consumed across layers.
+- Dependency direction is strictly API → services → core/schemas; the store Protocol isolates persistence so tests can swap implementations. The retention task is started/stopped inside the FastAPI lifespan alongside the store.

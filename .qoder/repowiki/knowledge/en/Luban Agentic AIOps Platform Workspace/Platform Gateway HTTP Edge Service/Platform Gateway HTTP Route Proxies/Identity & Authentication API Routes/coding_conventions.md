@@ -1,0 +1,4 @@
+- Each route handler resolves a `request_id` via `resolve_request_id(x_request_id)` before invoking any service function.
+- Settings are injected as a typed `PlatformGatewaySettings` dependency using `Depends(get_settings)` rather than reading globals directly.
+- Auth-related operations emit an audit event through `log_event(LOGGER, '<event_name>', request_id=..., user_id=...)` after obtaining a payload.
+- Route functions return plain `dict` payloads produced by the underlying service layer instead of defining Pydantic response models locally.

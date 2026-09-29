@@ -1,0 +1,1 @@
+`make verify` runs the full test suite plus a `validate_secret_vocabulary` leg that cross-checks credential-hole literals against `shared/shared-contracts/scripts/validate_secret_vocabulary.py` to keep skills-hub's copy in lockstep with the platform contract; `uv run skills-hub` invokes the `run()` entry point from `pyproject.scripts`.

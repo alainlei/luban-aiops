@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: agent_platform/documents_and_evidence
+title: Session Evidence & Operation Document Stores
+scope:
+    - products/agent-platform/src/agent_service/services/evidence_store.py
+    - products/agent-platform/src/agent_service/services/operation_documents.py
+    - products/agent-platform/src/agent_service/services/document_prose.py
+source_files: []
+depends_on: []
+related_to: []

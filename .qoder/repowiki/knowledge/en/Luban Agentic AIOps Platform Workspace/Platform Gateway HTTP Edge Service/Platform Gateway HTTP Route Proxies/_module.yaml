@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: platform_gateway/route_proxies
+title: Platform Gateway HTTP Route Proxies
+scope:
+    - products/platform-gateway/src/platform_gateway/api/
+    - products/platform-gateway/src/platform_gateway/services/agent_client.py
+    - products/platform-gateway/src/platform_gateway/services/incident_client.py
+source_files: []
+depends_on: []
+related_to: []

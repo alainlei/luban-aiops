@@ -24,6 +24,7 @@
 - Updated architecture diagrams to reflect the new delivery buffer system
 - Added detailed examples of gated secret delivery workflows
 - **New**: Added CompressContext tool integration documentation as kernel-local operation with AGENTSCOPE_COMPRESS_CONTEXT_ENABLED environment variable and validation guards requiring AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2
+- **Updated**: Added TokenUsageMiddleware documentation as part of the default always-on middlewares alongside permission and evidence middlewares, documenting streaming-aware token tracking capabilities
 
 ## Table of Contents
 1. Introduction
@@ -38,14 +39,14 @@
 10. Appendices
 
 ## Introduction
-This document explains the Agent Platform's runtime kernel and middleware system that coordinates agent execution, request context propagation, and cross-cutting concerns such as observability, security, and performance. It covers how the kernel composes middlewares for permission gating and evidence emission, how request IDs flow through tracing, and how metrics are collected. It also provides guidance for implementing custom middleware, extending the request pipeline, debugging runtime issues, and scaling for high-throughput scenarios.
+This document explains the Agent Platform's runtime kernel and middleware system that coordinates agent execution, request context propagation, and cross-cutting concerns such as observability, security, and performance. It covers how the kernel composes middlewares for permission gating, evidence emission, and LLM token usage tracking, how request IDs flow through tracing, and how metrics are collected. It also provides guidance for implementing custom middleware, extending the request pipeline, debugging runtime issues, and scaling for high-throughput scenarios.
 
-**Updated** The runtime kernel now features enhanced per-stream delivery buffers that enable gated secret delivery workflows, allowing secure one-time password generation with deferred reveal-on-commit semantics. Additionally, the kernel integrates the CompressContext tool as a kernel-local operation, enabling optional context compression with the AGENTSCOPE_COMPRESS_CONTEXT_ENABLED environment variable and validation guards requiring AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2. This enhancement supports both standalone generate-and-copy scenarios and complex human-in-the-loop (HITL) approval workflows where secrets are only revealed when approved mutations commit successfully.
+**Updated** The runtime kernel now features enhanced per-stream delivery buffers that enable gated secret delivery workflows, allowing secure one-time password generation with deferred reveal-on-commit semantics. Additionally, the kernel integrates the CompressContext tool as a kernel-local operation, enabling optional context compression with the AGENTSCOPE_COMPRESS_CONTEXT_ENABLED environment variable and validation guards requiring AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2. The middleware stack has been enhanced with TokenUsageMiddleware as part of the default always-on middlewares, providing streaming-aware LLM token usage tracking via the `on_model_call` hook. This enhancement supports both standalone generate-and-copy scenarios and complex human-in-the-loop (HITL) approval workflows where secrets are only revealed when approved mutations commit successfully.
 
 ## Project Structure
 The runtime kernel lives under the agent-service package and is composed of:
 - A central kernel orchestrating agent lifecycle, toolkit caching, model switching, and streaming turns.
-- A middleware stack that enforces permissions and emits evidence frames for streamed tool calls.
+- A middleware stack that enforces permissions, emits evidence frames, and tracks LLM token usage for streamed tool calls.
 - Cross-cutting services for request context resolution, telemetry (OpenTelemetry), and Prometheus metrics.
 - Configuration via environment-driven runtime settings.
 
@@ -95,9 +96,10 @@ RC --> TEL
 - AgentKernel: Builds and caches agents per session, composes the middleware stack, manages toolkit discovery and caching per delegated token, handles model switching, structured output, streaming events, and evidence persistence. **Updated** Now includes per-stream delivery buffers for gated secret delivery workflows and CompressContext tool integration for optional context compression.
 - GatewayPermissionMiddleware: Enforces a platform allow-list for auto-approved read-only tools, always allows kernel-local task tools, and routes other tool invocations to explicit ASK for operator confirmation; supports browser flow unlock for approved mutating flows. **Updated** Outbound HTTP requests now require explicit operator confirmation by default. **Updated** CompressContext tool is registered as kernel-local and always allowed.
 - ToolEvidenceMiddleware: Emits tool_call and tool_result evidence frames for gateway-backed tools during streaming, with bounded data summaries and optional full payloads, and redacts sensitive parameters. **Updated** Now intercepts secrets.generate_password calls and implements deferred delivery mechanism using per-stream buffers.
+- **TokenUsageMiddleware**: Records provider-reported LLM token usage as a metric via the `on_model_call` hook, always-on with no opt-in knob, streaming-aware, and pure observation without cost calculation.
 - Request Context: Resolves x-request-id by preferring inbound header, then current OTel trace_id, then generating a UUID.
 - Telemetry: Optional OpenTelemetry push pipeline for traces, metrics, and logs; integrates FastAPI and HTTPX instrumentation.
-- Metrics: Always-on Prometheus surface with RED middleware and /metrics endpoint; includes counters/gauges for sessions, chat requests, store backends, evidence writes, audit emissions, and model discovery.
+- Metrics: Always-on Prometheus surface with RED middleware and /metrics endpoint; includes counters/gauges for sessions, chat requests, store backends, evidence writes, audit emissions, model discovery, and LLM token usage.
 - Runtime Settings: Environment-driven configuration for provider options, kernel tuning, middleware toggles, HITL timeouts, evidence caps, model discovery, signed execution, isolated worker, browser flow TTL, audit/incident/skills clients, and authoring-trace bounds. **Updated** Enhanced default system prompt with operational request handling improvements and CompressContext tool configuration.
 
 **Section sources**
@@ -105,13 +107,15 @@ RC --> TEL
 - [runtime_kernel.py:462-496](file://products/agent-platform/src/agent_service/runtime_kernel.py#L462-L496)
 - [kernel_middleware.py:151-193](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L151-L193)
 - [kernel_middleware.py:282-398](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L282-L398)
+- [kernel_middleware.py:636-741](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L636-L741)
 - [request_context.py:8-19](file://products/agent-platform/src/agent_service/core/request_context.py#L8-L19)
 - [telemetry.py:69-117](file://products/agent-platform/src/agent_service/core/telemetry.py#L69-L117)
 - [metrics.py:23-73](file://products/agent-platform/src/agent_service/core/metrics.py#L23-L73)
+- [metrics.py:284-312](file://products/agent-platform/src/agent_service/core/metrics.py#L284-L312)
 - [runtime_settings.py:136-184](file://products/agent-platform/src/agent_service/runtime_settings.py#L136-L184)
 
 ## Architecture Overview
-The runtime kernel sits at the center of agent execution. Requests enter FastAPI, where logging and metrics are recorded, and request IDs are resolved. The kernel builds or reuses an Agent instance per session, composes middlewares, and executes turns either as blocking replies or streaming events. Middlewares enforce permissions and emit evidence frames. Observability is enabled via optional OTel and always-on Prometheus metrics. **Updated** The architecture now includes per-stream delivery buffers that enable gated secret delivery workflows with reveal-on-commit semantics, and CompressContext tool integration for optional context compression.
+The runtime kernel sits at the center of agent execution. Requests enter FastAPI, where logging and metrics are recorded, and request IDs are resolved. The kernel builds or reuses an Agent instance per session, composes middlewares, and executes turns either as blocking replies or streaming events. Middlewares enforce permissions, emit evidence frames, and track LLM token usage. Observability is enabled via optional OTel and always-on Prometheus metrics. **Updated** The architecture now includes per-stream delivery buffers that enable gated secret delivery workflows with reveal-on-commit semantics, CompressContext tool integration for optional context compression, and TokenUsageMiddleware for streaming-aware LLM token tracking.
 
 ```mermaid
 sequenceDiagram
@@ -121,6 +125,7 @@ participant RC as "Request Context<br/>request_context.py"
 participant Kernel as "AgentKernel<br/>runtime_kernel.py"
 participant Perm as "GatewayPermissionMiddleware"
 participant Evidence as "ToolEvidenceMiddleware"
+participant Token as "TokenUsageMiddleware"
 participant Buf as "Delivery Buffers"
 participant Comp as "CompressContext Tool"
 participant Provider as "Model Provider"
@@ -134,6 +139,8 @@ Perm-->>Kernel : ALLOW or ASK
 Kernel->>Evidence : on_acting(tool_call)
 Evidence->>Buf : Buffer portal_copy deliveries
 Evidence-->>Kernel : yield items + emit frames
+Kernel->>Token : on_model_call(current_model)
+Token-->>Kernel : record usage from terminal chunk
 Kernel->>Comp : CompressContext (if enabled)
 Kernel->>Provider : execute turn
 Provider-->>Kernel : stream events / result
@@ -148,6 +155,7 @@ App-->>Client : SSE or response
 - [runtime_kernel.py:662-697](file://products/agent-platform/src/agent_service/runtime_kernel.py#L662-L697)
 - [kernel_middleware.py:195-279](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L195-L279)
 - [kernel_middleware.py:309-388](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L309-L388)
+- [kernel_middleware.py:683-696](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L683-L696)
 
 ## Detailed Component Analysis
 
@@ -337,6 +345,44 @@ end
 - [test_kernel_middleware.py:760-815](file://products/agent-platform/tests/test_kernel_middleware.py#L760-L815)
 - [test_kernel_middleware.py:816-888](file://products/agent-platform/tests/test_kernel_middleware.py#L816-L888)
 
+### TokenUsageMiddleware
+**New Section** The TokenUsageMiddleware provides streaming-aware LLM token usage tracking via the `on_model_call` hook, recording provider-reported token counts as Prometheus metrics.
+
+Key characteristics:
+- **Always-on middleware**: Registered unconditionally in `_build_middlewares()` alongside GatewayPermissionMiddleware and ToolEvidenceMiddleware, with no opt-in knob since reading token counts is pure observation.
+- **Streaming-aware**: Wraps AsyncGenerator responses and records usage from the terminal chunk, mirroring the tracing middleware's generator wrapper approach.
+- **Bounded labels**: Resolves `{provider, model}` labels from the credential-gated catalog, using "unknown" sentinel for uncatalogued models to maintain bounded cardinality.
+- **Direction tracking**: Records four token directions: `input`, `output`, `cache_input`, and `cache_creation`.
+- **No cost calculation**: Deliberately omits cost metrics since agentscope 2.0.8 exposes no provider-derived cost and the platform holds no price table.
+
+Implementation details:
+- Uses `on_model_call` hook to intercept model interactions
+- Resolves provider/model labels via catalog lookup
+- Handles both streaming and non-streaming responses
+- Records nothing when providers return no usage data
+- Integrates with existing metrics infrastructure via `record_llm_tokens`
+
+```mermaid
+flowchart TD
+ModelCall["on_model_call"] --> ResolveLabels["_resolve_labels(current_model)"]
+ResolveLabels --> CallHandler["await next_handler(**input_kwargs)"]
+CallHandler --> CheckType{"AsyncGenerator?"}
+CheckType --> |Yes| RecordStream["_record_stream(stream, provider, model)"]
+CheckType --> |No| RecordNonStream["_record(result.usage, provider, model)"]
+RecordStream --> YieldChunks["Pass chunks through<br/>record terminal usage"]
+RecordNonStream --> ReturnResult["Return result"]
+YieldChunks --> ReturnStream["Return wrapped stream"]
+```
+
+**Diagram sources**
+- [kernel_middleware.py:683-696](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L683-L696)
+- [kernel_middleware.py:698-718](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L698-L718)
+
+**Section sources**
+- [kernel_middleware.py:636-741](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L636-L741)
+- [metrics.py:284-312](file://products/agent-platform/src/agent_service/core/metrics.py#L284-L312)
+- [test_kernel_middleware.py:1396-1530](file://products/agent-platform/tests/test_kernel_middleware.py#L1396-L1530)
+
 ### Per-Stream Delivery Buffers
 **New Section** The enhanced runtime kernel introduces per-stream delivery buffers that enable gated secret delivery workflows with reveal-on-commit semantics.
 
@@ -453,13 +499,15 @@ HasTrace --> |No| GenUUID["Generate UUID"]
 
 ### Metrics Collection
 - Always-on Prometheus metrics via RED middleware and GET /metrics.
-- Counters and gauges for HTTP requests/duration, sessions created, chat requests, session/agent state stores, evidence writes, audit emissions, and model discovery.
+- Counters and gauges for HTTP requests/duration, sessions created, chat requests, session/agent state stores, evidence writes, audit emissions, model discovery, and LLM token usage.
 - Handlers label metrics by templated route path to keep cardinality bounded.
+- **Updated** LLM token usage tracking via `agent_llm_tokens_total{provider,model,direction}` counter with bounded label cardinality.
 
 **Section sources**
 - [metrics.py:23-73](file://products/agent-platform/src/agent_service/core/metrics.py#L23-L73)
 - [metrics.py:84-185](file://products/agent-platform/src/agent_service/core/metrics.py#L84-L185)
 - [metrics.py:188-224](file://products/agent-platform/src/agent_service/core/metrics.py#L188-L224)
+- [metrics.py:284-312](file://products/agent-platform/src/agent_service/core/metrics.py#L284-L312)
 
 ### Runtime Settings and Configuration
 - Environment-driven configuration for provider options, kernel tuning, middleware toggles, HITL timeout, evidence caps, model discovery, signed execution, isolated worker, browser flow approval TTL, audit/incident/skills clients, and authoring-trace bounds.
@@ -479,7 +527,7 @@ The kernel depends on:
 - Tool-gateway for discovering and invoking tools.
 - Stores for agent state, evidence, execution records, confirmations, and approvals.
 - Audit emitter for durable audit trail.
-- Middleware base classes from AgentScope for permission and acting hooks.
+- Middleware base classes from AgentScope for permission, acting, and model call hooks.
 
 ```mermaid
 graph LR
@@ -491,6 +539,7 @@ Kernel --> Audit["Audit Emitter"]
 Kernel --> Middleware["AgentScope MiddlewareBase"]
 Kernel --> DeliveryBuffers["Delivery Buffers"]
 Kernel --> CompressContext["CompressContext Tool"]
+Kernel --> TokenTracking["TokenUsageMiddleware"]
 ```
 
 **Diagram sources**
@@ -517,6 +566,7 @@ Kernel --> CompressContext["CompressContext Tool"]
 - **Updated** Enhanced system prompt processing: Skills search-first approach may add initial latency but improves overall operational efficiency by reducing failed attempts and improving first-time success rates.
 - **Updated** Delivery buffer management: Per-stream buffers minimize memory footprint and provide efficient deferred delivery mechanisms without blocking main execution paths.
 - **Updated** CompressContext tool: Optional context compression reduces memory usage for long conversations; disabled by default to maintain backward compatibility; when enabled, operates efficiently without external network calls.
+- **Updated** TokenUsageMiddleware: Pure observation middleware with minimal overhead; streaming-aware design ensures accurate token counting without impacting stream performance; bounded label cardinality prevents metric explosion.
 
 ## Troubleshooting Guide
 Common issues and diagnostics:
@@ -529,6 +579,7 @@ Common issues and diagnostics:
 - **Updated** Operational request refusals: If models refuse operational requests without calling skills.search, verify the enhanced default system prompt is being used and that skills.search tool is available.
 - **Updated** Secret delivery issues: Monitor delivery buffer states and verify portal_copy handles are properly formatted; check that held deliveries are released only on successful gated commits.
 - **Updated** CompressContext configuration issues: Verify AGENTSCOPE_COMPRESS_CONTEXT_ENABLED is set correctly and AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2; check for startup validation errors indicating invalid configuration.
+- **Updated** Token usage tracking issues: Verify agent_llm_tokens_total metrics are appearing on /metrics endpoint; check that provider/model labels are bounded and no high-cardinality identifiers are leaking.
 - Telemetry misconfiguration: OTel setup failures are logged but do not block requests; verify OTEL_ENABLED and endpoint configuration.
 
 **Section sources**
@@ -536,19 +587,20 @@ Common issues and diagnostics:
 - [runtime_kernel.py:539-582](file://products/agent-platform/src/agent_service/runtime_kernel.py#L539-L582)
 - [runtime_kernel.py:627-660](file://products/agent-platform/src/agent_service/runtime_kernel.py#L627-660)
 - [kernel_middleware.py:195-279](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L195-L279)
+- [kernel_middleware.py:636-741](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L636-L741)
 - [telemetry.py:69-117](file://products/agent-platform/src/agent_service/core/telemetry.py#L69-L117)
 - [metrics.py:156-185](file://products/agent-platform/src/agent_service/core/metrics.py#L156-L185)
 
 ## Conclusion
-The runtime kernel provides a robust, configurable foundation for agent execution with strong separation of concerns: permission gating, evidence emission, request context propagation, and observability. Its design emphasizes safety (deny-by-default permissions, bounded payloads), resilience (best-effort persistence, fail-open telemetry), and scalability (per-session caching, per-token toolkit caching, streaming). Operators can tune behavior via environment-driven settings and extend the pipeline through supported middleware hooks.
+The runtime kernel provides a robust, configurable foundation for agent execution with strong separation of concerns: permission gating, evidence emission, LLM token usage tracking, request context propagation, and observability. Its design emphasizes safety (deny-by-default permissions, bounded payloads), resilience (best-effort persistence, fail-open telemetry), and scalability (per-session caching, per-token toolkit caching, streaming). Operators can tune behavior via environment-driven settings and extend the pipeline through supported middleware hooks.
 
-**Updated** The enhanced runtime kernel now includes sophisticated per-stream delivery buffers that enable secure gated secret delivery workflows with reveal-on-commit semantics, and integrates the CompressContext tool as a kernel-local operation for optional context compression. The CompressContext tool provides agent-driven context summarization while maintaining strict safety guarantees: it never parks on the ASK gate, performs no external access, and requires explicit opt-in via AGENTSCOPE_COMPRESS_CONTEXT_ENABLED with validation ensuring AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2. The enhanced default system prompt significantly improves operational request handling by ensuring models consult skills.search FIRST for any request to act on named systems, accounts, or targets. This prevents anti-fabrication refusals and promotes better operational workflows by prioritizing skill-based guidance over model-generated procedures. The security posture has been strengthened with hardened defaults that require explicit operator confirmation for outbound HTTP requests, providing defense-in-depth against potential SSRF vulnerabilities while maintaining operational flexibility through additive configuration.
+**Updated** The enhanced runtime kernel now includes sophisticated per-stream delivery buffers that enable secure gated secret delivery workflows with reveal-on-commit semantics, integrates the CompressContext tool as a kernel-local operation for optional context compression, and incorporates TokenUsageMiddleware as part of the default always-on middlewares for streaming-aware LLM token tracking. The TokenUsageMiddleware provides pure observation of provider-reported token usage via the `on_model_call` hook, recording `agent_llm_tokens_total{provider,model,direction}` metrics with bounded label cardinality and streaming-aware usage extraction from terminal chunks. The CompressContext tool provides agent-driven context summarization while maintaining strict safety guarantees: it never parks on the ASK gate, performs no external access, and requires explicit opt-in via AGENTSCOPE_COMPRESS_CONTEXT_ENABLED with validation ensuring AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2. The enhanced default system prompt significantly improves operational request handling by ensuring models consult skills.search FIRST for any request to act on named systems, accounts, or targets. This prevents anti-fabrication refusals and promotes better operational workflows by prioritizing skill-based guidance over model-generated procedures. The security posture has been strengthened with hardened defaults that require explicit operator confirmation for outbound HTTP requests, providing defense-in-depth against potential SSRF vulnerabilities while maintaining operational flexibility through additive configuration.
 
 ## Appendices
 
 ### Implementing Custom Middleware
 To add cross-cutting behavior:
-- Subclass MiddlewareBase and implement on_check_permission to influence tool admission or on_acting to observe/instrument tool execution.
+- Subclass MiddlewareBase and implement on_check_permission to influence tool admission, on_acting to observe/instrument tool execution, or on_model_call to observe model interactions.
 - Compose your middleware into the kernel's stack via _build_middlewares or equivalent extension points.
 - Ensure your middleware respects request-scoped contexts (e.g., TOOL_EVIDENCE_SINK) and does not introduce unbounded data in frames.
 
@@ -557,11 +609,13 @@ Guidance grounded in existing patterns:
 - Evidence emission should produce schema-valid frames with bounded data and redacted parameters.
 - **Updated** For secret delivery workflows, leverage the per-stream delivery buffers (STREAM_PENDING_DELIVERIES and PENDING_RELEASE_DELIVERIES) for deferred reveal semantics.
 - **Updated** For kernel-local tools like CompressContext, register them in KERNEL_LOCAL_TOOL_NAMES to ensure they're always allowed and don't park on the ASK gate.
+- **Updated** For model interaction observation, follow TokenUsageMiddleware pattern using on_model_call hook with streaming-aware response handling.
 
 **Section sources**
 - [kernel_middleware.py:151-193](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L151-L193)
 - [kernel_middleware.py:282-398](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L282-L398)
 - [kernel_middleware.py:490-544](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L490-L544)
+- [kernel_middleware.py:636-741](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L636-L741)
 - [runtime_kernel.py:462-496](file://products/agent-platform/src/agent_service/runtime_kernel.py#L462-L496)
 
 ### Extending the Request Pipeline
@@ -570,6 +624,7 @@ Guidance grounded in existing patterns:
 - Enable OTel for distributed tracing and attach log bridge to correlate logs with traces.
 - **Updated** Leverage per-stream delivery buffers for implementing custom secret delivery workflows with gated reveal semantics.
 - **Updated** Consider kernel-local tool patterns for internal operations that should never park on the ASK gate.
+- **Updated** Utilize on_model_call hook for observing model interactions similar to TokenUsageMiddleware implementation.
 
 **Section sources**
 - [app.py:55-76](file://products/agent-platform/src/agent_service/app.py#L55-L76)
@@ -578,17 +633,20 @@ Guidance grounded in existing patterns:
 
 ### Debugging Runtime Issues
 - Inspect runtime_metadata and configuration_hint to validate provider and model configuration.
-- Monitor Prometheus metrics for anomalies in request rates, durations, store errors, and evidence writes.
-- Validate middleware behavior with unit-style checks similar to existing tests for permission and evidence emission.
+- Monitor Prometheus metrics for anomalies in request rates, durations, store errors, evidence writes, and LLM token usage.
+- Validate middleware behavior with unit-style checks similar to existing tests for permission, evidence emission, and token usage tracking.
 - **Updated** For operational request issues: Verify that the enhanced default system prompt is active and that skills.search tool is properly configured and accessible.
 - **Updated** For secret delivery issues: Monitor delivery buffer states, verify portal_copy handle formatting, and ensure held deliveries are properly released on successful gated commits.
 - **Updated** For CompressContext issues: Check AGENTSCOPE_COMPRESS_CONTEXT_ENABLED and AGENTSCOPE_CONTEXT_TRIGGER_RATIO configuration, verify startup validation passes, and ensure the tool is registered as kernel-local.
+- **Updated** For token usage tracking issues: Verify agent_llm_tokens_total metrics appear on /metrics endpoint, check provider/model label cardinality, and ensure streaming responses are properly handled.
 
 **Section sources**
 - [runtime_kernel.py:236-289](file://products/agent-platform/src/agent_service/runtime_kernel.py#L236-L289)
 - [metrics.py:23-73](file://products/agent-platform/src/agent_service/core/metrics.py#L23-L73)
+- [metrics.py:284-312](file://products/agent-platform/src/agent_service/core/metrics.py#L284-L312)
 - [test_kernel_middleware.py:161-360](file://products/agent-platform/tests/test_kernel_middleware.py#L161-L360)
 - [test_kernel_middleware.py:508-736](file://products/agent-platform/tests/test_kernel_middleware.py#L508-L736)
+- [test_kernel_middleware.py:1396-1530](file://products/agent-platform/tests/test_kernel_middleware.py#L1396-L1530)
 
 ### Managing the Auto-Allow List
 
@@ -721,3 +779,36 @@ export AGENTSCOPE_COMPRESS_CONTEXT_ENABLED=false
 - [kernel_middleware.py:105-117](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L105-L117)
 - [test_runtime_settings.py:637-678](file://products/agent-platform/tests/test_runtime_settings.py#L637-L678)
 - [test_kernel_middleware.py:491-513](file://products/agent-platform/tests/test_kernel_middleware.py#L491-L513)
+
+### Token Usage Tracking Reference
+**New Section** Configuration and behavior reference for the TokenUsageMiddleware:
+
+**Middleware Characteristics:**
+- **Always-on**: Registered unconditionally in `_build_middlewares()` with no opt-in knob
+- **Pure observation**: No side effects beyond metric recording
+- **Streaming-aware**: Properly handles AsyncGenerator responses and extracts usage from terminal chunks
+- **Bounded labels**: Uses catalog-resolved provider/model pairs with "unknown" sentinel for uncatalogued models
+
+**Metric Output:**
+- Counter family: `agent_llm_tokens_total{provider,model,direction}`
+- Direction values: `input`, `output`, `cache_input`, `cache_creation`
+- No cost metrics: Cost calculation deferred per SPEC-065 Stage-0 finding
+- No high-cardinality labels: Excludes session_id, user_id, request_id
+
+**Behavioral Guarantees:**
+- Records nothing when providers return no usage data
+- Never synthesizes zero-fill estimates
+- Maintains bounded label cardinality
+- Preserves original response/stream passthrough behavior
+
+**Example Metric Values:**
+```
+agent_llm_tokens_total{provider="dashscope",model="qwen-plus",direction="input"} 5352
+agent_llm_tokens_total{provider="dashscope",model="qwen-plus",direction="output"} 1
+agent_llm_tokens_total{provider="dashscope",model="qwen-plus",direction="cache_input"} 5120
+```
+
+**Section sources**
+- [kernel_middleware.py:636-741](file://products/agent-platform/src/agent_service/services/kernel_middleware.py#L636-L741)
+- [metrics.py:284-312](file://products/agent-platform/src/agent_service/core/metrics.py#L284-L312)
+- [test_kernel_middleware.py:1396-1530](file://products/agent-platform/tests/test_kernel_middleware.py#L1396-L1530)

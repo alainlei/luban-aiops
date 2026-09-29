@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: identity_broker
+title: Identity Broker Service
+scope:
+    - products/identity-broker/
+source_files: []
+depends_on: []
+related_to:
+    - path: platform_gateway/auth_delegation

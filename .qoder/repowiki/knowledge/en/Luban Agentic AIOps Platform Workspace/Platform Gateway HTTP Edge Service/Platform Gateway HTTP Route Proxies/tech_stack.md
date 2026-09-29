@@ -1,0 +1,1 @@
+FastAPI `APIRouter` for route composition; Pydantic models live in `routes/models.py` and are re-exported by the sub-modules.

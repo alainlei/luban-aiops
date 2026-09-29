@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: samples
+title: Tutorial Samples & ACME Admin Demo Suite
+scope:
+    - samples/
+source_files: []
+depends_on: []
+related_to: []

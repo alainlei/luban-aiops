@@ -1,0 +1,4 @@
+- Per-service Kustomize directories under `gitops/dev-k8s/base/<service>/` pair a `-deployment.yaml` and `-service.yaml` with `runtime-config.env` (non-secret env) and `runtime-secrets.env` / `runtime-secrets.example.env` (secret templates).
+- Runtime feature toggles are exposed as environment variables merged into a shared `platform-runtime-config` ConfigMap, keeping the base deny-by-default and enabling features only through explicit profile overlays.
+- Operator-facing automation is implemented as idempotent shell scripts under `gitops/` and `dashboards/`, documented in adjacent READMEs, and invoked from Makefile targets rather than embedded in CI YAML.
+- Secrets are never committed: real values live in local `runtime-secrets.env` files while `runtime-secrets.example.env` documents the contract consumed by CI or external pipelines.

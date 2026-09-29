@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: agent_platform/api_layer
+title: Agent Service HTTP API Layer (FastAPI v2)
+scope:
+    - products/agent-platform/src/agent_service/api/
+    - products/agent-platform/src/agent_service/schemas/
+source_files: []
+depends_on: []
+related_to:
+    - path: incident_service
+    - path: platform_gateway/route_proxies/chat_sessions_routes

@@ -1,0 +1,1 @@
+FastAPI route handlers exposing identity normalization and OAuth-style login/logout/token-refresh endpoints, mounted under the gateway's central router.

@@ -1,0 +1,1 @@
+FastAPI `APIRouter` + `Depends`/`Header`/`Request` parameter injection; structured event logging through `core.observability.log_event`.

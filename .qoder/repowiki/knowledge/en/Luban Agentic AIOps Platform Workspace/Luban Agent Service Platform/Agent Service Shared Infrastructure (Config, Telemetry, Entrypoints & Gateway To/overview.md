@@ -1,0 +1,1 @@
+Cross-cutting runtime bootstrap for the agent service: settings/env loading, Prometheus + OpenTelemetry observability, FastAPI/uvicorn entrypoints, and gateway-backed AgentScope tool wrappers.

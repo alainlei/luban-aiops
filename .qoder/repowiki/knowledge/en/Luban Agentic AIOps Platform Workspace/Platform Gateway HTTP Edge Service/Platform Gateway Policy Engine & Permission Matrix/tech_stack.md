@@ -1,0 +1,1 @@
+Pure-Python evaluation using PyYAML (`yaml.safe_load`) against a YAML bundle schema; policy bundles are shipped as Python package resources via `importlib.resources.files("platform_gateway.policies")`.

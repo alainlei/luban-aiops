@@ -1,0 +1,1 @@
+`make` targets plus three uv console scripts exposed by `pyproject.toml`: `agent-service` (HTTP API), `agent-service-runtime` (AgentScope worker), and `agent-service-native` (native entrypoint); development dependencies include fakeredis and pytest.

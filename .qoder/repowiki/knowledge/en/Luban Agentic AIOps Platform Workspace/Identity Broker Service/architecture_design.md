@@ -1,0 +1,6 @@
+Layered FastAPI application under `src/identity_service/`:
+- Entry point: `main.py` loads `IdentityRunSettings` from env and starts uvicorn; `app.py` builds the `FastAPI` instance, installs an HTTP request middleware that emits structured `http_request` events, mounts routers, and wires metrics/telemetry.
+- API layer (`api/routes/{auth,health,identity}.py`) is thin — routes delegate to services via Pydantic schemas in `schemas/`.
+- Business layer (`services/`) splits concerns: `exchange_service.py` implements broker-mediated token delegation (SPEC-008 R-2/R-3), supporting both static Basic-auth clients and Kubernetes projected workload tokens verified against the cluster OIDC issuer's JWKS; `token_service.py` owns RSA key lifecycle (load/generate/persist) and signs RS256 JWTs with RFC 7517 JWKS exposure; `audit_emitter.py` publishes audit events.
+- Core infrastructure (`core/`) centralizes config (`config.py` + `metadata.py`), runtime settings (`runtime.py`), Prometheus metrics (`metrics.py`), OpenTelemetry setup (`telemetry.py`), logging (`observability.py`).
+- Dependency direction is strictly routes → services → core; services never import routes. Module-level caches hold the signing key and per-issuer JWKS clients, with explicit `reset_*` helpers exposed for tests.

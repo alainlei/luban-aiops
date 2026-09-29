@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: agent_platform/execution_orchestration
+title: Execution Invocation, Recovery & Records
+scope:
+    - products/agent-platform/src/agent_service/services/execution_invocation.py
+    - products/agent-platform/src/agent_service/services/execution_recovery.py
+    - products/agent-platform/src/agent_service/services/execution_records.py
+source_files: []
+depends_on: []
+related_to:
+    - path: execution_runtime
