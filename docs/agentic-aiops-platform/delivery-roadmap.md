@@ -284,6 +284,42 @@ This release builds on proven operator value and focuses on broader rollout read
 
 The platform is ready for wider enterprise adoption beyond the initial user group.
 
+### Status
+
+Closed 2026-09-30 with the v0.45.0 delivery. R5 ran as a long slice
+train (SPEC-039 → SPEC-065, v0.21.0 → v0.45.0) rather than a single
+release, and carried substantial operator-capability work beyond its
+five named themes (the SPEC-039 operations-document repository, the
+SPEC-044/045/052/053/055/056/057 skill authoring, graduation, viewer,
+Studio and composition suite, the SPEC-049→061 browser/HTTP tool and
+`acme-admin` sample suite, and SPEC-062 secure password generation and
+delivery).
+
+Of the five named theme deliverables, four are shipped: better policy
+testing and rollout controls (SPEC-048); stronger reliability and
+observability (crash-safe execution SPEC-063, agent-driven context
+compression SPEC-064, and the token/domain-metric/dashboard slice
+SPEC-065); richer audit reporting (SPEC-046/047); and better internal
+platform-operations visibility (the SPEC-065 dashboards and the
+SPEC-047 audit summary drill-down).
+
+The fifth — **stable API productization / external consumption**
+(`api-gateway` <-> external consumers; "use stable platform APIs from
+another internal application") — is **deliberately deferred, not
+dropped**: the operator confirmed no second consumer exists, matching
+the [MCP toolset memo](../workspace/mcp-exposure-spike.md)'s
+independent finding that external access to Luban workflows is "a
+separate, unestablished product use case." It is parked on the
+exploration backlog with an explicit promotion trigger (a named second
+internal application committing to a concrete workflow + operation
+set, read-only-first given the attribution/HITL constraint).
+
+Accordingly the Release Completion Signal is **re-scoped**: R5 closes
+on its internal hardening and operator-value deliverables, and the
+platform is production-ready for its *initial* user group; "wider
+enterprise adoption beyond the initial user group" via external API
+consumption is deferred behind that trigger rather than claimed now.
+
 ## Release Stacking Logic
 
 ### Why This Sequence Works
@@ -306,6 +342,7 @@ promotion; until then they stay here.
 | Candidate | Question to answer in a spike | Likely home |
 |---|---|---|
 | Independent MCP toolsets consumed by tool-gateway | Assessed 2026-09-23 in [the MCP toolset memo](../workspace/mcp-exposure-spike.md): retain native connectors; no implementation promotion. Reopen on a concrete credential-local deployment need, recurring connector-release friction, named second consumer, or missing operational capability. Compare native extension, existing-server adoption, and selective extraction while preserving Luban governance. External access to Luban workflows is a separate, unestablished product use case. | trigger-gated Kubernetes pilot proposal; no spec assigned |
+| Stable API productization / external consumption | The one R5 theme deliverable ("stable API productization"; integration point `api-gateway` <-> external consumers; validation "use stable platform APIs from another internal application") never spiked or specified. **Parked 2026-09-30** on the operator's confirmation that **no second consumer exists** — the same finding the [MCP toolset memo](../workspace/mcp-exposure-spike.md) reached independently ("no second consumer and required operation set have been named"; external access to Luban workflows is "a separate, unestablished product use case"). This row is the home for that separate use case and is distinct from the MCP row: MCP = expose Luban's *tools* for reuse by other systems; this = expose Luban's *workflows/APIs* for a second application to consume. A speculative build is also the risky path — the platform's attribution/HITL model requires a human owner and a distinct human approver ([identity design](identity-and-authorization-design.md) principles 2 and 5), so external consumption of anything that drives an agent turn or mutates state collides with the trust model; only read-only consumption is tractable without first solving machine-consumer attribution. Unbuilt anchors a future spec would pick up: the empty `shared/shared-sdk` placeholder (service clients / auth helpers / typed event consumers); the identity design doc's named-but-unbuilt "approved machine consumers" client registration and `client_credentials` gap (only `authorization_code` + `refresh_token` are wired today); a published stability/deprecation contract for the `/api/v1/*` surface (versioned by convention only — the `/api/v2/*` namespace is the internal tool-gateway <-> agent-platform boundary, guarded from leaking into the public gateway); and external API reference docs. | own spec (likely `SPEC-066`); trigger-gated — promote when a named second internal application commits to a concrete workflow + operation set, read-only-first given the attribution/HITL constraint |
 | Crash-safe execution and outcome reconciliation | [SPEC-063](../specs/SPEC-063-crash-safe-execution/spec.md) scope approved 2026-09-23; [failure-first implementation plan](../specs/SPEC-063-crash-safe-execution/plan.md), [tasks](../specs/SPEC-063-crash-safe-execution/tasks.md), and accepted [ADR-0013](../adr/0013-durable-single-use-execution-claims.md) recorded. Durable single-use dispatch claims, explicit unknown outcomes, late-result preservation, and owner-scoped recovery without automatic mutation retries. All 26 criteria and 36 [failure scenarios](../specs/SPEC-063-crash-safe-execution/failure-test-matrix.md) are mapped; real-Postgres multiprocess crash tests and independent target counters are mandatory. Implementation, the historical 791-test campaign, and the separately authorized corrected five-path S6 acceptance/cleanup preceded delivery; the final full root `make verify` is green (real-Postgres campaign 791 passed, exit 0), with the daemon-wedge attempts (V1/V5/V6) and the V4 test-only fixture fix retained in the [closure evidence](../specs/SPEC-063-crash-safe-execution/tasks.md#delivery-closure-evidence). Delivered locally 2026-09-26 as 0.43.0; no shared rollout, registry push, or release tag is claimed. Queue/pool scaling and MCP remain deferred. | `SPEC-063` — delivered 2026-09-26 as 0.43.0 |
 | Semantic (vector) skill retrieval | Does an Elasticsearch vector store measurably beat skills-hub's scoring search on our corpus? We already run Elastic (SPEC-011). | skills-hub enhancement spec |
 | Long-term operator memory | Do agentscope long-term-memory middlewares (mem0/reme) add real triage continuity across sessions, and where would that state live? ReME was evaluated 2026-08-20 and does not fit as-is (file-based vault vs Postgres durability, unaudited LLM write-back, no per-user isolation); a spike needs a governed storage backend, per-tenant scoping, and audit hooks first (see `docs/workspace/agentscope-utilization-audit.md`). | follow-up to SPEC-017 durability |
