@@ -13,6 +13,66 @@ Release 1 entries are grouped retrospectively under 0.1.0.
 
 ## Unreleased
 
+## 0.45.0 — 2026-09-29
+
+Feature release: the R5 observability slice — a first-class LLM
+token metric, the platform's domain metrics pushed as OpenTelemetry instruments
+so they are dashboard-visible without a scraper, an OpenObserve dashboard suite
+as config-as-code, and a gated end-to-end live-check. Delivered under
+[SPEC-065](docs/specs/SPEC-065-r5-observability-token-cost-dashboards/spec.md)
+(implementing [ADR-0014](docs/adr/0014-domain-metrics-via-otel-push.md)). No new
+route, action, contract, schema, audit event type, or execution path; the only
+external side effect is R-4's single authorized, billable, read-only model call,
+which mutates nothing and is cleaned up. **Cost is deferred** — Stage-0 found
+agentscope 2.0.8 exposes no provider-derived dollar cost and the platform has no
+price table, so no `agent_llm_cost_usd_total` is emitted. Delivered as v0.45.0
+(2026-09-29): the gated live-check's authorized paid leg was run and evidenced at
+delivery, closing the slice.
+
+### Added
+
+- **Always-on LLM token metric (SPEC-065 R-1).** `agent-platform` gains a
+  `TokenUsageMiddleware` on the supported `on_model_call` hook, recording
+  provider-reported usage as `agent_llm_tokens_total{provider,model,direction}`
+  (`direction` ∈ {input, output, cache_input, cache_creation}; `model` bounded by
+  the SPEC-026/027 catalog with an `unknown` sentinel). Streaming-aware (reads
+  usage off the terminal chunk), never estimated, records nothing when a provider
+  returns no usage, and carries no session/user/request id. Registered
+  unconditionally beside the permission and evidence middleware.
+- **Domain metrics pushed as OTel instruments (SPEC-065 R-2, ADR-0014).** Every
+  `prometheus_client` domain family across all eight services is additionally
+  mirrored to an OpenTelemetry instrument of the same name and bounded label set
+  when `OTEL_ENABLED=true`, so it pushes over the existing OTLP pipeline into
+  OpenObserve — no Prometheus scraper. Strictly additive: the always-on
+  `/metrics` pull surface is unchanged and stays the source of truth with push
+  disabled. The mirror lives once in the parity-guarded `core/telemetry.py` and
+  fails open.
+- **OpenObserve dashboards as config-as-code (SPEC-065 R-3).** Three
+  `version: 5` dashboard JSON files under `shared/platform-ops/dashboards/`
+  (Service Health/RED, LLM Token Consumption, Governance & Decision Chain; 36
+  panels) query the per-metric OpenObserve streams via PromQL.
+  `validate_dashboards.py` is wired into `make verify` as `validate-dashboards`
+  (the `kustomize build` analog) and cross-references every metric against the
+  eight services' `OTEL_MIRROR_FAMILIES` (AST-parsed) so a renamed metric fails
+  the gate; `apply-dashboards.sh` imports idempotently by `dashboardId`.
+- **Gated observability live-check (SPEC-065 R-4).**
+  `shared/platform-ops/e2e/observability-livecheck.sh` reproduces the spike §6
+  procedure with three escalating legs: a mocked-I/O proof (default), a read-only
+  cluster pre-flight, and a gated **billable** one-turn `deepseek` correlation by
+  `trace_id`. The mocked leg runs in the ordinary test suite
+  (`test_observability_livecheck.py`, 8 scenarios) and in the `make e2e` list; the
+  paid leg is an explicitly gated, operator-authorized step.
+
+### Changed
+
+- **Observability contract and living docs (SPEC-065 R-5).**
+  `shared/shared-contracts/observability-conventions.md` records the
+  `agent_llm_tokens_total` family and its bounded labels, a "domain-metric OTel
+  push" note under Two Surfaces, and a config-as-code dashboards pointer; the
+  operator guide (`docs/guides/observability-dashboards.md`) and the
+  configuration reference Feature Activation Matrix document the dashboards and
+  the R-4 live-check.
+
 ## 0.44.0 — 2026-09-27
 
 Feature release: opt-in agent-driven context compression in the agent-platform

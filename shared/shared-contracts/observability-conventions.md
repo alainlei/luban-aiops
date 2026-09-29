@@ -4,7 +4,7 @@
 
 Define the metrics, tracing, logging, and request-correlation conventions that all platform services follow, so that signal from every service is consistent, joinable, and stable enough for a future shared SDK or backend migration.
 
-These conventions back `SPEC-005` (observability baseline).
+These conventions back `SPEC-005` (observability baseline) and `SPEC-065` (R5 observability — LLM token emission, the domain-metric OTel push mirror, and the config-as-code dashboards).
 
 ## Two Surfaces
 
@@ -14,6 +14,8 @@ Each service exposes two deliberately decoupled observability surfaces:
 2. **OpenTelemetry push (opt-in)** — traces, metrics, and mirrored logs pushed via OTLP **HTTP/protobuf** to the configured backend (OpenObserve in this organization). Gated by `OTEL_ENABLED`; off by default; fails open.
 
 The two never depend on each other: disabling OTel push leaves `/metrics` fully functional.
+
+**Domain-metric push mirror (SPEC-065 R-2, ADR-0014).** Every domain family in the `prometheus_client` registry is additionally mirrored to an OpenTelemetry instrument of the *same name and same bounded label set* when `OTEL_ENABLED=true`, so it pushes over the existing OTLP pipeline and becomes visible in OpenObserve (and on the dashboards). The mirror is strictly **additive**: `/metrics` stays the always-on source of truth, and push-only dashboard visibility requires `OTEL_ENABLED`. The mechanism lives once in the parity-guarded `core/telemetry.py` and fails open.
 
 ## Metric Naming
 
@@ -27,11 +29,13 @@ Examples:
 - `gateway_token_verification_total{result}`
 - `identity_tokens_issued_total`
 - `agent_sessions_created_total`, `agent_chat_requests_total`
+- `agent_llm_tokens_total{provider,model,direction}` — the LLM token counter (SPEC-065 R-1), recording provider-reported usage per model call; no cost metric is emitted (deferred — the platform maintains no price table)
 
 ## Standard Labels
 
 - HTTP RED metrics (from the RED middleware): `method`, `handler` (the templated route, e.g. `/api/v1/sessions/{session_id}`), `status`
 - domain counters use **bounded enum labels only** (e.g. `decision` ∈ {allow, deny}; `result` ∈ {valid, invalid, expired, missing})
+- the LLM token counter's `direction` is the bounded enum `{input, output, cache_input, cache_creation}` (the counts agentscope's `ChatUsage` reports); its `model` is a bounded value drawn from the SPEC-026/027 model catalog, coerced to the sentinel `unknown` when uncatalogued so cardinality stays bounded
 
 ## Cardinality Rules
 
@@ -77,4 +81,4 @@ When OTel push is enabled, each service attaches an OTel `LoggingHandler` to the
 
 ## Relationship To Backends
 
-Services only *expose* `/metrics` and *push* OTLP. Scraping infrastructure, metrics/traces/logs storage, dashboards, and alerting are platform-ops concerns outside the service contract. OpenObserve is the organization's observability backend; OTLP HTTP is its first-class ingestion path (org-scoped at `/api/{org}/v1/{signal}`, Basic-authenticated).
+Services only *expose* `/metrics` and *push* OTLP. Scraping infrastructure, metrics/traces/logs storage, dashboards, and alerting are platform-ops concerns outside the service contract. OpenObserve is the organization's observability backend; OTLP HTTP is its first-class ingestion path (org-scoped at `/api/{org}/v1/{signal}`, Basic-authenticated). The dashboards that consume these signals are **config-as-code** under `shared/platform-ops/dashboards/` (SPEC-065 R-3), validated by `make validate-dashboards` in the verification path and applied by `apply-dashboards.sh`; see the [observability dashboards operator guide](../../docs/guides/observability-dashboards.md).

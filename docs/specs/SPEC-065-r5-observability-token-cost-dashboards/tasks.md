@@ -146,19 +146,20 @@ with R-1). `make validate-dashboards` green (3 dashboards, 36 panels, 51 familie
       (assert `OTEL_ENABLED`/`AGENTSCOPE_KERNEL_TRACING`; inspect `/metrics` for
       `agent_llm_tokens_total`; port-forward OpenObserve; query metrics/traces
       correlated by `trace_id`)
-- [ ] Drive **one** read-only chat turn against external `deepseek`
+- [x] Drive **one** read-only chat turn against external `deepseek`
       (`deepseek-v4-flash`, authorized billable per memo §7.3); delete the test
       session; no mutation/tool/HITL
-      — **leg implemented + mocked-tested; the live billable run is GATED and NOT
-      yet fired** (needs a deployed cluster + explicit operator authorization for
-      the paid call; tracked by the Delivery Gate "authorized live paid leg run
-      and evidenced" below).
+      — **fired and evidenced at delivery (2026-09-29)**:
+      `OBSERVABILITY_LIVECHECK_TURN_OK`, one read-only turn correlated in
+      OpenObserve by `trace_id` `e8aa12b6a89a235ce95ffc2106b34173`; throwaway
+      session deleted; no mutation/tool/HITL. Authorized operator paid call
+      against the deployed `dev-luban-aiops` cluster.
 - [x] Make the script idempotent, loud on a missing signal, and invoked from the
       demo/e2e entrypoint (`make` list) so it cannot be skipped silently
 - [x] Add a mocked-I/O execution of the script (no live paid call) to the ordinary
       test suite; keep the paid live leg an explicitly gated, authorized step
 
-**DONE 2026-09-27 (authoring; live paid leg gated)** —
+**DONE 2026-09-27 (authoring); live paid leg fired + evidenced 2026-09-29** —
 `shared/platform-ops/e2e/observability-livecheck.sh` reproduces spike §6 with
 three escalating legs: `--local` (default) runs the mocked-I/O pytest proof;
 `--live` is a read-only cluster pre-flight (asserts `OTEL_ENABLED` +
@@ -175,25 +176,28 @@ missing signal (single-line, secret-free failure; non-zero exit). Wired into the
 `make e2e` list (cannot be skipped silently) + a discoverable
 `make observability-livecheck` target (`LIVE=1` / `DRIVE_TURN=1` escalate). The
 mocked-I/O execution lives in the ordinary suite as
-`products/agent-platform/tests/test_observability_livecheck.py` (a 7-scenario
+`products/agent-platform/tests/test_observability_livecheck.py` (an 8-scenario
 matrix: read-only ok, turn ok, missing OTel env, missing token metric,
-OpenObserve unreachable, missing trace, bad trace-id — asserting the sentinels,
-session cleanup, the no-`X-Request-ID` invariant, and a secret-free failure),
-collected by `make test` / `make verify`; agent-platform suite **1537 passed**.
-**The live billable leg has NOT been fired** (a separate authorization boundary
-that also needs a deployed cluster); it remains the Delivery Gate's "authorized
-live paid leg run and evidenced" step.
+OpenObserve unreachable, missing trace, bad trace-id, metric cold-start (a lazy
+metric-stream 400 retried until the stream materializes) — asserting the
+sentinels, session cleanup, the no-`X-Request-ID` invariant, and a secret-free
+failure), collected by `make test` / `make verify`; agent-platform suite
+**1538 passed**.
+**The live billable leg was fired and evidenced at delivery (2026-09-29)** — a
+separate authorization boundary that also needed a deployed cluster; it satisfies
+the Delivery Gate's "authorized live paid leg run and evidenced" step
+(`OBSERVABILITY_LIVECHECK_TURN_OK`, `trace_id` `e8aa12b6a89a235ce95ffc2106b34173`).
 
 ## R-5: Contract and living-doc updates
 
-- [ ] Update `shared/shared-contracts/observability-conventions.md`: the token
+- [x] Update `shared/shared-contracts/observability-conventions.md`: the token
       family + bounded labels; an additive "domain-metric OTel push" note under Two
       Surfaces (push-only visibility requires `OTEL_ENABLED`, ADR-0014); a
       dashboards-as-config-as-code pointer
-- [ ] Update the operator guide (dashboards R-3, live-check R-4) and the config
+- [x] Update the operator guide (dashboards R-3, live-check R-4) and the config
       reference / Feature Activation Matrix (dashboard visibility depends on
       `OTEL_ENABLED`; no new knob expected)
-- [ ] `CHANGELOG.md` entry referencing SPEC-065; `VERSION` + lockstep version files
+- [x] `CHANGELOG.md` entry referencing SPEC-065; `VERSION` + lockstep version files
       → v0.45.0 at delivery
 - [x] Flip ADR-0014 `proposed` → `accepted`; update `docs/adr/README.md` index
       (done at approval, 2026-09-27)
@@ -204,24 +208,27 @@ live paid leg run and evidenced" step.
 > criterion maps to at least one asserting test and the shipped live-check is
 > exercised. Mapping (criterion → asserting test):
 
-- [ ] **R-1** non-streaming increment → token label test
-- [ ] **R-1** streaming terminal-chunk → multi-chunk generator test
-- [ ] **R-1** bounded `direction` enum + model sentinel → label-bound test
-- [ ] **R-1** no forbidden labels → emitted-label-set assertion
-- [ ] **R-1** absent usage → records-nothing test
-- [ ] **R-1** always-on registration → `_build_middlewares` presence test
-- [ ] **R-1** cost deferred, no fabrication → Stage-0 finding recorded + assertion
+- [x] **R-1** non-streaming increment → token label test
+- [x] **R-1** streaming terminal-chunk → multi-chunk generator test
+- [x] **R-1** bounded `direction` enum + model sentinel → label-bound test
+- [x] **R-1** no forbidden labels → emitted-label-set assertion
+- [x] **R-1** absent usage → records-nothing test
+- [x] **R-1** always-on registration → `_build_middlewares` presence test
+- [x] **R-1** cost deferred, no fabrication → Stage-0 finding recorded + assertion
       that no cost counter is emitted (no platform price table)
-- [ ] **R-2** name/label parity → parity test
-- [ ] **R-2** `OTEL_ENABLED=false` no-op + `/metrics` unchanged → decoupling test
-- [ ] **R-2** fail-open → exporter-error test
-- [ ] **R-2** single definition under guard → `TelemetryParityTest` green
-- [ ] **R-3** dashboards importable → `make verify` render/import validation
-- [ ] **R-4** live path end to end → mocked-I/O script test in CI + the authorized
-      live paid leg run and evidenced
-- [ ] **R-5** docs/version updated; all bookkeeping surfaces consistent
-- [ ] Full root `make verify` green (every product suite incl. the parity guard,
-      every overlay render, policy rules, version lockstep, secret vocabulary)
-- [ ] Living state docs updated (see `spec.md` Impact)
-- [ ] Spec index (`docs/specs/README.md`) + delivery-roadmap backlog row updated
-- [ ] `spec.md` status set to `delivered` (+ delivered date/version + changelog)
+- [x] **R-2** name/label parity → parity test
+- [x] **R-2** `OTEL_ENABLED=false` no-op + `/metrics` unchanged → decoupling test
+- [x] **R-2** fail-open → exporter-error test
+- [x] **R-2** single definition under guard → `TelemetryParityTest` green
+- [x] **R-3** dashboards importable → `make verify` render/import validation
+- [x] **R-4** live path end to end → mocked-I/O script test in CI + the authorized
+      live paid leg run and evidenced (`OBSERVABILITY_LIVECHECK_TURN_OK`, `trace_id`
+      `e8aa12b6a89a235ce95ffc2106b34173`, one read-only `deepseek-v4-flash` turn,
+      throwaway session deleted, 2026-09-29)
+- [x] **R-5** docs/version updated; all bookkeeping surfaces consistent
+- [x] Full root `make verify` green (every product suite incl. the parity guard,
+      every overlay render, policy rules, version lockstep, secret vocabulary) —
+      2026-09-29 run: SPEC-063 campaign 791 passed / 2 deselected, exit 0
+- [x] Living state docs updated (see `spec.md` Impact)
+- [x] Spec index (`docs/specs/README.md`) + delivery-roadmap backlog row updated
+- [x] `spec.md` status set to `delivered` (+ delivered date/version + changelog)

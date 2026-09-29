@@ -2,10 +2,11 @@
 
 ## Status
 
-- status: `approved`
+- status: `delivered`
 - owner: luban-platform-team
 - created: 2026-09-27
 - approved: 2026-09-27
+- delivered: 2026-09-29 (v0.45.0)
 - release slice: R5 — hardening and external consumption ("all core services ↔
   dashboards and metrics"; "stronger reliability and observability" — the one R5
   theme deliverable with no spec yet)
@@ -364,3 +365,13 @@ drove the cost-deferral above. The mirrored-family enumeration for R-2 is fixed 
   R-2 push, R-3 token/RED/decision-chain dashboards, and R-4 live-check are
   unchanged. Spec stays `approved` (a scope refinement within the approved theme,
   not a re-open).
+- 2026-09-29: **Delivered as v0.45.0.** Cut the release: VERSION + the eight-product
+  lockstep (pyproject / `metadata.py` / `__init__.py` / `uv.lock`) bumped to `0.45.0`,
+  `make validate-version` green, and the CHANGELOG `Unreleased` section closed into
+  `## 0.45.0`. The R-4 gated live-check's authorized paid leg was run and evidenced at
+  delivery (`OBSERVABILITY_LIVECHECK_TURN_OK`: one read-only `deepseek-v4-flash` turn
+  correlated in OpenObserve by `trace_id`, throwaway session deleted; the full trace_id
+  is recorded on the Delivery Gate R-4 row in `tasks.md`). Full root `make verify` green
+  (SPEC-063 campaign 791 passed / 2 deselected, exit 0). Status flipped `approved` →
+  `delivered`; `docs/specs/README.md` and the delivery-roadmap Exploration Backlog row
+  updated to match. No release note (the gate/Impact require none).
