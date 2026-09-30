@@ -7,6 +7,46 @@ waves and validation outcomes rather than published product releases.
 
 ## Available Notes
 
+- `2026-09-29-spec-065-r5-observability-token-metrics-and-dashboards.md`
+  - minor (v0.45.0) — the R5 observability slice (SPEC-065, implementing
+    ADR-0014) and the last R5 deliverable. Adds an always-on
+    `agent_llm_tokens_total{provider,model,direction}` metric via a
+    `TokenUsageMiddleware` on the `on_model_call` hook — streaming-aware, never
+    estimated, no session/user/request id (R-1); mirrors every `prometheus_client`
+    domain family across all eight services to an OTel instrument of the same name
+    pushed over OTLP into OpenObserve when `OTEL_ENABLED=true`, with the `/metrics`
+    pull surface unchanged and authoritative and the mirror failing open (R-2);
+    ships three config-as-code `version: 5` OpenObserve dashboards (Service
+    Health/RED, LLM Token Consumption, Governance & Decision Chain; 36 panels)
+    guarded by a new `validate-dashboards` leg that AST-cross-references each
+    metric against the services' `OTEL_MIRROR_FAMILIES` so a rename fails the gate
+    (R-3); and adds a gated three-leg `observability-livecheck` (mocked default,
+    read-only cluster pre-flight, and an explicitly authorized **billable**
+    one-turn `deepseek` correlation by `trace_id`) whose mocked leg runs in the
+    ordinary suite (R-4). R-5 updates the observability-conventions contract, the
+    operator guide, and the config reference. Dollar cost is deliberately deferred
+    — agentscope 2.0.8 exposes no provider-derived cost and there is no price
+    table, so no `agent_llm_cost_usd_total` is emitted. No new route, action,
+    contract, schema, audit event type, or execution path; the only external side
+    effect is R-4's single authorized, billable, read-only call, which mutates
+    nothing and is cleaned up. Closes R5.
+- `2026-09-27-agent-driven-context-compression.md`
+  - minor (v0.44.0) — opt-in agent-driven context compression in the
+    agent-platform kernel (SPEC-064 R-2), adopting the first of the two agentscope
+    2.0.8 surfaces the v0.43.2 refresh pinned but left unwired. A new
+    `AGENTSCOPE_COMPRESS_CONTEXT_ENABLED` flag (default `false`) maps to
+    `ContextConfig.compression_tool_enabled`, registering agentscope's
+    `CompressContext` tool so the agent may summarize its own working context on
+    demand via the *same* `_compress_context_impl` the threshold trigger runs; it
+    is a kernel-local always-allow (touches no external system), guarded by a
+    startup check that `AGENTSCOPE_CONTEXT_TRIGGER_RATIO > 0.2`, and mutates only
+    `state.summary`/`state.context` (already persisted and secret-redacted by the
+    SPEC-017 snapshot). The `offloader` is deliberately unwired (pod-local
+    split-brain vs the shared Postgres snapshot). `GoalPipeline`, the second
+    deferred surface, is **kept out** (no caller; its executor/verifier loop fails
+    the four-point gate against ADR-0011 and the governed dispatch path).
+    Default-off, so unset deployments are byte-identical to v0.43.2; no route,
+    action, contract, schema, audit, or execution-path change.
 - `2026-09-27-dependency-refresh-agentscope-2-0-8.md`
   - patch (v0.43.2) — a dependency-only re-lock of the eight backend products
     inside their declared ranges at latest stable, prompted by the AgentScope

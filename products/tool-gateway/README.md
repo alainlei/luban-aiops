@@ -50,12 +50,21 @@ This project covers:
 - read-only and bounded-action connector pathways
 - connector execution metadata and health reporting
 
-MCP-backed connectors and selective standalone toolset extraction are under
-assessment, not shipped or approved implementation scope. The
-[use-case assessment](../../docs/workspace/mcp-exposure-spike.md) recommends
-retaining native connectors until a concrete need justifies a pilot. The proposed
-direction is for tool-gateway to consume independent servers while Luban retains
-its governance; it is not external exposure of tool-gateway or Luban workflows.
+MCP-backed connectors and selective standalone toolset extraction remain under
+assessment, not shipped or approved implementation scope. The 2026-09-23
+[use-case assessment](../../docs/workspace/mcp-exposure-spike.md) recommended
+retaining native connectors until a concrete need justified a pilot; that reopen
+trigger is now **met** — operations has named three concrete external targets
+(Ansible runbooks, ServiceNow ITSM ticket handling, Windows UI automation for
+desktop-application / Windows-service health checks). The current direction is
+captured in the [MCP-ingestion memo](../../docs/workspace/mcp-ingestion-spike.md):
+tool-gateway becomes the MCP *client* of external servers (an ingestion connector
+*beneath* the gateway, reusing the `BaseTool` / `ToolRegistry` seam) while Luban
+retains policy, approval, redaction, evidence, and audit; the kernel never becomes
+an independent MCP client. This is inbound consumption, **not** external exposure
+of tool-gateway or Luban workflows (that separate concern stays parked as
+SPEC-066). The memo authorizes no implementation, pilot, ADR, or spec — each
+target pilot is separately approved.
 
 Current implementation artifacts:
 
