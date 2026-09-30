@@ -38,6 +38,12 @@ This folder contains the documents that define how the platform should be organi
 - [mcp-exposure-spike.md](mcp-exposure-spike.md)
   - assesses independent MCP toolsets consumed by tool-gateway; recommends retaining native connectors until a concrete use case justifies a pilot, not exposing Luban workflows or promoting an implementation spec
 
+- [mcp-ingestion-spike.md](mcp-ingestion-spike.md)
+  - records the met reopen trigger and the current MCP direction — tool-gateway as the MCP *client* of external servers via an ingestion connector beneath the gateway, staged ServiceNow → Ansible → Windows; assessment only, no implementation, ADR, or spec authorized
+
+- [semantic-skill-retrieval-spike.md](semantic-skill-retrieval-spike.md)
+  - evaluates semantic skill retrieval against skills-hub's lexical `rank()` baseline using live corpus and audit evidence; recommends measuring before building, corrects the `pgvector`-is-free premise, and records the sidecar-schema, embedding, gating, and go/no-go criteria; assessment only
+
 ## Relationship To The Platform Study
 
 These documents extend the main platform study in `docs/agentic-aiops-platform/` by answering:
