@@ -39,7 +39,10 @@ This folder contains the documents that define how the platform should be organi
   - assesses independent MCP toolsets consumed by tool-gateway; recommends retaining native connectors until a concrete use case justifies a pilot, not exposing Luban workflows or promoting an implementation spec
 
 - [mcp-ingestion-spike.md](mcp-ingestion-spike.md)
-  - records the met reopen trigger and the current MCP direction — tool-gateway as the MCP *client* of external servers via an ingestion connector beneath the gateway, staged ServiceNow → Ansible → Windows; assessment only, no implementation, ADR, or spec authorized
+  - records that the MCP reopen trigger is now met, and the current MCP direction — tool-gateway as the MCP *client* of external servers via an ingestion connector beneath the gateway, staged ServiceNow → Ansible → Windows; assessment only, no implementation, ADR, or spec authorized
+
+- [semantic-skill-retrieval-eval-set.md](semantic-skill-retrieval-eval-set.md)
+  - the measurement artifact for gate 1 of the semantic-retrieval spike: an 18-document catalogue, the 63 real audit queries with their lexical candidate pools, and the labeling protocol, label sheet, metrics, and pre-registered decision rule operations needs to produce a baseline; records three measured lexical defects that no vector store is required to fix; labeling and offline scoring only, no implementation authorized
 
 - [semantic-skill-retrieval-spike.md](semantic-skill-retrieval-spike.md)
   - evaluates semantic skill retrieval against skills-hub's lexical `rank()` baseline using live corpus and audit evidence; recommends measuring before building, corrects the `pgvector`-is-free premise, and records the sidecar-schema, embedding, gating, and go/no-go criteria; assessment only
