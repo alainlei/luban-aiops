@@ -19,25 +19,12 @@ configMapGenerator:
     files:
       - shared/policy.yaml
       - password-policy.yaml=../../../../shared-contracts/policies/password-policy.yaml
-  # Sample skill sources (SPEC-014 R-6): keys are flattened
-  # (<dir>-<file>) because ConfigMap keys cannot contain '/'; the
-  # skills-hub deployment maps each key back to its nested path.
-  - name: skills-sre-alerting
-    files:
-      - alerts-KubePodNotReady.md=../../../skills/sre-alerting/alerts/KubePodNotReady.md
-      - alerts-KubePodCrashLooping.md=../../../skills/sre-alerting/alerts/KubePodCrashLooping.md
-      - alerts-KubeContainerWaiting.md=../../../skills/sre-alerting/alerts/KubeContainerWaiting.md
-      - alerts-KubeDeploymentReplicasMismatch.md=../../../skills/sre-alerting/alerts/KubeDeploymentReplicasMismatch.md
-      - alerts-KubeNodeNotReady.md=../../../skills/sre-alerting/alerts/KubeNodeNotReady.md
-      - alerts-KubeMemoryPressure.md=../../../skills/sre-alerting/alerts/KubeMemoryPressure.md
-  - name: skills-platform-runbooks
-    files:
-      - guides-DebugPods.md=../../../skills/platform-runbooks/guides/DebugPods.md
-      - guides-GeneratePassword.md=../../../skills/platform-runbooks/guides/GeneratePassword.md
-      - guides-ImagePullFailures.md=../../../skills/platform-runbooks/guides/ImagePullFailures.md
-      - guides-DebugServices.md=../../../skills/platform-runbooks/guides/DebugServices.md
-      - guides-CrashLoopsAndOOM.md=../../../skills/platform-runbooks/guides/CrashLoopsAndOOM.md
-      - guides-PodSchedulingFailures.md=../../../skills/platform-runbooks/guides/PodSchedulingFailures.md
+  # Skill content is not generated here. shared/platform-ops/skills reaches
+  # skills-hub through the `platform-skills` git source in
+  # skills-hub/runtime-config.env; generating ConfigMaps from the same files
+  # registered every document a second time under a different source-prefixed
+  # skill_id. The `skills-samples` ConfigMap is created out-of-band by
+  # `make deploy-samples`, and the base overlay never names a sample.
   - name: postgres-initdb
     files:
       - infra/create-skills-db.sql

@@ -465,12 +465,19 @@ Sample sources (committed under `shared/platform-ops/skills/`):
 - `sre-alerting` — six adapted Prometheus Operator alert runbooks (Apache-2.0)
 - `platform-runbooks` — five adapted Kubernetes troubleshooting guides (CC-BY-4.0)
 
+Both trees reach the pod through the single `platform-skills` **git** source,
+which ingests `shared/platform-ops/skills/` from the tracked `ref`. They were
+additionally mounted as `local` ConfigMap sources until 2026-10-01; because
+`skill_id` is source-prefixed that stored every document twice, and since
+ranking does no content de-duplication the copies consumed result slots.
+
 The skills-hub fragment of `runtime-config.env` commits the non-secret halves:
 
 - `SKILLS_STORE_BACKEND=postgres`, `SKILLS_DB_URL` (points at the in-cluster
   `postgres` service, database `skills`), `SKILLS_SYNC_INTERVAL_SECONDS=300`,
   `SKILLS_DATA_PATH=/var/lib/skills-hub`, and the `SKILLS_SOURCES` federation
-  list (both sources as `local` mounts)
+  list — the `platform-skills` git source plus `samples`, now the only `local`
+  source, whose ConfigMap `make deploy-samples` creates out-of-band
 
 The tool-gateway fragment commits the caller halves:
 

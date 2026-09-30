@@ -4,7 +4,8 @@
 #
 # Deterministic end-to-end assertions for the skills and grounded guidance
 # slice, runnable after `make deploy`:
-#   1. skills-hub status reports both sample sources synced with skills
+#   1. skills-hub status reports the platform-skills git source synced with
+#      skills and no source reporting an error
 #   2. an alert-name search ranks the matching runbook first (deterministic
 #      scoring regression check)
 #   3. a scripted chat against the gateway shows the agent invoking
@@ -43,12 +44,11 @@ STATUS=$(kubectl -n "$NAMESPACE" exec deployment/skills-hub -- \
   curl -fsS http://localhost:8000/api/v1/skills/status)
 echo "$STATUS"
 
-echo "$STATUS" | grep -q '"source_id":"sre-alerting"' \
-  || echo "$STATUS" | grep -q '"source_id": "sre-alerting"' \
-  || fail "status does not report sre-alerting"
-echo "$STATUS" | grep -q '"source_id":"platform-runbooks"' \
-  || echo "$STATUS" | grep -q '"source_id": "platform-runbooks"' \
-  || fail "status does not report platform-runbooks"
+# Platform runbooks and SRE alerts arrive only through the `platform-skills`
+# git source; the duplicate local ConfigMap sources were removed 2026-10-01.
+echo "$STATUS" | grep -q '"source_id":"platform-skills"' \
+  || echo "$STATUS" | grep -q '"source_id": "platform-skills"' \
+  || fail "status does not report the platform-skills git source"
 echo "$STATUS" | grep -qi '"last_error": *null\|"last_error":null' \
   || fail "a source reports a sync error"
 
@@ -72,11 +72,10 @@ if not matches:
     sys.exit(2)
 print(matches[0]['skill_id'])
 ") || fail "search for KubePodNotReady returned no matches"
-# The git-federated platform-skills source mirrors the sample content, so the
-# top match is the runbook from either source (identical deterministic score;
-# ordering between ties follows the sorted source list).
+# The git-federated platform-skills source is now the only route to this
+# document, so the top match must carry its source prefix. Accepting the
+# unprefixed local-source id as well would hide a re-introduced duplicate.
 case "$TOP_SKILL" in
-  "sre-alerting/alerts/kubepodnotready") ;;
   "platform-skills/sre-alerting/alerts/kubepodnotready") ;;
   *) fail "expected top match to be the KubePodNotReady runbook, got $TOP_SKILL" ;;
 esac

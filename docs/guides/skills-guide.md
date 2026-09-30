@@ -233,7 +233,8 @@ runnable example composing `password-reset` + `lock-unlock-user`.
 
 The knowledge skill
 [`GeneratePassword.md`](../../shared/platform-ops/skills/platform-runbooks/guides/GeneratePassword.md)
-is available through the `platform-runbooks` source. Search `generate a password`;
+is available through the `platform-skills` git source, which ingests all of
+`shared/platform-ops/skills/`. Search `generate a password`;
 it cites the canonical policy without duplicating strength numbers. It grants no
 authority and declares no executable flow.
 
@@ -341,39 +342,48 @@ trace of an ephemeral draft.
 
 ## Adding a skill to an existing source
 
-The dev-k8s sample sources (`sre-alerting`, `platform-runbooks`) live under
-`shared/platform-ops/skills/` and ship to the pod as ConfigMap volumes.
+The dev-k8s platform documents (`sre-alerting`, `platform-runbooks`) live under
+`shared/platform-ops/skills/` and reach the pod through the `platform-skills`
+**git** source, which ingests that whole tree. Adding one is therefore a commit,
+not a manifest change.
 
 1. Create the Markdown file under the source directory (e.g.
    `shared/platform-ops/skills/sre-alerting/alerts/MyNewAlert.md`), with
    frontmatter as above. For alert runbooks, tag the skill with the alert
    name so alert → runbook lookups rank well.
-2. Register the file in the GitOps overlay — ConfigMap keys cannot contain
-   `/`, so keys are flattened `<dir>-<file>` and mapped back to nested paths
-   in two places:
-   - `shared/platform-ops/gitops/dev-k8s/base/kustomization.yaml` — add an
-     entry under the source's ConfigMap, e.g.
-     `alerts-MyNewAlert.md=../../../skills/sre-alerting/alerts/MyNewAlert.md`
-   - `shared/platform-ops/gitops/dev-k8s/base/skills-hub/skills-hub-deployment.yaml`
-     — add the matching `items:` entry mapping key `alerts-MyNewAlert.md` to
-     path `alerts/MyNewAlert.md`
-3. Validate, then deploy:
+2. Validate it, then merge to the branch the source tracks (`main`):
 
    ```sh
    python -m skills_hub.validate shared/platform-ops/skills/sre-alerting
-   make build && make deploy
    ```
 
-   The new pod re-syncs all sources at startup; otherwise changes appear
-   within one sync interval (default 5 minutes). To force an immediate
-   re-sync without other changes: `kubectl -n dev-luban-aiops rollout restart
+   The next sync picks the file up within one interval (default 5 minutes).
+   To force an immediate re-sync: `kubectl -n dev-luban-aiops rollout restart
    deployment/skills-hub`.
 
-4. Verify (see [Verification](#verification)).
+3. Verify (see [Verification](#verification)).
 
-> **Git-based sources skip steps 2–3**: the service clones the repository
-> itself, so merging to the tracked `ref` is enough — the next sync picks it
-> up. The ConfigMap wiring applies only to `local` sources.
+The resulting `skill_id` is source-prefixed — here
+`platform-skills/sre-alerting/alerts/mynewalert`.
+
+> **ConfigMap-backed `local` sources need GitOps wiring instead.** ConfigMap
+> keys cannot contain `/`, so keys are flattened `<dir>-<file>` and mapped back
+> to nested paths in two places: an entry under the source's ConfigMap in
+> `shared/platform-ops/gitops/dev-k8s/base/kustomization.yaml` (e.g.
+> `alerts-MyNewAlert.md=../../../skills/my-source/alerts/MyNewAlert.md`) and the
+> matching `items:` entry in
+> `shared/platform-ops/gitops/dev-k8s/base/skills-hub/skills-hub-deployment.yaml`,
+> then `make build && make deploy` (the ConfigMap content is baked at render
+> time). The dev overlay's only `local` source is now `samples`, whose ConfigMap
+> is created out-of-band by `make deploy-samples`.
+>
+> **Never register the same files twice.** Mounting a tree as a `local` source
+> while a `git` source's `path` also covers it stores every document twice under
+> two `skill_id`s, and because ranking does no content de-duplication the copies
+> consume result slots — measured at **32 of 63** recorded queries before the
+> duplicate `sre-alerting`/`platform-runbooks` mounts were removed on
+> 2026-10-01. See
+> [the retrieval evaluation set](../workspace/semantic-skill-retrieval-eval-set.md).
 
 ## Revising a skill
 
@@ -401,13 +411,15 @@ Git sources: merge the deletion; the next sync picks it up.
 
 Choose the source type:
 
-- **`local`** (dev-k8s sample pattern): commit the documents under
-  `shared/platform-ops/skills/<source_id>/` with a `README.md` (the team
-  contribution template) and a `NOTICE` if content is adapted. Then wire the
-  ConfigMap (`kustomization.yaml`), the volume + mount + `items`
+- **`local`** (the dev overlay now uses this only for `samples`): commit the
+  documents under `shared/platform-ops/skills/<source_id>/` with a `README.md`
+  (the team contribution template) and a `NOTICE` if content is adapted. Then
+  wire the ConfigMap (`kustomization.yaml`), the volume + mount + `items`
   (`skills-hub-deployment.yaml`), and append the source entry to
   `SKILLS_SOURCES` in
-  `shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env`:
+  `shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env`.
+  Pick a `path` that no `git` source's `path` already covers, or every document
+  in the overlap is stored twice under two `skill_id`s:
 
   ```json
   {"source_id":"my-team","type":"local","path":"/skills/my-team"}
@@ -471,7 +483,7 @@ Operators can ask directly:
 
 - *"What guidance do we have for KubePodNotReady?"* → `skills.search`
 - *"List all the skills we have"* → `skills.list`
-- *"Show me the full runbook for sre-alerting/alerts/kubepodnotready"* →
+- *"Show me the full runbook for platform-skills/sre-alerting/alerts/kubepodnotready"* →
   `skills.get`
 
 **Directly against the API** (for debugging and content checks; requires the
@@ -495,7 +507,7 @@ kubectl -n dev-luban-aiops exec deployment/skills-hub -- \
 # One full record
 kubectl -n dev-luban-aiops exec deployment/skills-hub -- \
   curl -fsS -u "tool-gateway:${QUERY_SECRET}" \
-  "http://localhost:8000/api/v1/skills/sre-alerting/alerts/kubepodnotready"
+  "http://localhost:8000/api/v1/skills/platform-skills/sre-alerting/alerts/kubepodnotready"
 ```
 
 **End-to-end smoke test** after any content change:
@@ -529,13 +541,14 @@ Prometheus metrics on `/metrics`:
 
 | Symptom | Likely cause | Action |
 |---|---|---|
-| New/revised skill not visible | Sync not yet run, or ConfigMap wiring missed a file | Wait one interval or `kubectl rollout restart deployment/skills-hub`; check kustomization + deployment `items` |
+| New/revised skill not visible | Sync not yet run, or (for a `local` source) ConfigMap wiring missed a file | Wait one interval or `kubectl rollout restart deployment/skills-hub`; for a `local` source check kustomization + deployment `items`, for a git source check the merge reached the tracked `ref` |
 | Source reports rejections | Document violates the format contract | Read the `rejections` reasons in `/api/v1/skills/status`; fix and re-validate |
 | Source reports `last_error` | Unreachable git URL / bad token / unreadable path | Fix credentials or path; the previous slice keeps serving until then |
 | Git source errors mention auth, others healthy | `SKILLS_GIT_TOKENS` missing the source's token | Re-run `sync-skills-secrets.sh` with `SKILLS_GIT_TOKEN` exported (dev) or update the Secret (prod) |
 | Git source errors mention a subpath | Configured `path` absent from the repo checkout | Fix `path` in `SKILLS_SOURCES` or move the skills directory |
 | Search returns no matches | Query words co-occur nowhere, or source never synced | Try `skills.list` / the catalog endpoint to confirm the skill exists; check status |
-| `kustomize build` fails | ConfigMap entry points at a deleted/renamed file | Align `kustomization.yaml` keys with the files under `shared/platform-ops/skills/` |
+| The same document appears twice in search results | One tree is registered both as a `local` mount and inside a `git` source's `path` | Keep exactly one route per tree. `skill_id` is source-prefixed, so both copies rank separately and consume result slots |
+| `kustomize build` fails | A ConfigMap generator entry points at a deleted/renamed file | Align the generator's keys with the files on disk (the base overlay generates `platform-policy` and `postgres-initdb`; skill ConfigMaps are created by `make deploy-samples`) |
 | Agent claims no skills exist | skills connector not registered | Check `GATEWAY_SKILLS_SERVICE_URL` and the query-secret match (see [Configuration Reference](configuration-reference.md)) |
 
 For deployment-level symptoms (CrashLoopBackOff, ErrImagePull, secrets),

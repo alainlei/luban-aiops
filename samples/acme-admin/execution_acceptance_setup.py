@@ -130,7 +130,15 @@ def render(args):
             data.update(OTEL_ENABLED="false", OTEL_SDK_DISABLED="true", AGENTSCOPE_KERNEL_TRACING="false",
                         GATEWAY_K8S_ENABLED="false", GATEWAY_K8S_NAMESPACE=args.namespace,
                         GATEWAY_HTTP_ALLOW_ORIGINS=args.origin, GATEWAY_BROWSER_ALLOW_ORIGINS=args.origin,
-                        SKILLS_SOURCES=json.dumps([{"source_id": "platform-runbooks", "type": "local", "path": "/skills/platform-runbooks"}]))
+                        # No skill sources. This harness asserts execution and
+                        # admission semantics, never skill content, so an empty
+                        # list keeps it hermetic: no git clone out of the
+                        # acceptance namespace and no dependency on a ConfigMap
+                        # mount. It previously pointed a local source at
+                        # /skills/platform-runbooks, a mount the dev overlay
+                        # dropped on 2026-10-01 when the duplicate local skill
+                        # sources were removed in favour of the git source.
+                        SKILLS_SOURCES="[]")
     wire = {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": metadata("spec063-wire", args.namespace),
             "spec": {"replicas": 1, "strategy": {"type": "Recreate"}, "selector": {"matchLabels": {"app": "spec063-wire"}},
                      "template": {"metadata": {"labels": {"app": "spec063-wire"}}, "spec": {

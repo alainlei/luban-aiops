@@ -1,10 +1,10 @@
 # Spike: Semantic Skill Retrieval — pgvector vs. the Lexical Baseline on an 18-Document Corpus
 
 Status: assessment — recommends **measure before building**. **No implementation, embedding run, extension install, image swap, ADR, or spec is authorized by this memo.**
-Date: 2026-09-30 · Revised: 2026-10-01 (§2.3 measured defects; §2.2 query-shape claim corrected; §4.4, §7, §10 re-ordered by cost)
-Evaluation set: [semantic-skill-retrieval-eval-set.md](./semantic-skill-retrieval-eval-set.md) — built, awaiting operations' relevance labels
+Date: 2026-09-30 · Revised: 2026-10-01 (§2.3 measured defects; §2.2 query-shape claim corrected; §4.4, §7, §10 re-ordered by cost) · Revised again 2026-10-01 (§2.3 defect 1 resolved by configuration; corpus figures re-measured at 18 rows / 2 sources)
+Evaluation set: [semantic-skill-retrieval-eval-set.md](./semantic-skill-retrieval-eval-set.md) — built, regenerated against the 18-row corpus, awaiting operations' relevance labels
 Roadmap home: [Exploration Backlog](../agentic-aiops-platform/delivery-roadmap.md#exploration-backlog), "Semantic (vector) skill retrieval"
-Evidence baseline: repository at v0.45.0 (`3c87723`); static read of the skills-hub retrieval path plus **read-only** queries against the live dev cluster (`postgres-0` `skills` and `audit` databases, the `llm-hosting/ollama` deployment) and the pinned agentscope 2.0.8 venv. Nothing was installed, embedded, deployed, mutated, or committed.
+Evidence baseline: repository at v0.45.0 (`3c87723`); static read of the skills-hub retrieval path plus queries against the live dev cluster (`postgres-0` `skills` and `audit` databases, the `llm-hosting/ollama` deployment) and the pinned agentscope 2.0.8 venv. **The 2026-09-30 pass was entirely read-only** — nothing was installed, embedded, deployed, mutated, or committed. The 2026-10-01 revision follows two operator-authorized mutations (dropping the leftover `_idx_probe` table and removing the duplicate skill sources, §2.3 defect 1) and re-measures the corpus afterwards; **no product code was changed in either pass, and no embedding was computed.**
 
 ## 1. Question and recommendation
 
@@ -30,9 +30,10 @@ measurement, not an implementation.** Three verified findings reshape it:
    and `sessions` databases (§3.1–3.2). The roadmap row's "avoiding new
    infrastructure" is true of a new *server* and false of a new *image*.
 3. **At this corpus size, no vector store is needed to test the hypothesis at all.**
-   The catalog is **30 rows across 4 sources — but only 18 distinct documents**
-   (§2.1, §2.3), 92,486 bytes of body text total. Exact brute-force cosine over 18
-   documents in process is sub-millisecond
+   The catalog is **18 rows across 2 sources, and 18 distinct documents** — it was 30
+   rows across 4 sources until the duplicate registration was removed on 2026-10-01
+   (§2.1, §2.3 defect 1) — totalling 75,398 characters of body text. Exact
+   brute-force cosine over 18 documents in process is sub-millisecond
    and needs no extension, no image swap, and no ANN index. `pgvector` earns its
    place only when catalog scale makes SQL-side filtering or ANN necessary.
 
@@ -44,8 +45,9 @@ pre-registered decision rule; what remains is the human labeling. Candidates are
 evaluated in **cost order, and a cheaper candidate that closes the gap ends the
 exercise**:
 
-1. **De-duplicate and fix the tokenizer** (§4.4, defects 1–2 of §2.3) — no model,
-   no vector, no new dependency, no image change.
+1. **Finish de-duplication in the product and fix the tokenizer** (§4.4, defects 1–2
+   of §2.3) — no model, no vector, no new dependency, no image change. Defect 1's
+   *configuration* half is done; its *product* half is not.
 2. **Then** the heavier lexical options — cover-density ranking, trigram tolerance,
    a curated alias map.
 3. **Only then** semantics. If they are shown to help, the cheapest substrate is a
@@ -75,18 +77,27 @@ The recall gap is real *in principle*: "pod won't start" shares no token with a
 runbook titled `KubePodNotReady`, so it scores 0 and is excluded. What §2.2 shows
 is that this has **not been observed** in the platform's own audit trail.
 
-### 2.2 The corpus and the real query record (live, 2026-09-30)
+### 2.2 The corpus and the real query record (live; corpus re-measured 2026-10-01)
 
-Corpus, from the `skills` database on `postgres-0`:
+Corpus, from the `skills` database on `postgres-0`. The left column is the
+2026-09-30 measurement, before the duplicate sources were removed; the right is the
+current one:
 
-| Measure | Value |
-|---|---|
-| Skills | **30** |
-| Distinct documents (`md5(body)`) | **18** — 12 rows are byte-identical duplicates (§2.3) |
-| Distinct sources | **4** |
-| Body length min / avg / max | **1,094 / 3,083 / 11,778** chars |
-| Total body bytes | **92,486** (~90 KB) |
-| `skills` database size | **8,999 kB** |
+| Measure | 2026-09-30 | 2026-10-01 |
+|---|---|---|
+| Skills (corpus rows) | 30 | **18** |
+| Distinct documents (`md5(body)`) | 18 — 12 rows byte-identical duplicates (§2.3) | **18** — one row each |
+| Distinct sources | 4 | **2** (`platform-skills` git 12, `samples` local 6) |
+| Body length min / avg / max | 1,094 / 3,083 / 11,778 chars | **1,094 / 4,189 / 11,778** chars |
+| Total body text | 92,486 chars | **75,398** chars (75,680 UTF-8 bytes, ~74 KB) |
+| `skills` database size | 8,999 kB | **8,927 kB** |
+
+The average body length *rises* after de-duplication because the 12 removed rows were
+the short platform runbooks and alerts (≈1,400 chars each); the six `samples`
+documents are the long ones and were never duplicated. Note also that the 2026-09-30
+"total body bytes" figure was a `length(body)` **character** sum, not an octet sum —
+the two differ by 282 non-ASCII characters in the current corpus. The label is
+corrected here rather than silently carried forward.
 
 Query record, from `skill_searched` events in the `audit` database (SPEC-029
 records `query`, `limit`, `result_count`, and `skill_ids` in `details` — see
@@ -130,20 +141,27 @@ Read honestly, with its limits:
   pattern is demo, e2e, and verification traffic. The absence of zero-hit queries
   is therefore *weak* evidence, not proof that operators never hit the gap.
 
-### 2.3 Three measured defects in the lexical baseline
+### 2.3 Three measured defects in the lexical baseline — defect 1 resolved 2026-10-01
 
 Building the §7.1 evaluation set
 ([semantic-skill-retrieval-eval-set.md](./semantic-skill-retrieval-eval-set.md))
 required re-running the real scorer over the real corpus, which produced evidence
 this memo did not have when first written. All three defects below are measured,
 reproducible, and **fixable without a vector store** — which is why §4.4 and §10
-now put them ahead of the substrate decision.
+now put them ahead of the substrate decision. Defect 1 has since been fixed in the
+dev overlay; defects 2 and 3 are unchanged and still reproduce today.
 
 | # | Defect | Measured |
 |---|---|---|
-| 1 | **The corpus is 18 documents, not 30.** [`runtime-config.env:19`](../../shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env) registers `platform-skills` as a git source at `shared/platform-ops/skills`, while [`kustomization.yaml:25-40`](../../shared/platform-ops/gitops/dev-k8s/base/kustomization.yaml) generates the two local ConfigMap sources from *those same files*. One file reaches the store by two routes under two `source_id`s. `rank()` does no content de-duplication and breaks ties on `skill_id` ascending | `md5(body)` grouping: **12 byte-identical pairs + 6 singletons**. **32 of 63 queries (50.8%)** return fewer distinct documents than result slots; 22 of 49 in the discriminating stratum |
-| 2 | **CamelCase titles are opaque.** `tokenize("KubePodCrashLooping")` → `['kubepodcrashlooping']`, a single token, so no `sre-alerting` title can match a sub-word query term at the 3.0 title weight. Matching is strict token equality with no stemming, so `crashloop` cannot reach the `CrashLoopBackOff` tag | For `pod keeps restarting CrashLoopBackOff` the exactly-right document ranks **3rd**, tied at 10.0 with a *scheduling-failures* guide that takes the slot on alphabetical tie-break alone. Adding the single word "restart" moves it to 1st |
-| 3 | **A non-zero `result_count` is not a useful answer.** §2.2's zero-hit finding is true and, read alone, misleading | `argocd health check` — 7 occurrences, the trail's second most frequent query — scores **20.0** on "Check ACME Admin Service Health". **No ArgoCD document exists in the corpus** |
+| 1 | **The corpus was 18 documents in 30 rows — *resolved by configuration 2026-10-01; the product gap behind it is not*.** [`runtime-config.env`](../../shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env) registered `platform-skills` as a git source at `shared/platform-ops/skills` while the base `kustomization.yaml` generated two local ConfigMap sources from *those same files*. One file reached the store by two routes under two `source_id`s. `rank()` does no content de-duplication and breaks ties on `skill_id` ascending | `md5(body)` grouping: **12 byte-identical pairs + 6 singletons**. **32 of 63 queries (50.8%)** returned fewer distinct documents than result slots; 22 of 49 in the discriminating stratum. **After** dropping the two local sources: **0 of 63**, 18 rows / 18 distinct bodies, no top-1 changed, and 28 pools widened (+88 candidates). Still open: `rank()` de-duplicates nothing and `parse_sources` accepts overlapping coverage, so any overlapping registration reproduces 32-of-63 |
+| 2 | **CamelCase titles are opaque.** `tokenize("KubePodCrashLooping")` → `['kubepodcrashlooping']`, a single token, so no `sre-alerting` title can match a sub-word query term at the 3.0 title weight. Matching is strict token equality with no stemming, so `crashloop` cannot reach the `CrashLoopBackOff` tag | For `pod keeps restarting CrashLoopBackOff` the exactly-right document ranks **2nd** (was 3rd before de-duplication), tied at 10.0 with a *scheduling-failures* guide that takes the slot on alphabetical tie-break alone (`platform-runbooks` < `sre-alerting`). Adding the single word "restart" moves it to 1st at 11.0 |
+| 3 | **A non-zero `result_count` is not a useful answer.** §2.2's zero-hit finding is true and, read alone, misleading | `argocd health check` — 7 occurrences, the trail's second most frequent query — scores **20.0** on "Check ACME Admin Service Health". **No ArgoCD document exists in the corpus.** Unchanged by de-duplication |
+
+Defect 2 also cuts the other way, and the eval-set measures it: the exact identifier
+`KubePodNotReady` matches only **2 of 18** documents, while the prose paraphrase
+`pod not ready` matches 5 and *still* ranks the scheduling guide above the alert;
+whether the right document leads turns on the searcher appending the word
+`kubernetes`, worth 2.0 as a tag.
 
 Two consequences for the rest of this memo:
 
@@ -152,14 +170,19 @@ Two consequences for the rest of this memo:
   rate. §7.2 now lists it.
 - Every rank-sensitive metric must be reported **twice**: as returned, and over
   de-duplicated documents. Otherwise a de-duplication fix and a ranking fix are
-  indistinguishable in the aggregate.
+  indistinguishable in the aggregate. Since 2026-10-01 the two coincide on the dev
+  corpus — which is exactly why the variant must be kept: it is the only thing that
+  would notice a regression if overlapping sources were re-registered.
 
-The offline reproduction returns the same documents in the same order as the audit
-trail's recorded `skill_ids` for every cross-checked query whose catalog has not
-drifted, so it is a valid harness. Where it *does* differ — `argocd health check`
-formerly led with the now-retired `platform-runbooks/web-checks/inventoryhealth` —
-that is catalog drift, and it is why labels must pin a snapshot rather than reuse
-recorded results.
+The offline reproduction was validated against the audit trail's recorded `skill_ids`
+for every cross-checked query whose catalog had not drifted, so it is a valid harness.
+It can no longer be validated that way — the trail records the 30-row era — and the
+eval-set §3 now validates the 18-row re-run three other ways (reproducing the pinned
+32-of-63 from the old pool column, old-pool-is-a-prefix-of-new for all 63 queries,
+and corpus agreement with Postgres and the service's own status endpoint). Where the
+trail *does* differ — `argocd health check` formerly led with the now-retired
+`platform-runbooks/web-checks/inventoryhealth` — that is catalog drift, and it is why
+labels must pin a snapshot rather than reuse recorded results.
 
 ## 3. Infrastructure reality — corrections to the roadmap framing
 
@@ -180,7 +203,7 @@ One `postgres` StatefulSet with a **1 Gi** `local-path` PVC
 (`postgres-data-postgres-0`) hosts **four** databases: `audit`, `skills`,
 `incidents`, `sessions`. Current usage is small — audit 33 MB, sessions ~10 MB,
 skills 9 MB, incidents 8 MB, postgres ~7.5 MB, ≈67 MB of 1 Gi — so *storage* is not
-the constraint (30 × 768-dim × 4 B ≈ 92 KB; even 10,000 × 1024-dim ≈ 41 MB).
+the constraint (18 × 768-dim × 4 B ≈ 55 KB; even 10,000 × 1024-dim ≈ 41 MB).
 The constraint is that swapping the image touches the audit trail, the session
 store, and the incident store at the same time. That is a real, reviewable change
 with a rollback story to write, and it should not be presented as free.
@@ -238,7 +261,7 @@ in one query.
 Cost: an image swap on the StatefulSet holding all four databases (§3.2), a gitops
 base change, a rollout and rollback plan for durable state, plus an ANN tuning
 surface (`m`, `ef_construction`, `ef_search`, or `lists` + `ANALYZE`) that buys
-nothing at 30 rows. This is the right answer at catalog scale and the wrong first
+nothing at 18 rows. This is the right answer at catalog scale and the wrong first
 step now.
 
 ### 4.2 Option B — adopt an agentscope RAG store (rejected)
@@ -262,12 +285,15 @@ The adopt-worthy surface is `agentscope.embedding` (§6.2), not `agentscope.rag`
 ### 4.3 Option C — sidecar `real[]` + in-process exact cosine (recommended first substrate)
 
 Store the vector as a plain Postgres array in a sidecar table (§5.2), load the
-catalog's vectors, and compute exact cosine in Python. At 18 distinct documents × 768
+catalog's vectors, and compute exact cosine in Python. At 18 documents × 768
 dimensions that is 13,824 floats — a single small query and a few hundred
-microseconds of arithmetic, exact and with **no ANN recall loss at all**. (Embedding
-the 30 stored rows instead of the 18 distinct documents would cost 23,040 floats and
-twice the embedding work for identical content, which is one more reason §4.4's
-de-duplication comes first.)
+microseconds of arithmetic, exact and with **no ANN recall loss at all**. Since
+2026-10-01 the stored row count and the distinct-document count are the same 18
+(§2.3 defect 1), so there is no longer a cheaper-to-embed subset to aim at; when the
+corpus carried 30 rows for 18 documents, embedding rows rather than documents would
+have cost 23,040 floats and twice the embedding work for identical content — which
+is why §4.4's de-duplication still comes first, and why it has to be enforced in the
+product rather than left to a tidy dev config.
 
 Properties that matter here:
 
@@ -289,12 +315,16 @@ The paraphrase failure has deterministic fixes that need no model, no vector, an
 no new dependency. **The first two are now measured against live evidence (§2.3)
 and are cheaper than anything else in this memo:**
 
-- **Collapse duplicate content in `rank()`.** 12 of 30 corpus rows are
-  byte-identical, and 32 of 63 real queries return fewer distinct documents than
-  result slots (§2.3 defect 1). De-duplicating by content hash before truncating to
-  `limit` — or fixing the overlapping `SKILLS_SOURCES` registration that produces
-  them — reclaims up to two of five slots for genuinely different documents. This
-  is the single highest-value change available and needs no ranking change at all.
+- **Finish collapsing duplicate content in `rank()`.** *Configuration half done
+  2026-10-01.* 12 of 30 corpus rows were byte-identical and 32 of 63 real queries
+  returned fewer distinct documents than result slots (§2.3 defect 1); removing the
+  overlapping `SKILLS_SOURCES` registration took that to **0 of 63** and reclaimed
+  the wasted slots — measured, not predicted. But nothing in the *product* changed:
+  `rank()` still has no content-hash de-duplication before truncating to `limit`, and
+  `parse_sources` still accepts two sources covering the same files, so the next
+  overlapping registration silently reproduces the defect. De-duplicating in `rank()`
+  (or rejecting the overlap at ingestion) is the remaining highest-value change here
+  and needs no ranking change at all.
 - **Tokenize CamelCase and stop breaking ties alphabetically.** Splitting
   `KubePodCrashLooping` into `kube/pod/crash/looping` makes every alert title
   matchable at the 3.0 weight, and a stemming or trigram step lets `crashloop`
@@ -313,8 +343,8 @@ and are cheaper than anything else in this memo:**
   set before scoring. This fixes the precise case the vector store is invoked for,
   deterministically, with the synonym list itself reviewable as an artifact.
 
-Honest cost: an alias map is manual curation and scales badly — but at 18 distinct
-documents across 4 sources it is a bounded, reviewable artifact, and every entry is
+Honest cost: an alias map is manual curation and scales badly — but at 18 documents
+across 2 sources it is a bounded, reviewable artifact, and every entry is
 explainable to an operator in a way a cosine score is not. The first two bullets are
 cheaper still and address defects that are already measured rather than
 hypothesised. **If Option D closes the measured gap, no embedding work is needed at
@@ -388,12 +418,12 @@ Why each element is there:
 - **`real[]` vs `vector(n)` is the only Option-C/Option-A difference.** Everything
   above — the table, the cascade, the provenance columns, the sync integration —
   is identical, so the pgvector decision stays open and reversible.
-- **Storage is a non-issue** (§3.2): 30 rows ≈ 92 KB; 10,000 rows at 1024 dims
+- **Storage is a non-issue** (§3.2): 18 rows ≈ 55 KB; 10,000 rows at 1024 dims
   ≈ 41 MB against ≈67 MB used of 1 Gi today.
 
 ### 5.3 Index posture
 
-- **At 30 rows: no index.** A sequential scan is exact, and an ANN index would add
+- **At 18 rows: no index.** A sequential scan is exact, and an ANN index would add
   tuning parameters and recall loss to a table that fits in a single page range.
 - **pgvector at scale:** HNSW with `vector_cosine_ops` (tune `m`,
   `ef_construction`, query-time `ef_search`) is the default choice; IVFFlat needs a
@@ -540,7 +570,7 @@ on our corpus" closes the backlog row as honestly as "vectors win" opens a spec.
   so a future catalog change re-runs the same evaluation instead of trusting a
   stale one.
 - **State the sample size honestly.** 63 real queries (49 of them discriminating)
-  plus a paraphrase set over an **18-document catalog carried in 30 rows across 4
+  plus a paraphrase set over an **18-document catalog carried in 18 rows across 2
   sources** is *small*. Report confidence intervals, and treat any difference inside
   the noise band as **no evidence of improvement**.
 
@@ -659,18 +689,33 @@ Non-negotiables:
 ## 10. Go/no-go gates and next decision
 
 1. **Approve the measurement-first step — no code, no infrastructure.** The
-   evaluation set is **built** (§7.1, [eval-set artifact](./semantic-skill-retrieval-eval-set.md));
+   evaluation set is **built** (§7.1, [eval-set artifact](./semantic-skill-retrieval-eval-set.md))
+   and was regenerated on 2026-10-01 against the de-duplicated 18-row corpus;
    what remains is the human part: operations labels relevance against the
    18-document catalogue and reviews the paraphrase stratum. Then publish the
    lexical baseline (Precision@5, MRR, nDCG@10, zero-relevant rate, distinct-document
    variants, p50/p95). **Gate: without these numbers, no retrieval change is
    approved.**
-2. **Work the lexical fixes in cost order, measuring each.** First de-duplication
-   and the tokenizer/tie-break fixes (§4.4, already measured as defects in §2.3);
-   then `ts_rank_cd` cover density and a curated alias map; then, only if an image
-   change is already accepted, `pg_trgm`. **If any cheaper step closes the measured
-   gap, everything below is cancelled and the backlog row closes** — a null result
-   is a publishable outcome, not a failure.
+2. **Work the lexical fixes in cost order, measuring each.** First the *product* half
+   of de-duplication and the tokenizer/tie-break fixes (§4.4, already measured as
+   defects in §2.3); then `ts_rank_cd` cover density and a curated alias map; then,
+   only if an image change is already accepted, `pg_trgm`. **If any cheaper step
+   closes the measured gap, everything below is cancelled and the backlog row
+   closes** — a null result is a publishable outcome, not a failure.
+
+   De-duplication's *configuration* half was executed on 2026-10-01 under separate
+   operator authorization, and its effect is now measured rather than predicted:
+   crowding **32 of 63 → 0 of 63**, no top-1 changed, 28 pools widened. That changes
+   what remains of this step — it is no longer "does de-duplication help" but "should
+   the product enforce what the dev config happens to get right", i.e. content-hash
+   de-duplication in `rank()` and/or overlap rejection in `parse_sources`. It is
+   still the cheapest item on the list and still needs no labels to justify, though
+   the labels remain the gate for anything that reorders results.
+
+   Defects 2 and 3 are untouched by it: `pod keeps restarting CrashLoopBackOff`
+   still ranks the scheduling guide above `KubePodCrashLooping` on an alphabetical
+   tie-break at 10.0, and `argocd health check` still scores 20.0 on a sample app's
+   health check. Those are the fixes the labels must grade.
 3. **If semantics proceed, approve the substrate:** sidecar `real[]` + in-process
    exact cosine (Option C — no extension, no image swap, reversible), **or** the
    `postgres:16-alpine` → pgvector image swap on the shared StatefulSet now,
@@ -750,3 +795,34 @@ Non-negotiables:
   the two cheapest Option D fixes (§4.4); re-ordered §1 and §10 so candidates are
   measured in cost order and any cheaper fix that closes the gap cancels the rest.
   Read-only throughout: no product code, manifest, or configuration was changed.
+- 2026-10-01 (second pass) — **§2.3 defect 1 resolved by configuration, and every
+  corpus figure in this memo re-measured against the result.** The operator
+  authorized the two cleanups the eval-set had surfaced and declined: the leftover
+  `_idx_probe` table was dropped from the dev `skills` database (confirmed 0 rows,
+  referenced by nothing in the repository), and the two local ConfigMap skill sources
+  were removed from
+  [`runtime-config.env`](../../shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env),
+  the base [`kustomization.yaml`](../../shared/platform-ops/gitops/dev-k8s/base/kustomization.yaml)
+  and the skills-hub deployment, leaving the `platform-skills` git source as the only
+  route to `shared/platform-ops/skills`. Deployed to the dev overlay and verified:
+  `source_count: 2`, `skill_count: 18`, 18 rows / 18 distinct `md5(body)`, both
+  sources `last_error: null`. Re-running the real scorer over the re-exported corpus
+  gives crowding **0 of 63** (was 32 of 63; 0 of 49 in the discriminating stratum,
+  was 22 of 49), distinct documents in top-5 windows **309 of 315** (was 265), pool
+  entries **526** (was 582), and — verified rather than assumed — **no query's top-1
+  document changed**, with the de-duplicated old pool an exact prefix of the new one
+  for all 63 queries and 28 pools widening by 88 candidates. Updated: front matter
+  and evidence baseline (the pass was **not** read-only and is recorded as such),
+  §1 finding 3 and its cost-ordered candidate list, §2.2 corpus table (re-tabulated
+  as two dates, with the
+  "total body bytes" label corrected — the 2026-09-30 figure was a `length(body)`
+  character sum), §2.3 defect table and validation paragraph, §3.2 and §5.2 storage
+  arithmetic, §4.1, §4.3, §4.4's first bullet, §5.3, §7.1 and §10 gates 1–2.
+  **Defects 2 and 3 are unchanged and still reproduce**: `pod keeps restarting
+  CrashLoopBackOff` still ranks the scheduling guide first on an alphabetical
+  tie-break at 10.0 (the right alert moved 3rd → 2nd and no further), and `argocd
+  health check` still scores 20.0 on an unrelated sample. §4.4 and §10 now frame the
+  remaining de-duplication work as *enforcement in the product* — `rank()` still
+  collapses nothing and `parse_sources` still accepts two sources covering the same
+  files — rather than as an open measurement. No product code was modified; the
+  changes are dev-overlay configuration, e2e/guide documentation, and this memo.

@@ -640,7 +640,7 @@ Config fragment: `shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-con
 
 | Variable | Purpose | Default | Source |
 |---|---|---|---|
-| `SKILLS_SOURCES` | Federated source list (JSON: `source_id`, `type` `local`/`git`; local requires `path`; git requires `url`, optional `ref` (default `HEAD`) and `path` — the subdirectory within the checkout to ingest) | two local sample sources + one git source | runtime-config |
+| `SKILLS_SOURCES` | Federated source list (JSON: `source_id`, `type` `local`/`git`; local requires `path`; git requires `url`, optional `ref` (default `HEAD`) and `path` — the subdirectory within the checkout to ingest). Sources must not cover the same files: `skill_id` is source-prefixed, so an overlap stores each document once per source and every copy ranks separately | one `local` source (`samples`) + one `git` source (`platform-skills`, over `shared/platform-ops/skills`) | runtime-config |
 | `SKILLS_GIT_TOKENS` | Per-source git tokens (JSON map `source_id`→token, injected into https clone URLs as `x-access-token`) | *(none)* | **runtime-secrets** |
 | `SKILLS_SYNC_INTERVAL_SECONDS` | Per-source sync loop period | `300` | runtime-config |
 | `SKILLS_COMPOSITION_MAX_SUB_SKILLS` | Composite-wide cap on a `kind: composition` skill's `sub_skills` count; ingestion rejects a composition over it (SPEC-057 R-2). Worst case `cap × GATEWAY_BROWSER_FLOW_MAX_STEPS` = 8 × 20 = 160 unlocked browser writes/run, each still individually signed, audited, receipted and gated once per sub-skill. Must be `>= 1` (`SettingsError` at startup otherwise) | `8` | runtime-config |

@@ -13,6 +13,47 @@ Release 1 entries are grouped retrospectively under 0.1.0.
 
 ## Unreleased
 
+### Changed
+
+- **dev-k8s skills-hub: one route per skill tree.** `SKILLS_SOURCES` no longer
+  registers `platform-runbooks` and `sre-alerting` as `local` ConfigMap mounts
+  alongside the `platform-skills` **git** source that already ingests their parent
+  directory (`shared/platform-ops/skills`). Because `skill_id` is source-prefixed,
+  the overlap stored all 12 of those documents twice under two ids, and since
+  `rank()` performs no content de-duplication both copies consumed result slots:
+  measured against the dev corpus, **32 of 63 recorded audit queries (50.8%)
+  returned fewer distinct documents than result slots in the top 5**
+  ([eval-set §2.1](docs/workspace/semantic-skill-retrieval-eval-set.md)). The two
+  `configMapGenerator` blocks and the two volume/mount pairs with their 12 `items`
+  mappings are removed; `skills-samples` (created out-of-band by
+  `make deploy-samples`) and the `platform-skills` git source remain, so the dev
+  corpus is now 18 rows / 18 distinct documents across 2 sources and crowding is
+  **0 of 63**. Verified purely subtractive: no query's top-1 document changed, and
+  28 candidate pools widened by 88 entries the duplicates had displaced. **Not
+  fixed here:** `rank()` still de-duplicates nothing and `parse_sources` still
+  accepts two sources covering the same files, so an overlapping registration
+  elsewhere reproduces the defect — that product-side enforcement stays in the
+  retrieval backlog.
+- **`e2e/skills-demo.sh`** asserts the `platform-skills` git source appears in
+  `/api/v1/skills/status` in place of the two removed local source ids, and its
+  ranking case now accepts only the source-prefixed
+  `platform-skills/sre-alerting/alerts/kubepodnotready` — tolerating the unprefixed
+  id would hide a re-introduced duplicate.
+- **SPEC-063 acceptance harness** (`samples/acme-admin/execution_acceptance_setup.py`)
+  overrides `SKILLS_SOURCES` to `[]`. It asserts execution and admission semantics
+  and never skill content, so an empty list keeps it hermetic — no git clone out of
+  the acceptance namespace and no dependency on a mount the dev overlay no longer
+  creates.
+- **Docs.** `skills-guide.md` is rewritten git-first for adding a platform skill and
+  gains a "never register the same files twice" caution and a duplicate-result
+  troubleshooting row; `configuration-reference.md` records the non-overlap
+  requirement on `SKILLS_SOURCES`; the dev-k8s README explains why skill content is
+  no longer generated into ConfigMaps. The [semantic skill retrieval
+  memo](docs/workspace/semantic-skill-retrieval-spike.md) and its
+  [evaluation set](docs/workspace/semantic-skill-retrieval-eval-set.md) are
+  regenerated against the 18-row corpus, and the delivery-roadmap backlog row
+  records defect 1 as resolved by configuration with defects 2–3 still open.
+
 ## 0.45.0 — 2026-09-29
 
 Feature release: the R5 observability slice — a first-class LLM

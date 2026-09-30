@@ -1,10 +1,10 @@
 # Eval set: Lexical Skill-Retrieval Baseline
 
-Status: **measurement artifact — gate 1 of the spike memo. Read-only. No implementation, ADR, or spec is authorized by this document.**
-Date: 2026-09-30 · Revised: 2026-10-01 (§2.4 correction applied to the memo)
+Status: **measurement artifact — gate 1 of the spike memo. Authorizes no implementation, ADR, or spec.**
+Date: 2026-09-30 · Revised: 2026-10-01 (§2.4 correction applied to the memo; catalogue and pool regenerated against the de-duplicated 18-row corpus)
 Companion to: [semantic-skill-retrieval-spike.md](./semantic-skill-retrieval-spike.md) — this file instantiates its [§7.1 Evaluation set](./semantic-skill-retrieval-spike.md#71-evaluation-set)
 Roadmap home: [Exploration Backlog](../agentic-aiops-platform/delivery-roadmap.md#exploration-backlog), "Semantic (vector) skill retrieval"
-Evidence baseline: repository at v0.45.0 (`26fbd9b`); corpus exported from the `skills` database and queries from the `audit` database on `postgres-0` in the `dev-luban-aiops` cluster. **Every query was read-only.** Nothing was installed, embedded, deployed, mutated, or labeled.
+Evidence baseline: 2026-09-30 extraction at repository v0.45.0 (`26fbd9b`); 2026-10-01 re-export at `02e8e99` with the `SKILLS_SOURCES` change still uncommitted in the working tree. Corpus exported from the `skills` database and queries from the `audit` database on `postgres-0` in the `dev-luban-aiops` cluster. **The 2026-09-30 extraction was entirely read-only** — nothing was installed, embedded, deployed, mutated, or labeled. The 2026-10-01 revision **was not**: it re-exports the same two databases after the operator-authorized `SKILLS_SOURCES` change described in §2.1, which mutated the dev cluster. The 63 queries and their audit statistics are byte-identical between the two passes, and **no product code was modified in either**. Scoring is still the real `scoring.py`, run offline (§3).
 
 ## 1. What this file is, and what it is not
 
@@ -27,61 +27,103 @@ of the scorer and the corpus, not of answer quality.
 
 Two constraints on reuse:
 
-- **The pool is pinned to the 2026-09-30 corpus.** The catalog has already moved
-  once — historical audit results include `platform-runbooks/web-checks/inventoryhealth`,
-  which no longer exists (retired with the `web-checks` samples). Re-running this
-  extraction against a changed catalog silently invalidates prior labels, so the
-  snapshot in §4 is part of the fixture, not decoration.
+- **The pool is pinned to the 2026-10-01 corpus — 18 rows, one per document.** The
+  catalog has already moved twice: historical audit results include
+  `platform-runbooks/web-checks/inventoryhealth`, which no longer exists (retired
+  with the `web-checks` samples), and the 2026-09-30 extraction's 12 duplicate rows
+  were pruned on 2026-10-01 (§2.1). Re-running this extraction against a changed
+  catalog silently invalidates prior labels, so the snapshot in §4 is part of the
+  fixture, not decoration. Labels recorded against the 2026-09-30 pool would still
+  be *usable* — no query's top-1 moved and every code→document mapping is unchanged
+  — but any pool regenerated after a further catalog move must be re-pinned here.
 - **The traffic is demo/e2e, not sustained operator triage.** All 96 recorded
   searches fall between 2026-09-02 and 2026-09-22. The pool is a real but narrow
   sample; §6 therefore requires a paraphrase stratum that the audit trail cannot
   supply.
 
-## 2. What the extraction measured — three lexical defects
+## 2. What the extraction measured — three lexical defects, one since fixed by configuration
 
 Extracting the pool required re-running the real scorer, which produced evidence
-the memo did not have. All three findings below are measured, reproducible (§3),
+the memo did not have. All three findings below are measured and reproducible (§3),
 and **none of them requires a vector store to fix**. They materially strengthen
 [Option D — improve the lexical baseline first](./semantic-skill-retrieval-spike.md#44-option-d--improve-the-lexical-baseline-first-cheapest-may-be-sufficient).
+Defect 1 (§2.1) was resolved by a configuration change on 2026-10-01 and its
+measurement is retained as history; defects 2 and 3 (§2.2, §2.3) are unchanged and
+still reproduce against the current corpus.
 
-### 2.1 The corpus is 18 documents, not 30 — and the duplicates eat result slots
+### 2.1 The corpus was 18 documents in 30 rows — resolved by configuration 2026-10-01
+
+*Measured 2026-09-30 against a 30-row corpus; resolved 2026-10-01. The measurement
+is retained in full because it is the evidence for a product gap the configuration
+change does **not** close.*
 
 `SKILLS_SOURCES` in
-[`runtime-config.env:19`](../../shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env)
-registers four sources. Two are local ConfigMap mounts (`/skills/platform-runbooks`,
+[`runtime-config.env`](../../shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env)
+registered four sources. Two were local ConfigMap mounts (`/skills/platform-runbooks`,
 `/skills/sre-alerting`); the fourth, `platform-skills`, is a **git** source pointed
 at `shared/platform-ops/skills` — the parent directory of exactly those same two
-trees. And the ConfigMaps are generated from the *same files* that git source
-ingests ([`kustomization.yaml:25-40`](../../shared/platform-ops/gitops/dev-k8s/base/kustomization.yaml)
-maps `../../../skills/sre-alerting/alerts/*.md` and
-`../../../skills/platform-runbooks/guides/*.md`), so this is not similar content but
-literally one file reaching the store by two routes under two `source_id`s.
+trees. The ConfigMaps were generated from the *same files* that git source
+ingested (the base `kustomization.yaml` mapped `../../../skills/sre-alerting/alerts/*.md`
+and `../../../skills/platform-runbooks/guides/*.md`), so this was not similar
+content but literally one file reaching the store by two routes under two
+`source_id`s. Grouping on `md5(body)` confirmed it in the database: **12 groups of
+2 byte-identical bodies plus 6 singletons**.
 
-Verified in the database by grouping on `md5(body)`: **12 groups of 2 byte-identical
-bodies plus 6 singletons**.
-
-| Measure | Value |
-|---|---|
-| Corpus rows | **30** |
-| Distinct documents (`md5(body)`) | **18** |
-| Byte-identical duplicate rows | **12** (every `platform-runbooks` guide and every `sre-alerting` alert) |
-
-`rank()` has no content-level de-duplication, so both copies of a document score
-identically and occupy separate slots in a `limit=5` window. Ties break on
-`skill_id` ascending, so the `platform-runbooks/…` copy always precedes the
+Because `skill_id` is source-prefixed, the two routes produced two distinct ids, and
+`rank()` — which has no content-level de-duplication — scored both copies
+identically and gave them separate slots in a `limit=5` window, ties broken on
+`skill_id` ascending so the `platform-runbooks/…` copy always preceded the
 `platform-skills/platform-runbooks/…` copy.
 
-**Measured: 32 of 63 queries (50.8%) return fewer distinct documents than result
-slots in the top 5.** Restricted to the discriminating stratum (§6.1), **22 of 49
-(44.9%)**. The worst observed case is Q03 `KubePodNotReady` — 9 occurrences, the
-most frequent query in the entire trail — which returns 4 hits containing **2
-distinct documents**, ranks 3–4 being `KubeDeploymentReplicasMismatch` at score
-1.0, a document with no plausible bearing on a pod-readiness alert.
+The worst observed case was Q03 `KubePodNotReady` — 9 occurrences, the most
+frequent query in the entire trail — returning 4 hits that contained **2 distinct
+documents**, ranks 3–4 being a second copy of `KubeDeploymentReplicasMismatch` at
+score 1.0, a document with no plausible bearing on a pod-readiness alert.
 
-This is a *configuration* overlap exposing a *missing product capability*. Both
-halves matter: fixing the dev source list alone would hide the fact that any
-deployment registering overlapping sources gets the same crowding, because nothing
-in the retrieval path collapses identical content.
+**Resolution.** The two local sources were dropped on 2026-10-01, leaving `samples`
+(local) and `platform-skills` (git, ref `main`). The startup prune removed the 12
+orphaned rows and the two ConfigMaps were deleted. Before and after, measured with
+the same offline harness over the same 63 queries:
+
+| Measure | 2026-09-30 | 2026-10-01 |
+|---|---|---|
+| Corpus rows | 30 | **18** |
+| Distinct documents (`md5(body)`) | 18 | 18 |
+| Byte-identical duplicate rows | 12 | **0** |
+| Queries with duplicate crowding in the top 5 | **32 of 63 (50.8%)** | **0 of 63** |
+| …restricted to stratum B (§6.1) | 22 of 49 (44.9%) | **0 of 49** |
+| Distinct documents across all 63 top-5 windows | 265 of a possible 315 | **309 of 315** |
+| Pool entries at depth 10, all queries summed | 582 | 526 (−56, every one a duplicate) |
+| Queries filling the depth-10 pool | 43 | 24 |
+
+The change was purely subtractive, and that is verified rather than assumed:
+
+- **No query's top-1 document changed** (0 of 63).
+- For all 63 queries, the de-duplicated 2026-09-30 pool is an exact **prefix** of
+  the 2026-10-01 pool — same documents, same relative order, same per-document
+  scores. Nothing was re-ranked.
+- **28 queries gained candidates** at depth 10 (+88 slots): documents the duplicates
+  had pushed out of the window are now visible to labelers, so the pool is strictly
+  wider than the one §5 pinned on 2026-09-30.
+- The 6 top-5 slots that remain unfilled are exactly those of Q03/Q04
+  (`KubePodNotReady`, `KubePodNotReady alert`), which return 2 hits in total — a
+  tokenizer problem (§2.2), not crowding.
+
+**What the fix does not do.** Crowding was a *configuration* overlap exposing a
+*missing product capability*, and only the configuration half is gone. `rank()`
+still collapses nothing, so any deployment that registers two sources covering the
+same files reproduces the 32-of-63 result exactly — including a production one.
+Nothing would reject that configuration: `parse_sources`
+([`core/config.py:51-115`](../../products/skills-hub/src/skills_hub/core/config.py))
+validates the JSON shape, the id pattern, required per-type keys, and duplicate
+`source_id` values, but two sources with **distinct** ids covering the same files
+are well-formed and ingest happily. The duplicate-`skill_id` check in
+[`ingestion.py`](../../products/skills-hub/src/skills_hub/services/ingestion.py) is
+scoped to a single source, so it cannot see across the federation either. The
+dev-overlay change makes the baseline measurable; it is not a guardrail. Step 1 of
+the §8 decision rule therefore remains open on its product half, and the guidance
+added to [`skills-guide.md`](../../docs/guides/skills-guide.md) ("never register the
+same files twice") is documentation, not enforcement.
 
 ### 2.2 CamelCase titles are opaque to the tokenizer
 
@@ -100,20 +142,47 @@ strict token equality with no stemming, so the `CrashLoopBackOff` tag on
 `KubePodCrashLooping` is unreachable from the query token `crashloop`
 (`'crashloop' == 'crashloopbackoff'` → `False`).
 
-The consequence is measured, not inferred. For Q46 `pod keeps restarting CrashLoopBackOff`:
+The consequence is measured, not inferred. For Q46 `pod keeps restarting CrashLoopBackOff`,
+scored against the current 18-row corpus:
 
 | Rank | Code | Document | Score |
 |---|---|---|---|
-| 1–2 | `D06` | Pod Scheduling Failures | 10.0 |
-| 3–4 | `D11` | **KubePodCrashLooping** | 10.0 |
-| 5 | `D01` | Crash Loops and OOM Kills | 8.0 |
+| 1 | `D06` | Pod Scheduling Failures | 10.0 |
+| 2 | `D11` | **KubePodCrashLooping** | 10.0 |
+| 3 | `D01` | Crash Loops and OOM Kills | 8.0 |
+| 4 | `D02` | Debug Pods | 8.0 |
+| 5 | `D12` | KubePodNotReady | 8.0 |
 
-The single most on-point document in the corpus is ranked **third**, behind two
-copies of a guide about *scheduling* failures — and because the two are tied at
-10.0, that ordering is decided by **alphabetical `skill_id` sort, not relevance**.
+The single most on-point document in the corpus is ranked **second**, behind a guide
+about *scheduling* failures — and because the two are tied at 10.0, that ordering is
+decided by **alphabetical `skill_id` sort, not relevance**:
+`platform-skills/platform-runbooks/…` precedes `platform-skills/sre-alerting/…`
+because `p` < `s`. Removing the duplicate rows (§2.1) lifted `D11` from third to
+second and changed nothing else; the tie-break still picks the wrong document.
 Adding one word flips it: Q47 `pod keeps restarting CrashLoopBackOff restart`
-puts `D11` first at 11.0. A one-token query change reordering the top result is
-exactly the variance the memo's §7.2 "rank stability" metric exists to catch.
+puts `D11` first at 11.0 against `D06` at 10.0. A one-token query change reordering
+the top result is exactly the variance the memo's §7.2 "rank stability" metric exists
+to catch, and it is why defect 2 survives the configuration fix.
+
+The same opacity bounds how much the corpus can answer at all, and Q03 shows it in
+both directions. `tokenize('KubePodNotReady')` is the single token
+`kubepodnotready`, so the exact alert name — the most frequent query in the trail, 9
+occurrences — matches only **2 of 18 documents** (`D12` at 6.0 from title 3 + tag 2 +
+one body occurrence, `D08` at 1.0). Those two hits are the only unfilled top-5 slots
+left in the pool (§2.1). Rewriting the same problem in prose does not help either:
+
+| Query | Hits | Top 3 (score) |
+|---|---|---|
+| `KubePodNotReady` | 2 | `D12` (6.0), `D08` (1.0) |
+| `pod not ready` | 5 | `D06` (12.0), **`D12` (11.0)**, `D02` (10.0) |
+| `pod is not ready kubernetes` | 5 | **`D12` (18.0)**, `D06` (15.0), `D02` (14.0) |
+
+The exact identifier under-matches; the natural paraphrase matches five documents but
+still ranks `D06` *Pod Scheduling Failures* above `D12`; and whether `D12` leads is
+decided by whether the searcher happened to append the word `kubernetes` — which is a
+tag on `D12` worth 2.0. One optional query word moving the top result is the rank
+instability §8 measures, and it is why stratum C (§6.1) cannot be skipped: the audit
+trail contains no paraphrase of this query, so it cannot see this failure at all.
 
 ### 2.3 A non-zero `result_count` is not evidence of a useful answer
 
@@ -132,11 +201,16 @@ be reported as one; the metric that captures this failure is *zero-relevant rate
 — the fraction of queries whose entire top-5 contains no document an operator
 would accept (§8).
 
+Both rows above are **unchanged by the 2026-10-01 de-duplication**: `D15` still
+scores 20.0 and leads Q31, and `D08` still scores 9.0 and leads Q01/Q02. That is the
+point — neither is a crowding artifact. They are vocabulary gaps, and no amount of
+source-list hygiene touches them.
+
 ### 2.4 Correction to the memo — applied 2026-10-01
 
-Memo [§2.2](./semantic-skill-retrieval-spike.md#22-the-corpus-and-the-real-query-record-live-2026-09-30)
-asserts that "the observed 5-word mode confirms natural phrasing reaches the
-scorer" and that the "agent already adapts to lexical" masking hypothesis is
+Memo [§2.2](./semantic-skill-retrieval-spike.md#22-the-corpus-and-the-real-query-record-live-corpus-re-measured-2026-10-01)
+originally asserted that "the observed 5-word mode confirms natural phrasing reaches
+the scorer" and that the "agent already adapts to lexical" masking hypothesis is
 **not** supported. The stratification in §6.1 undercuts that: **14 of 63 queries
 already contain the identifier of the document they were looking for**
 (`DemoTriage`, `ResetPasswordAdHoc`, `ResetUserPassword`, `scratch-restart-demo`,
@@ -160,7 +234,8 @@ no scorer logic was reimplemented — the analysis imports the real
 [`scoring.py`](../../products/skills-hub/src/skills_hub/services/scoring.py)
 module and calls its `rank()` directly.
 
-1. **Export the corpus** (30 rows: `skill_id`, `title`, `tags`, `body`):
+1. **Export the corpus** (18 rows as of 2026-10-01; 30 before it: `skill_id`,
+   `title`, `tags`, `body`):
 
    ```
    kubectl --context orbstack -n dev-luban-aiops exec postgres-0 -- \
@@ -186,144 +261,196 @@ module and calls its `rank()` directly.
    `sys.modules` *before* `exec_module`, or `@dataclass` fails resolving
    `SearchHit`'s annotations.
 
-**Validation.** The offline reproduction returns the same documents in the same
-order as the `skill_ids` arrays recorded in the audit trail for every cross-checked
-query whose catalog has not drifted — Q03 `KubePodNotReady`, Q46 `pod keeps restarting CrashLoopBackOff`,
-and Q56 `restart pod`, including the duplicate pairs and their `skill_id` tie-break
-order. The reproduction is therefore a faithful model of deployed behavior and can
-serve as the evaluation harness without touching the cluster.
+**Do not validate by calling the search API.** A `skills.search` call appends a
+`skill_searched` audit event (SPEC-029), which changes the `n` and `avg hits`
+columns of §5 and can add a distinct query to the pool. Reproduce offline against
+the exported CSV instead; the corpus counts can be cross-checked read-only via
+`/health/ready` (`source_count`, `skill_count`) and `/api/v1/skills/status`, neither
+of which is audited as a search.
 
-Two cross-checked queries **do not** match, and the mismatch is itself evidence:
+**Validation (2026-09-30, 30-row corpus).** The offline reproduction returned the
+same documents in the same order as the `skill_ids` arrays recorded in the audit
+trail for every cross-checked query whose catalog had not drifted — Q03
+`KubePodNotReady`, Q46 `pod keeps restarting CrashLoopBackOff`, and Q56 `restart
+pod`, including the duplicate pairs and their `skill_id` tie-break order.
 
-| Query | Historical `skill_ids` | Today's pool | Cause |
+Two cross-checked queries **did not** match, and the mismatch is itself evidence:
+
+| Query | Historical `skill_ids` | 2026-09-30 pool | Cause |
 |---|---|---|---|
 | Q31 `argocd health check` | led by `platform-runbooks/web-checks/inventoryhealth` | led by `D15` | that document was retired with the `web-checks` samples |
 | Q40 `password reset` | one `generatepassword` row | `D04` in **two** slots | the duplicate row did not exist at search time — same scores and the same `skill_id` tie-break would have surfaced it had the `platform-skills` source already contributed it |
 
-So the audit trail's recorded results are **not** reusable as ground truth for
-today's corpus. Labels must be computed against a pinned snapshot, which is why §5
+So the audit trail's recorded results are **not** reusable as ground truth for a
+later corpus. Labels must be computed against a pinned snapshot, which is why §5
 regenerates the pool rather than replaying `skill_ids`.
 
-## 4. Document catalogue — 18 distinct documents
+**Validation (2026-10-01, 18-row corpus).** The audit trail can no longer serve as
+the cross-check — it records the 30-row era — so the regenerated pool is validated
+three other ways, all reproducible from §5 alone:
 
-Codes `D01`–`D18` are the labeling unit. Labels attach to a **document**, never to
-a corpus row: `D01` and its duplicate row are the same runbook, and grading them
-separately would double-count.
+1. *Metric definitions.* Recomputing crowding from the **pinned 2026-09-30 pool
+   column** reproduces §2.1's `32 of 63` and `22 of 49 (44.9%)` exactly, and agrees
+   with all 63 of that table's `distinct@5` cells. The 2026-10-01 figures therefore
+   use identical definitions, not looser ones.
+2. *Cross-run consistency.* For all 63 queries the de-duplicated 2026-09-30 pool is
+   an exact prefix of the 2026-10-01 pool, codes **and** scores. Two independent
+   runs of the real scorer over two different exports agree on every overlapping
+   candidate; only the duplicates and the newly-reachable tail differ.
+3. *Corpus agreement.* The CSV holds 18 rows with 18 distinct `md5(body)`, matching
+   Postgres `count(*)`/`count(DISTINCT md5(body))`, the service's own
+   `skill_count: 18` / `source_count: 2`, and the per-source accepted counts
+   (`platform-skills` 12, `samples` 6). Every exported `skill_id` maps to exactly one
+   `D01`–`D18` code in §4, with none left over.
 
-| Code | Title | Tags | Rows | Corpus rows |
-|---|---|---|---|---|
-| `D01` | Crash Loops and OOM Kills | kubernetes, pod, troubleshooting, oom, crashloop | 2 | `platform-runbooks/guides/crashloopsandoom`<br>`platform-skills/platform-runbooks/guides/crashloopsandoom` |
-| `D02` | Debug Pods | kubernetes, pod, troubleshooting, debugging | 2 | `platform-runbooks/guides/debugpods`<br>`platform-skills/platform-runbooks/guides/debugpods` |
-| `D03` | Debug Services | kubernetes, service, troubleshooting, dns, networking | 2 | `platform-runbooks/guides/debugservices`<br>`platform-skills/platform-runbooks/guides/debugservices` |
-| `D04` | Generate a Password and Deliver It Securely | password, generate, secret, delivery, reset, account-recovery, portal-copy, email | 2 | `platform-runbooks/guides/generatepassword`<br>`platform-skills/platform-runbooks/guides/generatepassword` |
-| `D05` | Image Pull Failures | kubernetes, pod, troubleshooting, image | 2 | `platform-runbooks/guides/imagepullfailures`<br>`platform-skills/platform-runbooks/guides/imagepullfailures` |
-| `D06` | Pod Scheduling Failures | kubernetes, pod, troubleshooting, scheduling | 2 | `platform-runbooks/guides/podschedulingfailures`<br>`platform-skills/platform-runbooks/guides/podschedulingfailures` |
-| `D07` | KubeContainerWaiting | kubernetes, pod, alerting, KubeContainerWaiting | 2 | `platform-skills/sre-alerting/alerts/kubecontainerwaiting`<br>`sre-alerting/alerts/kubecontainerwaiting` |
-| `D08` | KubeDeploymentReplicasMismatch | kubernetes, deployment, alerting, KubeDeploymentReplicasMismatch | 2 | `platform-skills/sre-alerting/alerts/kubedeploymentreplicasmismatch`<br>`sre-alerting/alerts/kubedeploymentreplicasmismatch` |
-| `D09` | KubeMemoryPressure | kubernetes, node, alerting, KubeMemoryPressure, memory | 2 | `platform-skills/sre-alerting/alerts/kubememorypressure`<br>`sre-alerting/alerts/kubememorypressure` |
-| `D10` | KubeNodeNotReady | kubernetes, node, alerting, KubeNodeNotReady | 2 | `platform-skills/sre-alerting/alerts/kubenodenotready`<br>`sre-alerting/alerts/kubenodenotready` |
-| `D11` | KubePodCrashLooping | kubernetes, pod, alerting, KubePodCrashLooping, CrashLoopBackOff | 2 | `platform-skills/sre-alerting/alerts/kubepodcrashlooping`<br>`sre-alerting/alerts/kubepodcrashlooping` |
-| `D12` | KubePodNotReady | kubernetes, pod, alerting, KubePodNotReady | 2 | `platform-skills/sre-alerting/alerts/kubepodnotready`<br>`sre-alerting/alerts/kubepodnotready` |
-| `D13` | Reset a Password Ad Hoc (Per-Action Approval) | admin, portal, password, reset, ad-hoc, per-action, approval, browser, web-check, troubleshooting | 1 | `samples/adhoc-password-reset-resetpasswordadhoc` |
-| `D14` | Recover a Locked-Out ACME Admin Account | acme-admin, composition, runbook, account-recovery, password-reset, unlock, user-management | 1 | `samples/composition-recoveracmeaccount` |
-| `D15` | Check ACME Admin Service Health | acme-admin, health, healthz, http, service-check, read-only, api, uptime, monitoring | 1 | `samples/health-check-checkservicehealth` |
-| `D16` | Lock or Unlock an ACME Admin User Account | acme-admin, user, account, lock, unlock, suspend, http, mutation, user-management | 1 | `samples/lock-unlock-user-lockunlockuser` |
-| `D17` | Reset a Password in the ACME Admin Console | acme-admin, console, password, reset, browser-flow, web-check, mutation, temporary-password, user-management | 1 | `samples/password-reset-resetacmepassword` |
-| `D18` | Check ACME Admin User Account Status | acme-admin, user, account, status, locked, web-check, read-only, verification, user-management | 1 | `samples/user-status-checkuserstatus` |
+## 4. Document catalogue — 18 documents, one corpus row each
+
+Codes `D01`–`D18` are the labeling unit, and they are unchanged by the 2026-10-01
+re-export: same titles, same tags, same order. What changed is the last column —
+each code now maps to exactly **one** `skill_id`, because the unprefixed
+`platform-runbooks/…` and `sre-alerting/…` rows were pruned with the two local
+sources (§2.1). Any label sheet written against the 2026-09-30 catalogue still
+grades the same documents; only the row ids it would cite have moved.
+
+Labels attach to a **document**, never to a corpus row. That rule is still
+load-bearing rather than merely tidy: `rank()` performs no content de-duplication,
+so a deployment that re-registers overlapping sources would put the same runbook
+back into two slots, and row-level grading would double-count it and launder the
+defect into the metric.
+
+| Code | Title | Tags | Corpus row (`skill_id`) |
+|---|---|---|---|
+| `D01` | Crash Loops and OOM Kills | kubernetes, pod, troubleshooting, oom, crashloop | `platform-skills/platform-runbooks/guides/crashloopsandoom` |
+| `D02` | Debug Pods | kubernetes, pod, troubleshooting, debugging | `platform-skills/platform-runbooks/guides/debugpods` |
+| `D03` | Debug Services | kubernetes, service, troubleshooting, dns, networking | `platform-skills/platform-runbooks/guides/debugservices` |
+| `D04` | Generate a Password and Deliver It Securely | password, generate, secret, delivery, reset, account-recovery, portal-copy, email | `platform-skills/platform-runbooks/guides/generatepassword` |
+| `D05` | Image Pull Failures | kubernetes, pod, troubleshooting, image | `platform-skills/platform-runbooks/guides/imagepullfailures` |
+| `D06` | Pod Scheduling Failures | kubernetes, pod, troubleshooting, scheduling | `platform-skills/platform-runbooks/guides/podschedulingfailures` |
+| `D07` | KubeContainerWaiting | kubernetes, pod, alerting, KubeContainerWaiting | `platform-skills/sre-alerting/alerts/kubecontainerwaiting` |
+| `D08` | KubeDeploymentReplicasMismatch | kubernetes, deployment, alerting, KubeDeploymentReplicasMismatch | `platform-skills/sre-alerting/alerts/kubedeploymentreplicasmismatch` |
+| `D09` | KubeMemoryPressure | kubernetes, node, alerting, KubeMemoryPressure, memory | `platform-skills/sre-alerting/alerts/kubememorypressure` |
+| `D10` | KubeNodeNotReady | kubernetes, node, alerting, KubeNodeNotReady | `platform-skills/sre-alerting/alerts/kubenodenotready` |
+| `D11` | KubePodCrashLooping | kubernetes, pod, alerting, KubePodCrashLooping, CrashLoopBackOff | `platform-skills/sre-alerting/alerts/kubepodcrashlooping` |
+| `D12` | KubePodNotReady | kubernetes, pod, alerting, KubePodNotReady | `platform-skills/sre-alerting/alerts/kubepodnotready` |
+| `D13` | Reset a Password Ad Hoc (Per-Action Approval) | admin, portal, password, reset, ad-hoc, per-action, approval, browser, web-check, troubleshooting | `samples/adhoc-password-reset-resetpasswordadhoc` |
+| `D14` | Recover a Locked-Out ACME Admin Account | acme-admin, composition, runbook, account-recovery, password-reset, unlock, user-management | `samples/composition-recoveracmeaccount` |
+| `D15` | Check ACME Admin Service Health | acme-admin, health, healthz, http, service-check, read-only, api, uptime, monitoring | `samples/health-check-checkservicehealth` |
+| `D16` | Lock or Unlock an ACME Admin User Account | acme-admin, user, account, lock, unlock, suspend, http, mutation, user-management | `samples/lock-unlock-user-lockunlockuser` |
+| `D17` | Reset a Password in the ACME Admin Console | acme-admin, console, password, reset, browser-flow, web-check, mutation, temporary-password, user-management | `samples/password-reset-resetacmepassword` |
+| `D18` | Check ACME Admin User Account Status | acme-admin, user, account, status, locked, web-check, read-only, verification, user-management | `samples/user-status-checkuserstatus` |
 
 ## 5. Query pool — 63 real queries, lexical candidates at depth 10
 
 Extracted from `skill_searched.details->>'query'` (SPEC-029). Pooling depth is 10
 rather than 5 so nDCG@10 is computable and so labelers see candidates beyond the
-operator-visible window. Repeated codes at adjacent ranks are the duplicate rows
-of §2.1 — they are the defect, left visible rather than collapsed.
+operator-visible window.
+
+**Regenerated 2026-10-01 against the 18-row corpus.** No code appears twice in any
+pool now: the repeated adjacent codes that made §2.1's duplicate rows visible are
+gone, `distinct@5` reads 5/5 for every query that returns five hits, and 28 pools
+are *longer* than before because documents the duplicates displaced have entered the
+depth-10 window. The 2026-09-30 pool is preserved in git history at `02e8e99` and
+remains the reference for that measurement; §3 shows the new pool extends it without
+reordering any of it.
 
 `†` marks **stratum A**: the query already contains the identifier of the document
-it was seeking, so it cannot discriminate retrieval quality (§6.1).
+it was seeking, so it cannot discriminate retrieval quality (§6.1). The stratum
+assignment is a property of the query text and is unchanged by the regeneration.
 
 | # | Query | n | avg hits | distinct@5 | Pool (rank:code:score) |
 |---|---|---|---|---|---|
-| Q01 † | DemoTriage synthetic demo deployment SPEC-015 triage | 1 | 5.00 | 4/5 | 1:D08:9 2:D08:9 3:D16:6 4:D13:5 5:D03:3 6:D03:3 7:D17:3 8:D09:2 9:D10:2 10:D12:2 |
-| Q02 † | DemoTriage synthetic demo deployment triage SPEC-015 | 1 | 5.00 | 4/5 | 1:D08:9 2:D08:9 3:D16:6 4:D13:5 5:D03:3 6:D03:3 7:D17:3 8:D09:2 9:D10:2 10:D12:2 |
-| Q03 | KubePodNotReady | **9** | 4.00 | **2/4** | 1:D12:6 2:D12:6 3:D08:1 4:D08:1 |
-| Q04 | KubePodNotReady alert | 2 | 4.00 | **2/4** | 1:D12:8 2:D12:8 3:D08:1 4:D08:1 |
-| Q05 † | ResetPasswordAdHoc password reset admin portal | 1 | 4.00 | 4/5 | 1:D17:32 2:D13:29 3:D14:25 4:D04:21 5:D04:21 6:D18:15 7:D16:14 8:D15:11 |
-| Q06 † | ResetPasswordAdHoc reset password admin portal | 1 | 4.00 | 4/5 | 1:D17:32 2:D13:29 3:D14:25 4:D04:21 5:D04:21 6:D18:15 7:D16:14 8:D15:11 |
-| Q07 † | ResetUserPassword admin portal | 2 | 3.00 | 5/5 | 1:D17:12 2:D14:11 3:D16:11 4:D15:10 5:D18:10 6:D13:9 7:D04:4 8:D04:4 |
-| Q08 † | ResetUserPassword admin portal reset password | 1 | 3.00 | 4/5 | 1:D17:32 2:D13:29 3:D14:25 4:D04:21 5:D04:21 6:D18:15 7:D16:14 8:D15:11 |
-| Q09 † | ResetUserPassword admin portal reset user password | 1 | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D04:21 8:D15:13 9:D07:1 10:D07:1 |
-| Q10 † | ResetUserPassword reset password user admin portal | 1 | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D04:21 8:D15:13 9:D07:1 10:D07:1 |
-| Q11 | acme | 1 | 5.00 | 5/5 | 1:D15:10 2:D16:10 3:D17:10 4:D18:10 5:D14:9 6:D13:5 7:D04:1 8:D04:1 |
-| Q12 | acme-admin password reset alice | 1 | 5.00 | 5/5 | 1:D17:41 2:D13:33 3:D14:33 4:D16:27 5:D18:27 6:D15:21 7:D04:18 8:D04:18 |
-| Q13 | acme-admin password reset runbook | 1 | 5.00 | 5/5 | 1:D14:40 2:D17:40 3:D13:37 4:D18:26 5:D16:23 6:D15:21 7:D04:18 8:D04:18 |
-| Q14 | adhoc password reset admin panel | 1 | 4.00 | 4/5 | 1:D17:30 2:D13:29 3:D14:24 4:D04:17 5:D04:17 6:D18:15 7:D16:13 8:D15:11 |
-| Q15 † | adhoc password reset resetpasswordadhoc admin panel | 1 | 4.00 | 4/5 | 1:D17:30 2:D13:29 3:D14:24 4:D04:17 5:D04:17 6:D18:15 7:D16:13 8:D15:11 |
-| Q16 | admin panel password reset legacy | 1 | 3.00 | 4/5 | 1:D17:32 2:D13:29 3:D14:24 4:D04:17 5:D04:17 6:D18:15 7:D16:13 8:D15:11 |
-| Q17 | admin portal password reset ad-hoc credential set | 1 | 5.00 | 5/5 | 1:D13:59 2:D17:42 3:D14:27 4:D16:26 5:D18:25 6:D04:21 7:D04:21 8:D15:21 9:D01:1 10:D01:1 |
-| Q18 | admin portal password reset user | 5 | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D04:21 8:D15:13 9:D07:1 10:D07:1 |
-| Q19 | admin portal password reset user account | 1 | 5.00 | 5/5 | 1:D14:42 2:D17:42 3:D13:34 4:D16:32 5:D18:32 6:D04:25 7:D04:25 8:D15:13 9:D07:1 10:D07:1 |
-| Q20 | admin portal reset password user | 1 | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D04:21 8:D15:13 9:D07:1 10:D07:1 |
-| Q21 | admin portal reset user password | 4 | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D04:21 8:D15:13 9:D07:1 10:D07:1 |
-| Q22 | admin portal user password reset | 2 | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D04:21 8:D15:13 9:D07:1 10:D07:1 |
-| Q23 | admin portal user password reset web check | 1 | 5.00 | 5/5 | 1:D17:49 2:D13:44 3:D18:42 4:D14:35 5:D16:27 6:D15:26 7:D04:21 8:D04:21 9:D07:4 10:D07:4 |
-| Q24 | admin portal web check | 1 | 5.00 | 5/5 | 1:D18:27 2:D15:23 3:D17:22 4:D13:19 5:D14:14 6:D16:14 7:D04:4 8:D04:4 9:D07:3 10:D07:3 |
-| Q25 | admin portal web user management | 1 | 5.00 | 5/5 | 1:D18:29 2:D17:28 3:D16:25 4:D14:23 5:D13:21 6:D15:15 7:D04:4 8:D04:4 9:D07:1 10:D07:1 |
-| Q26 | admin portal write action user management approval | 1 | 5.00 | 5/5 | 1:D13:39 2:D16:38 3:D17:36 4:D14:33 5:D18:29 6:D15:14 7:D04:10 8:D04:10 9:D07:1 10:D07:1 |
-| Q27 | argo workflows health check controller workflow | 1 | 5.00 | 4/5 | 1:D15:20 2:D18:10 3:D12:5 4:D12:5 5:D03:3 6:D03:3 7:D07:3 8:D13:3 9:D17:3 10:D07:3 |
-| Q28 | argo-cd controller restart pod health namespace argocd | 1 | 5.00 | **3/5** | 1:D12:15 2:D12:15 3:D15:14 4:D02:12 5:D02:12 6:D01:11 7:D06:11 8:D01:11 9:D06:11 10:D03:10 |
-| Q29 | argocd application-server repo-server deployment pod | 1 | 5.00 | **3/5** | 1:D06:10 2:D06:10 3:D11:10 4:D11:10 5:D01:9 6:D01:9 7:D12:9 8:D12:9 9:D02:8 10:D02:8 |
-| Q30 | argocd argocd-server repo-server restart crashloop | 1 | 5.00 | 4/5 | 1:D18:5 2:D17:3 3:D01:2 4:D01:2 5:D16:2 6:D04:1 7:D04:1 8:D10:1 9:D11:1 10:D13:1 |
-| Q31 | argocd health check | **7** | 5.00 | 4/5 | 1:D15:20 2:D18:10 3:D03:3 4:D03:3 5:D07:3 6:D13:3 7:D17:3 8:D07:3 9:D01:2 10:D01:2 |
-| Q32 | argocd restarting pods repo-server crash troubleshooting | 1 | 5.00 | **3/5** | 1:D02:7 2:D03:7 3:D02:7 4:D03:7 5:D01:6 6:D01:6 7:D08:6 8:D08:6 9:D10:4 10:D10:4 |
-| Q33 † | demo deployment triage DemoTriage warning | 1 | 5.00 | **3/5** | 1:D08:8 2:D08:8 3:D04:2 4:D04:2 5:D12:2 6:D12:2 7:D07:1 8:D09:1 9:D10:1 10:D11:1 |
-| Q34 † | demo deployment triage DemoTriage warning deployment not ready | 1 | 5.00 | **3/5** | 1:D08:19 2:D08:19 3:D04:8 4:D04:8 5:D12:7 6:D12:7 7:D10:6 8:D14:6 9:D16:6 10:D10:6 |
-| Q35 | demo deployment triage warning | 1 | 5.00 | **3/5** | 1:D08:8 2:D08:8 3:D04:2 4:D04:2 5:D12:2 6:D12:2 7:D07:1 8:D09:1 9:D10:1 10:D11:1 |
-| Q36 | deployment needs triage warning pod not ready demo | 1 | 5.00 | **3/5** | 1:D08:13 2:D12:13 3:D08:13 4:D12:13 5:D06:12 6:D06:12 7:D15:12 8:D02:10 9:D02:10 10:D07:10 |
-| Q37 | deployment triage warning pod not ready | 1 | 5.00 | **3/5** | 1:D08:13 2:D12:13 3:D08:13 4:D12:13 5:D06:12 6:D06:12 7:D02:10 8:D02:10 9:D07:10 10:D07:10 |
-| Q38 † | inventory portal sign in failed browser-check-target svc-check credential set | 1 | 5.00 | 5/5 | 1:D18:48 2:D15:44 3:D17:41 4:D13:36 5:D16:26 6:D14:21 7:D04:10 8:D04:10 9:D03:8 10:D03:8 |
-| Q39 | lock account acme-admin disable user | 1 | 5.00 | 5/5 | 1:D16:48 2:D14:41 3:D18:39 4:D17:30 5:D15:22 6:D13:17 7:D04:5 8:D04:5 9:D07:1 10:D07:1 |
-| Q40 | password reset | 1 | 5.00 | 4/5 | 1:D13:20 2:D17:20 3:D04:17 4:D04:17 5:D14:14 6:D18:5 7:D16:3 8:D15:1 |
-| Q41 | password reset account recovery admin console | 1 | 5.00 | 5/5 | 1:D17:43 2:D14:38 3:D13:32 4:D18:27 5:D16:24 6:D04:23 7:D04:23 8:D15:12 |
-| Q42 | password reset admin web | 1 | 3.00 | 5/5 | 1:D17:37 2:D13:34 3:D14:27 4:D18:22 5:D04:17 6:D04:17 7:D16:15 8:D15:14 |
-| Q43 | password reset user account admin portal credential change | 1 | 5.00 | 5/5 | 1:D17:51 2:D13:44 3:D14:44 4:D16:42 5:D18:40 6:D04:25 7:D04:25 8:D15:18 9:D03:1 10:D03:1 |
-| Q44 | password reset write-class web-check flow binding | 1 | 5.00 | 5/5 | 1:D13:45 2:D17:45 3:D18:39 4:D14:31 5:D15:25 6:D04:19 7:D04:19 8:D16:19 9:D07:3 10:D07:3 |
-| Q45 | pod health check readiness verify running ready conditions | 1 | 5.00 | 4/5 | 1:D15:25 2:D12:14 3:D12:14 4:D18:12 5:D02:11 6:D03:11 7:D06:11 8:D02:11 9:D03:11 10:D06:11 |
-| Q46 | pod keeps restarting CrashLoopBackOff | 1 | 5.00 | **3/5** | 1:D06:10 2:D06:10 3:D11:10 4:D11:10 5:D01:8 6:D02:8 7:D01:8 8:D02:8 9:D12:8 10:D12:8 |
-| Q47 | pod keeps restarting CrashLoopBackOff restart | 1 | 5.00 | **3/5** | 1:D11:11 2:D11:11 3:D06:10 4:D06:10 5:D01:8 6:D02:8 7:D01:8 8:D02:8 9:D12:8 10:D12:8 |
-| Q48 | reset acme-admin password | 2 | 5.00 | 5/5 | 1:D17:40 2:D14:33 3:D13:32 4:D18:25 5:D16:23 6:D15:21 7:D04:18 8:D04:18 |
-| Q49 | reset acme-admin password alice | 1 | 5.00 | 5/5 | 1:D17:41 2:D13:33 3:D14:33 4:D16:27 5:D18:27 6:D15:21 7:D04:18 8:D04:18 |
-| Q50 | reset alice acme-admin password | 2 | 5.00 | 5/5 | 1:D17:41 2:D13:33 3:D14:33 4:D16:27 5:D18:27 6:D15:21 7:D04:18 8:D04:18 |
-| Q51 | reset alice password | 1 | 5.00 | 4/5 | 1:D13:21 2:D17:21 3:D04:17 4:D04:17 5:D14:14 6:D16:7 7:D18:7 8:D15:1 |
-| Q52 | reset password admin portal credential | 1 | 3.00 | 4/5 | 1:D17:37 2:D13:34 3:D14:26 4:D04:21 5:D04:21 6:D18:20 7:D16:19 8:D15:16 |
-| Q53 | reset password admin portal user | 1 | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D04:21 8:D15:13 9:D07:1 10:D07:1 |
-| Q54 | reset password user admin | 1 | 5.00 | 5/5 | 1:D17:37 2:D13:32 3:D14:31 4:D18:25 5:D16:23 6:D04:17 7:D04:17 8:D15:13 9:D07:1 10:D07:1 |
-| Q55 | reset user password admin portal | **7** | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D04:21 8:D15:13 9:D07:1 10:D07:1 |
-| Q56 | restart pod | 2 | 5.00 | **3/5** | 1:D06:10 2:D06:10 3:D11:8 4:D11:8 5:D01:7 6:D02:7 7:D01:7 8:D02:7 9:D07:7 10:D12:7 |
-| Q57 | restart pod deployment workload | 1 | 5.00 | 4/5 | 1:D06:11 2:D06:11 3:D08:9 4:D11:9 5:D12:9 6:D08:9 7:D11:9 8:D12:9 9:D01:7 10:D02:7 |
-| Q58 † | restart pod scratch-restart-demo | 1 | 5.00 | **3/5** | 1:D06:10 2:D06:10 3:D11:9 4:D11:9 5:D01:7 6:D02:7 7:D01:7 8:D02:7 9:D07:7 10:D12:7 |
-| Q59 | scratch restart demo repeatedly restarting container | 1 | 5.00 | **3/5** | 1:D11:4 2:D11:4 3:D02:3 4:D02:3 5:D12:3 6:D17:3 7:D12:3 8:D01:2 9:D01:2 10:D07:2 |
-| Q60 † | synthetic demo deployment triage DemoTriage alert | 1 | 5.00 | **3/5** | 1:D08:8 2:D08:8 3:D12:4 4:D12:4 5:D04:1 6:D04:1 7:D07:1 8:D09:1 9:D10:1 10:D11:1 |
-| Q61 | user password reset web admin | 1 | 5.00 | 5/5 | 1:D17:44 2:D13:39 3:D14:34 4:D18:32 5:D16:25 6:D04:17 7:D04:17 8:D15:16 9:D07:1 10:D07:1 |
-| Q62 | web check confirmation gate HITL blocked or page not advancing | 1 | 5.00 | 5/5 | 1:D17:35 2:D13:33 3:D18:32 4:D15:28 5:D16:24 6:D14:18 7:D04:10 8:D04:10 9:D07:9 10:D07:9 |
-| Q63 | web check sign in inventory portal does not transition successful login troubleshooting | 1 | 5.00 | 5/5 | 1:D18:40 2:D17:38 3:D13:36 4:D15:28 5:D14:21 6:D16:18 7:D04:15 8:D04:15 9:D03:9 10:D03:9 |
+| Q01 † | DemoTriage synthetic demo deployment SPEC-015 triage | 1 | 5.00 | 5/5 | 1:D08:9 2:D16:6 3:D13:5 4:D03:3 5:D17:3 6:D09:2 7:D10:2 8:D12:2 9:D14:2 10:D04:1 |
+| Q02 † | DemoTriage synthetic demo deployment triage SPEC-015 | 1 | 5.00 | 5/5 | 1:D08:9 2:D16:6 3:D13:5 4:D03:3 5:D17:3 6:D09:2 7:D10:2 8:D12:2 9:D14:2 10:D04:1 |
+| Q03 | KubePodNotReady | **9** | 4.00 | 2/2 | 1:D12:6 2:D08:1 |
+| Q04 | KubePodNotReady alert | 2 | 4.00 | 2/2 | 1:D12:8 2:D08:1 |
+| Q05 † | ResetPasswordAdHoc password reset admin portal | 1 | 4.00 | 5/5 | 1:D17:32 2:D13:29 3:D14:25 4:D04:21 5:D18:15 6:D16:14 7:D15:11 |
+| Q06 † | ResetPasswordAdHoc reset password admin portal | 1 | 4.00 | 5/5 | 1:D17:32 2:D13:29 3:D14:25 4:D04:21 5:D18:15 6:D16:14 7:D15:11 |
+| Q07 † | ResetUserPassword admin portal | 2 | 3.00 | 5/5 | 1:D17:12 2:D14:11 3:D16:11 4:D15:10 5:D18:10 6:D13:9 7:D04:4 |
+| Q08 † | ResetUserPassword admin portal reset password | 1 | 3.00 | 5/5 | 1:D17:32 2:D13:29 3:D14:25 4:D04:21 5:D18:15 6:D16:14 7:D15:11 |
+| Q09 † | ResetUserPassword admin portal reset user password | 1 | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D15:13 8:D07:1 |
+| Q10 † | ResetUserPassword reset password user admin portal | 1 | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D15:13 8:D07:1 |
+| Q11 | acme | 1 | 5.00 | 5/5 | 1:D15:10 2:D16:10 3:D17:10 4:D18:10 5:D14:9 6:D13:5 7:D04:1 |
+| Q12 | acme-admin password reset alice | 1 | 5.00 | 5/5 | 1:D17:41 2:D13:33 3:D14:33 4:D16:27 5:D18:27 6:D15:21 7:D04:18 |
+| Q13 | acme-admin password reset runbook | 1 | 5.00 | 5/5 | 1:D14:40 2:D17:40 3:D13:37 4:D18:26 5:D16:23 6:D15:21 7:D04:18 |
+| Q14 | adhoc password reset admin panel | 1 | 4.00 | 5/5 | 1:D17:30 2:D13:29 3:D14:24 4:D04:17 5:D18:15 6:D16:13 7:D15:11 |
+| Q15 † | adhoc password reset resetpasswordadhoc admin panel | 1 | 4.00 | 5/5 | 1:D17:30 2:D13:29 3:D14:24 4:D04:17 5:D18:15 6:D16:13 7:D15:11 |
+| Q16 | admin panel password reset legacy | 1 | 3.00 | 5/5 | 1:D17:32 2:D13:29 3:D14:24 4:D04:17 5:D18:15 6:D16:13 7:D15:11 |
+| Q17 | admin portal password reset ad-hoc credential set | 1 | 5.00 | 5/5 | 1:D13:59 2:D17:42 3:D14:27 4:D16:26 5:D18:25 6:D04:21 7:D15:21 8:D01:1 |
+| Q18 | admin portal password reset user | 5 | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D15:13 8:D07:1 |
+| Q19 | admin portal password reset user account | 1 | 5.00 | 5/5 | 1:D14:42 2:D17:42 3:D13:34 4:D16:32 5:D18:32 6:D04:25 7:D15:13 8:D07:1 |
+| Q20 | admin portal reset password user | 1 | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D15:13 8:D07:1 |
+| Q21 | admin portal reset user password | 4 | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D15:13 8:D07:1 |
+| Q22 | admin portal user password reset | 2 | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D15:13 8:D07:1 |
+| Q23 | admin portal user password reset web check | 1 | 5.00 | 5/5 | 1:D17:49 2:D13:44 3:D18:42 4:D14:35 5:D16:27 6:D15:26 7:D04:21 8:D07:4 9:D03:2 10:D10:2 |
+| Q24 | admin portal web check | 1 | 5.00 | 5/5 | 1:D18:27 2:D15:23 3:D17:22 4:D13:19 5:D14:14 6:D16:14 7:D04:4 8:D07:3 9:D03:2 10:D10:2 |
+| Q25 | admin portal web user management | 1 | 5.00 | 5/5 | 1:D18:29 2:D17:28 3:D16:25 4:D14:23 5:D13:21 6:D15:15 7:D04:4 8:D07:1 |
+| Q26 | admin portal write action user management approval | 1 | 5.00 | 5/5 | 1:D13:39 2:D16:38 3:D17:36 4:D14:33 5:D18:29 6:D15:14 7:D04:10 8:D07:1 |
+| Q27 | argo workflows health check controller workflow | 1 | 5.00 | 5/5 | 1:D15:20 2:D18:10 3:D12:5 4:D03:3 5:D07:3 6:D13:3 7:D17:3 8:D01:2 9:D05:2 10:D10:2 |
+| Q28 | argo-cd controller restart pod health namespace argocd | 1 | 5.00 | 5/5 | 1:D12:15 2:D15:14 3:D02:12 4:D01:11 5:D06:11 6:D03:10 7:D05:10 8:D11:10 9:D07:9 10:D08:4 |
+| Q29 | argocd application-server repo-server deployment pod | 1 | 5.00 | 5/5 | 1:D06:10 2:D11:10 3:D01:9 4:D12:9 5:D02:8 6:D08:8 7:D07:7 8:D03:6 9:D05:6 10:D15:6 |
+| Q30 | argocd argocd-server repo-server restart crashloop | 1 | 5.00 | 5/5 | 1:D18:5 2:D17:3 3:D01:2 4:D16:2 5:D04:1 6:D10:1 7:D11:1 8:D13:1 9:D14:1 10:D15:1 |
+| Q31 | argocd health check | **7** | 5.00 | 5/5 | 1:D15:20 2:D18:10 3:D03:3 4:D07:3 5:D13:3 6:D17:3 7:D01:2 8:D10:2 9:D12:2 10:D02:1 |
+| Q32 | argocd restarting pods repo-server crash troubleshooting | 1 | 5.00 | 5/5 | 1:D02:7 2:D03:7 3:D01:6 4:D08:6 5:D10:4 6:D09:3 7:D13:3 8:D05:2 9:D06:2 10:D18:2 |
+| Q33 † | demo deployment triage DemoTriage warning | 1 | 5.00 | 5/5 | 1:D08:8 2:D04:2 3:D12:2 4:D07:1 5:D09:1 6:D10:1 7:D11:1 8:D14:1 9:D16:1 |
+| Q34 † | demo deployment triage DemoTriage warning deployment not ready | 1 | 5.00 | 5/5 | 1:D08:19 2:D04:8 3:D12:7 4:D10:6 5:D14:6 6:D16:6 7:D13:5 8:D15:5 9:D17:5 10:D18:5 |
+| Q35 | demo deployment triage warning | 1 | 5.00 | 5/5 | 1:D08:8 2:D04:2 3:D12:2 4:D07:1 5:D09:1 6:D10:1 7:D11:1 8:D14:1 9:D16:1 |
+| Q36 | deployment needs triage warning pod not ready demo | 1 | 5.00 | 5/5 | 1:D08:13 2:D12:13 3:D06:12 4:D15:12 5:D02:10 6:D07:10 7:D03:9 8:D17:9 9:D04:8 10:D05:8 |
+| Q37 | deployment triage warning pod not ready | 1 | 5.00 | 5/5 | 1:D08:13 2:D12:13 3:D06:12 4:D02:10 5:D07:10 6:D03:9 7:D05:8 8:D11:8 9:D15:8 10:D01:7 |
+| Q38 † | inventory portal sign in failed browser-check-target svc-check credential set | 1 | 5.00 | 5/5 | 1:D18:48 2:D15:44 3:D17:41 4:D13:36 5:D16:26 6:D14:21 7:D04:10 8:D03:8 9:D07:7 10:D10:4 |
+| Q39 | lock account acme-admin disable user | 1 | 5.00 | 5/5 | 1:D16:48 2:D14:41 3:D18:39 4:D17:30 5:D15:22 6:D13:17 7:D04:5 8:D07:1 |
+| Q40 | password reset | 1 | 5.00 | 5/5 | 1:D13:20 2:D17:20 3:D04:17 4:D14:14 5:D18:5 6:D16:3 7:D15:1 |
+| Q41 | password reset account recovery admin console | 1 | 5.00 | 5/5 | 1:D17:43 2:D14:38 3:D13:32 4:D18:27 5:D16:24 6:D04:23 7:D15:12 |
+| Q42 | password reset admin web | 1 | 3.00 | 5/5 | 1:D17:37 2:D13:34 3:D14:27 4:D18:22 5:D04:17 6:D16:15 7:D15:14 |
+| Q43 | password reset user account admin portal credential change | 1 | 5.00 | 5/5 | 1:D17:51 2:D13:44 3:D14:44 4:D16:42 5:D18:40 6:D04:25 7:D15:18 8:D03:1 9:D07:1 |
+| Q44 | password reset write-class web-check flow binding | 1 | 5.00 | 5/5 | 1:D13:45 2:D17:45 3:D18:39 4:D14:31 5:D15:25 6:D04:19 7:D16:19 8:D07:3 9:D03:2 10:D10:2 |
+| Q45 | pod health check readiness verify running ready conditions | 1 | 5.00 | 5/5 | 1:D15:25 2:D12:14 3:D18:12 4:D02:11 5:D03:11 6:D06:11 7:D07:11 8:D01:9 9:D11:8 10:D05:7 |
+| Q46 | pod keeps restarting CrashLoopBackOff | 1 | 5.00 | 5/5 | 1:D06:10 2:D11:10 3:D01:8 4:D02:8 5:D12:8 6:D07:7 7:D05:6 8:D03:5 9:D15:4 10:D17:3 |
+| Q47 | pod keeps restarting CrashLoopBackOff restart | 1 | 5.00 | 5/5 | 1:D11:11 2:D06:10 3:D01:8 4:D02:8 5:D12:8 6:D07:7 7:D05:6 8:D17:6 9:D03:5 10:D15:5 |
+| Q48 | reset acme-admin password | 2 | 5.00 | 5/5 | 1:D17:40 2:D14:33 3:D13:32 4:D18:25 5:D16:23 6:D15:21 7:D04:18 |
+| Q49 | reset acme-admin password alice | 1 | 5.00 | 5/5 | 1:D17:41 2:D13:33 3:D14:33 4:D16:27 5:D18:27 6:D15:21 7:D04:18 |
+| Q50 | reset alice acme-admin password | 2 | 5.00 | 5/5 | 1:D17:41 2:D13:33 3:D14:33 4:D16:27 5:D18:27 6:D15:21 7:D04:18 |
+| Q51 | reset alice password | 1 | 5.00 | 5/5 | 1:D13:21 2:D17:21 3:D04:17 4:D14:14 5:D16:7 6:D18:7 7:D15:1 |
+| Q52 | reset password admin portal credential | 1 | 3.00 | 5/5 | 1:D17:37 2:D13:34 3:D14:26 4:D04:21 5:D18:20 6:D16:19 7:D15:16 |
+| Q53 | reset password admin portal user | 1 | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D15:13 8:D07:1 |
+| Q54 | reset password user admin | 1 | 5.00 | 5/5 | 1:D17:37 2:D13:32 3:D14:31 4:D18:25 5:D16:23 6:D04:17 7:D15:13 8:D07:1 |
+| Q55 | reset user password admin portal | **7** | 5.00 | 5/5 | 1:D17:39 2:D13:34 3:D14:32 4:D18:25 5:D16:24 6:D04:21 7:D15:13 8:D07:1 |
+| Q56 | restart pod | 2 | 5.00 | 5/5 | 1:D06:10 2:D11:8 3:D01:7 4:D02:7 5:D07:7 6:D12:7 7:D05:6 8:D03:5 9:D15:4 10:D17:4 |
+| Q57 | restart pod deployment workload | 1 | 5.00 | 5/5 | 1:D06:11 2:D08:9 3:D11:9 4:D12:9 5:D01:7 6:D02:7 7:D07:7 8:D05:6 9:D03:5 10:D15:4 |
+| Q58 † | restart pod scratch-restart-demo | 1 | 5.00 | 5/5 | 1:D06:10 2:D11:9 3:D01:7 4:D02:7 5:D07:7 6:D12:7 7:D17:7 8:D05:6 9:D03:5 10:D15:5 |
+| Q59 | scratch restart demo repeatedly restarting container | 1 | 5.00 | 5/5 | 1:D11:4 2:D02:3 3:D12:3 4:D17:3 5:D01:2 6:D07:2 7:D10:2 8:D14:2 9:D04:1 10:D08:1 |
+| Q60 † | synthetic demo deployment triage DemoTriage alert | 1 | 5.00 | 5/5 | 1:D08:8 2:D12:4 3:D04:1 4:D07:1 5:D09:1 6:D10:1 7:D11:1 8:D14:1 9:D16:1 |
+| Q61 | user password reset web admin | 1 | 5.00 | 5/5 | 1:D17:44 2:D13:39 3:D14:34 4:D18:32 5:D16:25 6:D04:17 7:D15:16 8:D07:1 |
+| Q62 | web check confirmation gate HITL blocked or page not advancing | 1 | 5.00 | 5/5 | 1:D17:35 2:D13:33 3:D18:32 4:D15:28 5:D16:24 6:D14:18 7:D04:10 8:D07:9 9:D05:8 10:D08:7 |
+| Q63 | web check sign in inventory portal does not transition successful login troubleshooting | 1 | 5.00 | 5/5 | 1:D18:40 2:D17:38 3:D13:36 4:D15:28 5:D14:21 6:D16:18 7:D04:15 8:D03:9 9:D05:8 10:D07:7 |
 
-Pool summary:
+Pool summary. The two columns are the same 63 queries scored over the two corpora:
 
-| Measure | Value |
-|---|---|
-| Queries | **63** (96 recorded searches) |
-| Queries returning zero hits against the current corpus | **0** |
-| Queries with duplicate crowding in the top 5 | **32 of 63 (50.8%)**; stratum B only: **22 of 49 (44.9%)** |
-| Pool depth reached | 10 hits: 43 queries · 8 hits: 18 · 4 hits: 2 |
-| Stratum A (identifier-bearing, `†`) | **14** |
-| Stratum B (discriminating) | **49** |
+| Measure | 2026-09-30 (30 rows) | 2026-10-01 (18 rows) |
+|---|---|---|
+| Queries | **63** (96 recorded searches) | **63** (unchanged) |
+| Queries returning zero hits | **0** | **0** |
+| Queries with duplicate crowding in the top 5 | **32 of 63 (50.8%)**; stratum B only: **22 of 49 (44.9%)** | **0 of 63**; stratum B: **0 of 49** |
+| Distinct documents across all 63 top-5 windows | 265 of a possible 315 | **309 of 315** |
+| Pool depth reached | 10 hits: 43 · 8: 18 · 4: 2 | 10 hits: 24 · 9: 4 · 8: 15 · 7: 18 · 2: 2 |
+| Pool entries, all queries summed | 582 | **526** (−56, all duplicates) |
+| Queries whose top-1 document changed | — | **0 of 63** |
+| Queries gaining candidates at depth 10 | — | **28** (+88 slots) |
+| Stratum A (identifier-bearing, `†`) | **14** | **14** |
+| Stratum B (discriminating) | **49** | **49** |
 
-**`n` and `avg hits` are historical audit values; the pool is today's.** They
-disagree where the catalog moved — Q07 recorded 3 hits at search time but has 8
-candidates now, and historical results for Q31 included
-`platform-runbooks/web-checks/inventoryhealth`, which no longer exists. This is why
-the pool was regenerated with the real scorer rather than reusing the recorded
-`skill_ids`: labels must attach to the catalog they will be scored against.
+The 6 top-5 slots short of 315 are Q03 and Q04, which return 2 hits each (§2.2) —
+not crowding. Every slot a hit exists to fill now holds a distinct document.
+
+**`n` and `avg hits` are historical audit values from the 30-row era; the pool is
+the 2026-10-01 corpus.** They are carried forward unchanged so the traffic weighting
+survives the regeneration, and they now disagree with the pool by construction: Q07
+recorded 3 hits at search time and has 7 candidates today, Q03 recorded 4 and has 2
+because its duplicate rows are gone, and historical results for Q31 included
+`platform-runbooks/web-checks/inventoryhealth`, which no longer exists. Read `n` as
+"how often operators asked" and `avg hits` as what the 30-row corpus returned then —
+never as a property of the current corpus. This is why the pool is regenerated with
+the real scorer rather than replaying the recorded `skill_ids`: labels must attach to
+the catalog they will be scored against.
 
 ## 6. Labeling protocol
 
@@ -376,8 +503,11 @@ genuine near-ties (Q11 `acme` scores `D15`/`D16`/`D17`/`D18` all at 10.0).
 
 ### 6.3 Rules
 
-1. **Label documents (`D01`–`D18`), never corpus rows.** Duplicate rows are one
-   document; grading both double-counts and launders the §2.1 defect into the metric.
+1. **Label documents (`D01`–`D18`), never corpus rows.** Each code maps to one row
+   today, but the rule outlives the current configuration: `rank()` does no content
+   de-duplication, so re-registering overlapping sources would put the same runbook
+   back into two slots, and grading rows would double-count it and launder the §2.1
+   defect into the metric.
 2. **Label blind to the ranking.** Judge each (query, document) pair from the
    document's own content, without looking at the pool's ranks or scores. Anchoring
    on the current top-1 is the fastest way to measure nothing.
@@ -405,7 +535,7 @@ Copy this block per labeler. One row per (query, document) pair judged; omit pai
 graded 0 only if the labeler confirms they reviewed the full catalogue.
 
 ```
-Labeler: ______________________   Date: __________   Corpus snapshot: 2026-09-30
+Labeler: ______________________   Date: __________   Corpus snapshot: 2026-10-01 (18 rows)
 
 | Query | Doc | Grade (0/1/2) | Note (required for grade 2 on a negative control) |
 |-------|-----|---------------|----------------------------------------------------|
@@ -435,8 +565,12 @@ with two additions this extraction forced:
 **Decision rule (pre-registered — memo §7.3, extended).** Candidates are evaluated
 in cost order, and a cheaper candidate that satisfies the rule ends the exercise:
 
-1. **De-duplicate only** (collapse identical content in `rank()`, and/or fix the
-   overlapping `SKILLS_SOURCES` registration). Measure.
+1. **De-duplicate only.** *Half done.* The overlapping `SKILLS_SOURCES` registration
+   was removed from the dev overlay on 2026-10-01 (§2.1), so the dev baseline is now
+   crowding-free. The **product** half is not done: `rank()` still collapses nothing
+   and `parse_sources` still accepts two sources covering the same files. Implement
+   content-level de-duplication in the retrieval path and/or an ingestion-time
+   overlap rejection. Measure.
 2. **+ tokenizer fixes** (CamelCase-splitting tokenization; stemming or trigram
    tolerance so `crashloop` reaches `crashloopbackoff`; a relevance-aware tie-break
    replacing alphabetical `skill_id`). Measure.
@@ -453,18 +587,27 @@ result, not a failure.
 This document authorizes exactly two activities: **labeling** (a human task) and
 **offline scoring** against the pinned snapshot (read-only, no cluster writes, no
 product-code changes). It authorizes no change to `scoring.py`, `skill_store.py`,
-`SKILLS_SOURCES`, the Postgres image, or any contract; no embedding run; no
-extension install; no ADR; and no spec. The memo's gate sequence still governs.
+the Postgres image, or any contract; no embedding run; no extension install; no ADR;
+and no spec. The memo's gate sequence still governs.
 
-Two cleanups surfaced by the extraction and **not** performed, because both are
-mutations:
+**Two cleanups the extraction surfaced — both since performed under separate
+operator authorization, not under this document.** The 2026-09-30 boundary
+deliberately declined them because both are mutations. The operator authorized both
+on 2026-10-01, so `SKILLS_SOURCES` is no longer on the do-not-touch list above;
+this is recorded here to keep the provenance straight rather than to retrofit
+authority onto a measurement artifact.
 
 - `_idx_probe` — a leftover table (`title`, `tags`, `body` + a GIN index on
-  `to_tsvector('simple', title)`) in the dev `skills` database, from an earlier
-  index investigation. Harmless but cruft; safe to drop.
-- The overlapping `SKILLS_SOURCES` registration (§2.1). Fixing it is a GitOps
-  change with retrieval consequences and belongs in a spec-or-not decision made
-  *after* the labels exist — not before.
+  `to_tsvector('simple', title)`) in the dev `skills` database, from an earlier index
+  investigation. Confirmed to hold 0 rows and to be referenced by nothing in the
+  repository, then **dropped 2026-10-01**. A sweep of all four dev databases found no
+  other copy; `skills` and its three indexes (`skills_pkey`, `idx_skills_search`,
+  `idx_skills_source_id`) were verified intact afterwards.
+- The overlapping `SKILLS_SOURCES` registration (§2.1) — **resolved 2026-10-01** by
+  dropping the two local ConfigMap sources and making the `platform-skills` git
+  source the only route to those trees. Still open: the product-side de-duplication
+  and overlap rejection in §8 step 1, which remains a spec-or-not decision belonging
+  *after* the labels exist.
 
 ## Changelog
 
@@ -472,3 +615,4 @@ mutations:
 |---|---|
 | 2026-09-30 | Created. Instantiates memo §7.1: 18-document catalogue, 63-query pool at depth 10 reproduced with the real scorer (validated against audit `skill_ids`, with two catalog-drift mismatches documented), strata A/B/C, grading scale, label sheet, and a cost-ordered pre-registered decision rule. Records three measured lexical defects — duplicate-source crowding (32/63 queries), opaque CamelCase titles, and confidently scored irrelevant top-1s — none of which requires a vector store to fix. Flags the correction owed to memo §2.2 on query shape. |
 | 2026-10-01 | §2.4 correction **applied** to the memo: its §2.2 query-shape claim is rewritten (masking hypothesis untested, not disproved — 14 of 63 queries carry a target identifier), a new memo §2.3 carries the three measured defects, §4.4 gains the two cheapest fixes, §7.2 gains zero-relevant rate and distinct-document metric variants, §1 and §10 are re-ordered cost-first, and the memo is retitled for an 18-document corpus. The delivery-roadmap backlog row is aligned to the same evidence. |
+| 2026-10-01 (2) | **Regenerated against the de-duplicated 18-row corpus** after the operator authorized both §9 cleanups. `_idx_probe` dropped; the two local ConfigMap skill sources removed so `platform-skills` (git) is the only route to those trees. §2.1 rewritten as a resolved defect with a before/after table (crowding **32 of 63 → 0 of 63**; distinct documents in top-5 windows 265 → 309 of 315; pool entries 582 → 526) and the verified claim that the change was purely subtractive — **no top-1 changed** and the old de-duplicated pool is an exact prefix of the new one for all 63 queries. §2.2 gains the Q03 paraphrase measurements and records that defect 2 survives (Q46 still ranks `D06` above `D11` on an alphabetical tie-break at 10.0). §2.3 records that defect 3 is unchanged. §3 replaces the now-unusable audit cross-check with a three-part validation and warns that live searches append audit events. §4 collapses to one row per code. §5 pool regenerated; summary re-tabulated as two corpora. §8 step 1 marked half-done — `rank()` still de-duplicates nothing and `parse_sources` still accepts overlapping coverage. |

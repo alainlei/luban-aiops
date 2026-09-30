@@ -56,19 +56,16 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 4
           volumeMounts:
-            # Sample skill sources (read-only ConfigMap mounts). Local sources
-            # are ingested straight from these paths.
-            - name: skills-sre-alerting
-              mountPath: /skills/sre-alerting
-              readOnly: true
-            - name: skills-platform-runbooks
-              mountPath: /skills/platform-runbooks
-              readOnly: true
             # Tutorial sample skills (SPEC-050 R-11): an optional ConfigMap
             # populated out-of-band by `make deploy-samples`, not by the base
             # overlay. Absent by default so the platform deploys cleanly with
             # no samples installed; the `samples` local source ingests
             # whatever lands here.
+            #
+            # Platform runbooks and SRE alerts are deliberately NOT mounted:
+            # they arrive through the `platform-skills` git source, and a
+            # ConfigMap mount of the same files used to ingest every document
+            # a second time under a different source-prefixed skill_id.
             - name: skills-samples
               mountPath: /skills/samples
               readOnly: true
@@ -77,38 +74,6 @@ spec:
             - name: skills-data
               mountPath: /var/lib/skills-hub
       volumes:
-        - name: skills-sre-alerting
-          configMap:
-            name: skills-sre-alerting
-            items:
-              - key: alerts-KubePodNotReady.md
-                path: alerts/KubePodNotReady.md
-              - key: alerts-KubePodCrashLooping.md
-                path: alerts/KubePodCrashLooping.md
-              - key: alerts-KubeContainerWaiting.md
-                path: alerts/KubeContainerWaiting.md
-              - key: alerts-KubeDeploymentReplicasMismatch.md
-                path: alerts/KubeDeploymentReplicasMismatch.md
-              - key: alerts-KubeNodeNotReady.md
-                path: alerts/KubeNodeNotReady.md
-              - key: alerts-KubeMemoryPressure.md
-                path: alerts/KubeMemoryPressure.md
-        - name: skills-platform-runbooks
-          configMap:
-            name: skills-platform-runbooks
-            items:
-              - key: guides-DebugPods.md
-                path: guides/DebugPods.md
-              - key: guides-GeneratePassword.md
-                path: guides/GeneratePassword.md
-              - key: guides-ImagePullFailures.md
-                path: guides/ImagePullFailures.md
-              - key: guides-DebugServices.md
-                path: guides/DebugServices.md
-              - key: guides-CrashLoopsAndOOM.md
-                path: guides/CrashLoopsAndOOM.md
-              - key: guides-PodSchedulingFailures.md
-                path: guides/PodSchedulingFailures.md
         # Tutorial sample skills (SPEC-050 R-11): optional ConfigMap created
         # out-of-band by `make deploy-samples`. Keys mount flat (no `items`)
         # so the base stays sample-agnostic; absent by default, which leaves
