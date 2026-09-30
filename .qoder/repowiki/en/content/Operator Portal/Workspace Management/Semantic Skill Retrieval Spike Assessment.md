@@ -3,11 +3,20 @@
 <cite>
 **Referenced Files in This Document**
 - [semantic-skill-retrieval-spike.md](file://docs/workspace/semantic-skill-retrieval-spike.md)
+- [semantic-skill-retrieval-eval-set.md](file://docs/workspace/semantic-skill-retrieval-eval-set.md)
 - [scoring.py](file://products/skills-hub/src/skills_hub/services/scoring.py)
 - [skill_store.py](file://products/skills-hub/src/skills_hub/services/skill_store.py)
 - [skills_connector.py](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py)
 - [skill.schema.json](file://shared/shared-contracts/schemas/skill.schema.json)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Corrected query-shape masking hypothesis status from "not supported" to "untested"
+- Added detailed documentation of three measured lexical baseline defects
+- Revised recommendations to prioritize cost-first fixes before vector embeddings
+- Updated evaluation metrics to include zero-relevant rate and distinct-document variants
+- Enhanced section structure to reflect the new evidence-based approach
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -22,12 +31,15 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document summarizes the repository’s semantic skill retrieval spike assessment and maps it to the actual code that implements skills search today. The spike is an evaluation memo, not an implementation: it recommends measuring the existing lexical baseline before building any vector or embedding path, and it lays out substrate options, schema posture, provider choices, gating posture, and go/no-go gates.
+This document summarizes the repository's semantic skill retrieval spike assessment and maps it to the actual code that implements skills search today. The spike is an evaluation memo, not an implementation: it recommends measuring the existing lexical baseline before building any vector or embedding path, and it lays out substrate options, schema posture, provider choices, gating posture, and go/no-go gates.
 
-The assessment’s central finding is that the live symptom is not “queries return nothing” — all 96 recorded searches returned at least one hit against a default limit of five — but rather ordering quality inside a saturated top-5 result set. It therefore frames the decision as a measurement-first exercise with explicit metrics, a reviewed evaluation set, and a null outcome if lexical is sufficient.
+The assessment's central finding has been significantly refined based on measured evidence: the live symptom is not "queries return nothing" — all 96 recorded searches returned at least one hit against a default limit of five — but rather ordering quality inside a saturated top-5 result set. More importantly, three concrete defects have been identified in the lexical baseline that may be fixable without any vector infrastructure.
+
+**Updated** The hypothesis about query-shape masking has been corrected from "not supported" to "untested" — the audit trail cannot discriminate between natural phrasing and keyword stuffing, so this remains an open question requiring paraphrase testing.
 
 **Section sources**
 - [semantic-skill-retrieval-spike.md:1-41](file://docs/workspace/semantic-skill-retrieval-spike.md#L1-L41)
+- [semantic-skill-retrieval-spike.md:105-131](file://docs/workspace/semantic-skill-retrieval-spike.md#L105-L131)
 
 ## Project Structure
 The relevant code spans three products and one shared contract:
@@ -35,7 +47,7 @@ The relevant code spans three products and one shared contract:
 - `products/skills-hub` — skills catalog ingestion, storage, scoring, and retrieval API.
 - `products/tool-gateway` — read-only tool surface (`skills.search`, `skills.get`, `skills.list`) that calls skills-hub over HTTP.
 - `shared/shared-contracts` — canonical JSON Schema for the `Skill` envelope used by ingestion, persistence, and responses.
-- `docs/workspace` — the spike memo itself.
+- `docs/workspace` — the spike memo itself and the evaluation set artifact.
 
 ```mermaid
 graph TB
@@ -135,6 +147,50 @@ Sum --> ReturnScore["Return total score"]
 - [scoring.py:20-52](file://products/skills-hub/src/skills_hub/services/scoring.py#L20-L52)
 - [scoring.py:55-75](file://products/skills-hub/src/skills_hub/services/scoring.py#L55-L75)
 - [scoring.py:78-96](file://products/skills-hub/src/skills_hub/services/scoring.py#L78-L96)
+
+### Measured Lexical Baseline Defects
+
+**Updated** Building the evaluation set revealed three concrete, measurable defects in the current lexical system that are fixable without vector embeddings:
+
+#### Defect 1: Corpus Duplication
+The corpus contains 30 rows but only 18 distinct documents due to overlapping source registration. A git source and two ConfigMap sources ingest the same files under different `source_id`s, causing duplicate content to occupy multiple result slots.
+
+**Impact**: 32 of 63 queries (50.8%) return fewer distinct documents than result slots. The worst case is Q03 `KubePodNotReady` which returns 4 hits containing only 2 distinct documents.
+
+#### Defect 2: CamelCase Tokenization  
+The tokenizer treats `KubePodCrashLooping` as a single opaque token `['kubepodcrashlooping']`, making sub-word matching impossible. This prevents queries like `crashloop` from matching the `CrashLoopBackOff` tag.
+
+**Impact**: For Q46 `pod keeps restarting CrashLoopBackOff`, the exactly-right document ranks 3rd, tied at 10.0 with a scheduling-failures guide that wins on alphabetical tie-break alone.
+
+#### Defect 3: Zero-Hit Reliability Misleading
+A non-zero `result_count` does not indicate useful results. Q31 `argocd health check` scores 20.0 on "Check ACME Admin Service Health" despite no ArgoCD document existing in the corpus.
+
+**Impact**: The metric that actually matters is **zero-relevant rate** — the fraction of queries whose entire top-5 holds no grade ≥1 document — not zero-hit rate.
+
+```mermaid
+flowchart TD
+Defect1["Corpus Duplication<br/>30 rows → 18 docs"] --> Impact1["50.8% of queries<br/>have duplicate crowding"]
+Defect2["CamelCase Tokenization<br/>Single opaque tokens"] --> Impact2["Sub-word matching<br/>impossible"]
+Defect3["Misleading Zero-Hits<br/>High scores on irrelevant docs"] --> Impact3["Need zero-relevant<br/>rate metric"]
+```
+
+**Diagram sources**
+- [semantic-skill-retrieval-spike.md:133-146](file://docs/workspace/semantic-skill-retrieval-spike.md#L133-L146)
+- [semantic-skill-retrieval-eval-set.md:47-133](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L47-L133)
+
+**Section sources**
+- [semantic-skill-retrieval-spike.md:133-146](file://docs/workspace/semantic-skill-retrieval-spike.md#L133-L146)
+- [semantic-skill-retrieval-eval-set.md:47-133](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L47-L133)
+
+### Query Shape Hypothesis Correction
+
+**Updated** The query-shape masking hypothesis has been corrected from "not supported" to "untested." The audit trail shows 14 of 63 queries already contain the identifier of the document they were seeking, and many others are visibly keyword-enumerated. A 5-word mode is consistent with both natural phrasing and keyword stuffing.
+
+The correct statement is that the hypothesis is **untested, and this pool cannot test it** — which is why the paraphrase stratum in the evaluation set is mandatory rather than optional.
+
+**Section sources**
+- [semantic-skill-retrieval-spike.md:114-127](file://docs/workspace/semantic-skill-retrieval-spike.md#L114-L127)
+- [semantic-skill-retrieval-eval-set.md:135-154](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L135-L154)
 
 ### Skill Store Backends
 Both backends delegate ranking to `scoring.rank`, which is the invariant that keeps their ordering byte-identical.
@@ -306,7 +362,7 @@ The spike proposes concrete triggers for promoting to pgvector: more than 2,000 
 When diagnosing retrieval issues, distinguish between three layers:
 
 1. **Tool-gateway transport failures**: Unreachable skills-hub, non-200 responses, or malformed payloads map to structured tool errors. Check whether the error is `TOOL_EXECUTION_ERROR`, `SKILL_NOT_FOUND`, or an upstream-specific code/message.
-2. **Lexical matching gaps**: Paraphrases such as “pod won’t start” vs a runbook titled `KubePodNotReady` share no alphanumeric token and score zero. The spike identifies this as the hypothesised failure mode, but notes that it has not been observed in the audit trail.
+2. **Lexical matching gaps**: Paraphrases such as "pod won't start" vs a runbook titled `KubePodNotReady` share no alphanumeric token and score zero. The spike identifies this as the hypothesised failure mode, but notes that it has not been observed in the audit trail.
 3. **Ordering quality**: Even when hits exist, the wrong runbook may appear first. This is measured by precision@5, MRR, nDCG, and rank stability, not by result count.
 
 Operational checks supported by the current code and the spike:
@@ -325,9 +381,15 @@ Operational checks supported by the current code and the spike:
 - [semantic-skill-retrieval-spike.md:561-582](file://docs/workspace/semantic-skill-retrieval-spike.md#L561-L582)
 
 ## Conclusion
-The spike concludes that the repository’s skills retrieval is currently a well-scoped lexical system with deterministic scoring, shared ranking, and clear boundaries between the tool-gateway and skills-hub. Its main recommendation is to measure before building: extract the existing audit queries, have operations label relevance, establish a lexical baseline, and only then decide whether Option D (improved lexical ranking, alias mapping, or trigram tolerance) or Option C (sidecar vector array with in-process exact cosine) is justified.
+The spike concludes that the repository's skills retrieval is currently a well-scoped lexical system with deterministic scoring, shared ranking, and clear boundaries between the tool-gateway and skills-hub. Its main recommendation has been strengthened by measured evidence: measure before building, and prioritize cost-first fixes.
 
-If semantics proceed, the memo recommends a hybrid design that preserves the existing `score` meaning, unions semantic candidates before ranking, applies an explainable fusion rule, and keeps feature flags default-off with fail-open fallback to lexical. It also warns against leaking vectors into public contracts, audit trails, or readiness checks.
+**Updated** Three concrete defects have been identified in the lexical baseline — corpus duplication, CamelCase tokenization opacity, and misleading zero-hit reliability — that are fixable without any vector infrastructure. The revised recommendation prioritizes these cheaper fixes before considering embeddings:
+
+1. **De-duplicate and fix the tokenizer** — no model, no vector, no new dependency, no image change.
+2. **Then the heavier lexical options** — cover-density ranking, trigram tolerance, curated alias mapping.
+3. **Only then semantics** — if proven necessary, the cheapest substrate is sidecar embedding table over `real[]` with in-process exact cosine.
+
+If any cheaper step closes the measured gap, everything below is cancelled and the backlog row closes — a null result is a publishable outcome, not a failure.
 
 **Section sources**
 - [semantic-skill-retrieval-spike.md:1-41](file://docs/workspace/semantic-skill-retrieval-spike.md#L1-L41)
@@ -352,9 +414,10 @@ If semantics proceed, the memo recommends a hybrid design that preserves the exi
 | Metric | Definition | Why it matters here |
 |---|---|---|
 | Zero-hit rate | Fraction of queries returning zero hits | Already 0/96 live; not the primary problem. |
+| **Zero-relevant rate** *(new)* | Fraction of queries whose entire top-5 holds no grade ≥1 document | **The metric that actually matters.** §2.3 defect 3 shows zero-hit cannot detect a useless answer. |
 | Precision@5 | Relevant hits within top 5 | Top-5 is saturated; ordering is what operators experience. |
 | Recall@5 / Recall@10 | Relevant hits found within k | Classic vector-store claim; must be measured, not asserted. |
-| MRR | Mean reciprocal rank of first relevant hit | Single-number summary of “is the right runbook first”. |
+| MRR | Mean reciprocal rank of first relevant hit | Single-number summary of "is the right runbook first". |
 | nDCG@10 | Graded relevance, position-discounted | Only useful if labels are graded. |
 | Rank stability | Fraction of queries whose top-1 changes vs baseline | Prevents reshuffling already-correct answers. |
 | Search latency p50/p95 | End-to-end route time | Must stay under the 10.0 s tool timeout. |
@@ -363,3 +426,17 @@ If semantics proceed, the memo recommends a hybrid design that preserves the exi
 
 **Section sources**
 - [semantic-skill-retrieval-spike.md:474-489](file://docs/workspace/semantic-skill-retrieval-spike.md#L474-L489)
+- [semantic-skill-retrieval-eval-set.md:419-434](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L419-L434)
+
+### Appendix C: Cost-Ordered Fix Priority
+
+**Updated** The evaluation decision rule now prioritizes fixes in cost order:
+
+1. **De-duplicate only** — collapse identical content in `rank()`, fix overlapping `SKILLS_SOURCES` registration.
+2. **Tokenizer fixes** — CamelCase-splitting tokenization, stemming/trigram tolerance, relevance-aware tie-break.
+3. **Hybrid/vector retrieval** — only if steps 1-2 don't close the measured gap.
+
+Promote to a spec **only if** step 3 beats the best of steps 1-2 on Precision@5 or MRR outside the noise band, does not regress rank stability, holds p95 inside the tool timeout, and fails open to lexical. If step 1 or 2 closes the gap, **no embedding work is authorized**.
+
+**Section sources**
+- [semantic-skill-retrieval-eval-set.md:435-449](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L435-L449)
