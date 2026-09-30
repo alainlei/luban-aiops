@@ -1,7 +1,8 @@
-# Spike: Semantic Skill Retrieval — pgvector vs. the Lexical Baseline on a 30-Document Corpus
+# Spike: Semantic Skill Retrieval — pgvector vs. the Lexical Baseline on an 18-Document Corpus
 
 Status: assessment — recommends **measure before building**. **No implementation, embedding run, extension install, image swap, ADR, or spec is authorized by this memo.**
-Date: 2026-09-30
+Date: 2026-09-30 · Revised: 2026-10-01 (§2.3 measured defects; §2.2 query-shape claim corrected; §4.4, §7, §10 re-ordered by cost)
+Evaluation set: [semantic-skill-retrieval-eval-set.md](./semantic-skill-retrieval-eval-set.md) — built, awaiting operations' relevance labels
 Roadmap home: [Exploration Backlog](../agentic-aiops-platform/delivery-roadmap.md#exploration-backlog), "Semantic (vector) skill retrieval"
 Evidence baseline: repository at v0.45.0 (`3c87723`); static read of the skills-hub retrieval path plus **read-only** queries against the live dev cluster (`postgres-0` `skills` and `audit` databases, the `llm-hosting/ollama` deployment) and the pinned agentscope 2.0.8 venv. Nothing was installed, embedded, deployed, mutated, or committed.
 
@@ -19,7 +20,9 @@ measurement, not an implementation.** Three verified findings reshape it:
    against the default `limit=5` (§2.2). The top-5 is *saturated*. That makes the
    live risk **ranking quality inside a full result set** (precision@k, MRR), not
    "nothing comes back". A vector store is primarily a recall instrument, and the
-   measured symptom is not a recall failure.
+   measured symptom is not a recall failure. **Update (§2.3): that ranking risk is
+   no longer abstract** — building the evaluation set measured three concrete
+   causes, and none of them needs a vector store.
 2. **`pgvector` is not a zero-infrastructure change.** The deployed
    `postgres:16-alpine` image offers **0 of 61** available extensions matching
    `%vector%`, so `CREATE EXTENSION vector` would fail today; enabling it means an
@@ -27,18 +30,27 @@ measurement, not an implementation.** Three verified findings reshape it:
    and `sessions` databases (§3.1–3.2). The roadmap row's "avoiding new
    infrastructure" is true of a new *server* and false of a new *image*.
 3. **At this corpus size, no vector store is needed to test the hypothesis at all.**
-   The catalog is **30 skills across 4 sources, 92,486 bytes of body text total**
-   (§2.1). Exact brute-force cosine over 30 documents in process is sub-millisecond
+   The catalog is **30 rows across 4 sources — but only 18 distinct documents**
+   (§2.1, §2.3), 92,486 bytes of body text total. Exact brute-force cosine over 18
+   documents in process is sub-millisecond
    and needs no extension, no image swap, and no ANN index. `pgvector` earns its
    place only when catalog scale makes SQL-side filtering or ANN necessary.
 
-So: build a labeled evaluation set and measure the lexical baseline first (§7). If
-semantics are then shown to help, the cheapest substrate is a **sidecar embedding
-table over `real[]` with in-process exact cosine** (§4.3, §5.2) — reversible into
-`pgvector` later without a data migration. Cheaper still, and worth trying first,
-is **improving the lexical baseline itself** (§4.4): cover-density ranking,
-trigram tolerance, or a curated alias map that fixes exactly the paraphrase case
-the vector store is invoked for, deterministically and explainably.
+So: build a labeled evaluation set and measure the lexical baseline first (§7) —
+**the set is now built**: [semantic-skill-retrieval-eval-set.md](./semantic-skill-retrieval-eval-set.md)
+holds the deduplicated 18-document catalogue, all 63 audit queries with their
+lexical candidate pools at depth 10, the strata, the grading scale, and a
+pre-registered decision rule; what remains is the human labeling. Candidates are
+evaluated in **cost order, and a cheaper candidate that closes the gap ends the
+exercise**:
+
+1. **De-duplicate and fix the tokenizer** (§4.4, defects 1–2 of §2.3) — no model,
+   no vector, no new dependency, no image change.
+2. **Then** the heavier lexical options — cover-density ranking, trigram tolerance,
+   a curated alias map.
+3. **Only then** semantics. If they are shown to help, the cheapest substrate is a
+   **sidecar embedding table over `real[]` with in-process exact cosine** (§4.3,
+   §5.2), reversible into `pgvector` later without a data migration.
 
 ## 2. Verified baseline — what "lexical" means today
 
@@ -70,6 +82,7 @@ Corpus, from the `skills` database on `postgres-0`:
 | Measure | Value |
 |---|---|
 | Skills | **30** |
+| Distinct documents (`md5(body)`) | **18** — 12 rows are byte-identical duplicates (§2.3) |
 | Distinct sources | **4** |
 | Body length min / avg / max | **1,094 / 3,083 / 11,778** chars |
 | Total body bytes | **92,486** (~90 KB) |
@@ -98,17 +111,55 @@ Read honestly, with its limits:
 - **`result_count` measures non-emptiness, not correctness.** 4.72/5 says the
   scorer found tokens, not that it found the *right* skill. Precision is unmeasured
   today, which is precisely why §7 asks for labels before code.
-- **Query shape is a fair sample of agent phrasing.** The tool description says
+- **Query shape does not establish natural phrasing.** The tool description says
   "Free-text search terms" and the system prompt tells the agent to consult
   `skills.search` FIRST and not to conclude it lacks grounding until a search
   returns no match ([`runtime_settings.py:25-34`](../../products/agent-platform/src/agent_service/runtime_settings.py)).
-  Nothing normalizes queries to keywords, and the observed 5-word mode confirms
-  natural phrasing reaches the scorer. So the "the agent already adapts to lexical"
-  masking hypothesis is **not** supported.
+  Nothing *instructs* keyword normalization — but the observed queries do not show
+  natural phrasing either. **14 of the 63 already contain the identifier of the
+  document they were seeking** (`DemoTriage`, `ResetPasswordAdHoc`,
+  `ResetUserPassword`, `scratch-restart-demo`, `browser-check-target`, `svc-check`),
+  and many more are visibly keyword-enumerated (`argocd application-server
+  repo-server deployment pod`). A 5-word mode is as consistent with keyword
+  stuffing as with prose. This memo originally concluded the masking hypothesis was
+  "not supported"; that was overstated. The correct statement is that the
+  hypothesis is **untested, and this pool cannot test it** — which is why §7.1's
+  paraphrase stratum is mandatory rather than optional.
 - **The traffic is not sustained operator triage.** All 96 events fall in a
   three-week window ending 2026-09-22, with none in the eight days to today; the
   pattern is demo, e2e, and verification traffic. The absence of zero-hit queries
   is therefore *weak* evidence, not proof that operators never hit the gap.
+
+### 2.3 Three measured defects in the lexical baseline
+
+Building the §7.1 evaluation set
+([semantic-skill-retrieval-eval-set.md](./semantic-skill-retrieval-eval-set.md))
+required re-running the real scorer over the real corpus, which produced evidence
+this memo did not have when first written. All three defects below are measured,
+reproducible, and **fixable without a vector store** — which is why §4.4 and §10
+now put them ahead of the substrate decision.
+
+| # | Defect | Measured |
+|---|---|---|
+| 1 | **The corpus is 18 documents, not 30.** [`runtime-config.env:19`](../../shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env) registers `platform-skills` as a git source at `shared/platform-ops/skills`, while [`kustomization.yaml:25-40`](../../shared/platform-ops/gitops/dev-k8s/base/kustomization.yaml) generates the two local ConfigMap sources from *those same files*. One file reaches the store by two routes under two `source_id`s. `rank()` does no content de-duplication and breaks ties on `skill_id` ascending | `md5(body)` grouping: **12 byte-identical pairs + 6 singletons**. **32 of 63 queries (50.8%)** return fewer distinct documents than result slots; 22 of 49 in the discriminating stratum |
+| 2 | **CamelCase titles are opaque.** `tokenize("KubePodCrashLooping")` → `['kubepodcrashlooping']`, a single token, so no `sre-alerting` title can match a sub-word query term at the 3.0 title weight. Matching is strict token equality with no stemming, so `crashloop` cannot reach the `CrashLoopBackOff` tag | For `pod keeps restarting CrashLoopBackOff` the exactly-right document ranks **3rd**, tied at 10.0 with a *scheduling-failures* guide that takes the slot on alphabetical tie-break alone. Adding the single word "restart" moves it to 1st |
+| 3 | **A non-zero `result_count` is not a useful answer.** §2.2's zero-hit finding is true and, read alone, misleading | `argocd health check` — 7 occurrences, the trail's second most frequent query — scores **20.0** on "Check ACME Admin Service Health". **No ArgoCD document exists in the corpus** |
+
+Two consequences for the rest of this memo:
+
+- The metric that detects defect 3 is **zero-relevant rate** — the fraction of
+  queries whose whole top-5 holds nothing an operator would accept — not zero-hit
+  rate. §7.2 now lists it.
+- Every rank-sensitive metric must be reported **twice**: as returned, and over
+  de-duplicated documents. Otherwise a de-duplication fix and a ranking fix are
+  indistinguishable in the aggregate.
+
+The offline reproduction returns the same documents in the same order as the audit
+trail's recorded `skill_ids` for every cross-checked query whose catalog has not
+drifted, so it is a valid harness. Where it *does* differ — `argocd health check`
+formerly led with the now-retired `platform-runbooks/web-checks/inventoryhealth` —
+that is catalog drift, and it is why labels must pin a snapshot rather than reuse
+recorded results.
 
 ## 3. Infrastructure reality — corrections to the roadmap framing
 
@@ -211,9 +262,12 @@ The adopt-worthy surface is `agentscope.embedding` (§6.2), not `agentscope.rag`
 ### 4.3 Option C — sidecar `real[]` + in-process exact cosine (recommended first substrate)
 
 Store the vector as a plain Postgres array in a sidecar table (§5.2), load the
-catalog's vectors, and compute exact cosine in Python. At 30 documents × 768
-dimensions that is 23,040 floats — a single small query and a few hundred
-microseconds of arithmetic, exact and with **no ANN recall loss at all**.
+catalog's vectors, and compute exact cosine in Python. At 18 distinct documents × 768
+dimensions that is 13,824 floats — a single small query and a few hundred
+microseconds of arithmetic, exact and with **no ANN recall loss at all**. (Embedding
+the 30 stored rows instead of the 18 distinct documents would cost 23,040 floats and
+twice the embedding work for identical content, which is one more reason §4.4's
+de-duplication comes first.)
 
 Properties that matter here:
 
@@ -232,8 +286,21 @@ Properties that matter here:
 ### 4.4 Option D — improve the lexical baseline first (cheapest; may be sufficient)
 
 The paraphrase failure has deterministic fixes that need no model, no vector, and
-no new dependency:
+no new dependency. **The first two are now measured against live evidence (§2.3)
+and are cheaper than anything else in this memo:**
 
+- **Collapse duplicate content in `rank()`.** 12 of 30 corpus rows are
+  byte-identical, and 32 of 63 real queries return fewer distinct documents than
+  result slots (§2.3 defect 1). De-duplicating by content hash before truncating to
+  `limit` — or fixing the overlapping `SKILLS_SOURCES` registration that produces
+  them — reclaims up to two of five slots for genuinely different documents. This
+  is the single highest-value change available and needs no ranking change at all.
+- **Tokenize CamelCase and stop breaking ties alphabetically.** Splitting
+  `KubePodCrashLooping` into `kube/pod/crash/looping` makes every alert title
+  matchable at the 3.0 weight, and a stemming or trigram step lets `crashloop`
+  reach the `CrashLoopBackOff` tag. Replacing the `skill_id`-ascending tie-break
+  with anything relevance-aware stops an alphabetical sort from deciding which of
+  two equally scored documents an operator sees first (§2.3 defect 2).
 - **Cover-density ranking.** PostgreSQL `ts_rank_cd` / `ts_rank` over the existing
   `to_tsvector` GIN index weights phrase proximity and term frequency, which the
   current flat per-token point total ignores. This is an ordering improvement —
@@ -246,11 +313,12 @@ no new dependency:
   set before scoring. This fixes the precise case the vector store is invoked for,
   deterministically, with the synonym list itself reviewable as an artifact.
 
-Honest cost: an alias map is manual curation and scales badly — but at 30 skills
-across 4 sources it is a bounded, reviewable document, and every entry is
-explainable to an operator in a way a cosine score is not. **If Option D closes the
-measured gap, no embedding work is needed at all**, which is why §10 puts it before
-the substrate decision rather than after.
+Honest cost: an alias map is manual curation and scales badly — but at 18 distinct
+documents across 4 sources it is a bounded, reviewable artifact, and every entry is
+explainable to an operator in a way a cosine score is not. The first two bullets are
+cheaper still and address defects that are already measured rather than
+hypothesised. **If Option D closes the measured gap, no embedding work is needed at
+all**, which is why §10 puts it before the substrate decision rather than after.
 
 ### 4.5 Comparison
 
@@ -441,7 +509,7 @@ what happens on a cluster where `llm-hosting` does not exist.
   the row unembedded, and let search fall back to lexical for that skill.
 - **Lazy on first query (rejected).** Puts a model round-trip on the search path,
   makes p95 non-deterministic, and risks the tool-gateway's 10.0 s timeout.
-- **Backfill** is trivial at this scale: 30 documents, one pass, seconds.
+- **Backfill** is trivial at this scale: 18 distinct documents, one pass, seconds.
 
 ## 7. Recall and latency assessment criteria — the gate
 
@@ -451,10 +519,14 @@ on our corpus" closes the backlog row as honestly as "vectors win" opens a spec.
 
 ### 7.1 Evaluation set
 
-- **Seed from real traffic.** The audit trail already holds **63 distinct operator-
-  shaped queries** in `skill_searched.details->>'query'` (§2.2). Extracting them is
-  a read-only query and needs no new instrumentation — this is the strongest
-  argument for measuring first, because the seed data already exists.
+- **Seed from real traffic.** The audit trail already holds **63 distinct queries**
+  in `skill_searched.details->>'query'` (§2.2), and they have been extracted — see
+  [semantic-skill-retrieval-eval-set.md](./semantic-skill-retrieval-eval-set.md).
+  Extracting them is a read-only query and needs no new instrumentation, which is
+  the strongest argument for measuring first: the seed data already existed. Note
+  that 14 of the 63 bear a target identifier and cannot discriminate retrieval
+  quality (§2.2), so they are held as a regression stratum and excluded from
+  headline metrics.
 - **Extend with a targeted paraphrase set** aimed at the hypothesised failure mode:
   "pod won't start" vs a runbook titled `KubePodNotReady`; "disk full" vs PVC
   storage exhaustion; "can't log in" vs an account-recovery runbook; "cert expired"
@@ -467,9 +539,10 @@ on our corpus" closes the backlog row as honestly as "vectors win" opens a spec.
 - **Version and store the labeled set** (a committed fixture, not a spreadsheet)
   so a future catalog change re-runs the same evaluation instead of trusting a
   stale one.
-- **State the sample size honestly.** 63 real queries plus a paraphrase set over a
-  30-document catalog with 4 sources is *small*. Report confidence intervals, and
-  treat any difference inside the noise band as **no evidence of improvement**.
+- **State the sample size honestly.** 63 real queries (49 of them discriminating)
+  plus a paraphrase set over an **18-document catalog carried in 30 rows across 4
+  sources** is *small*. Report confidence intervals, and treat any difference inside
+  the noise band as **no evidence of improvement**.
 
 ### 7.2 Metrics, and the baseline each must beat
 
@@ -478,7 +551,9 @@ the same harness. Nothing is promoted on an unmeasured baseline.
 
 | Metric | Definition | Why it matters here |
 |---|---|---|
-| **Zero-hit rate** | fraction of queries returning 0 hits | **Already 0/96 live.** There is no headroom on this axis, which is itself the central finding — do not build a recall instrument to fix a non-existent recall failure |
+| **Zero-hit rate** | fraction of queries returning 0 hits | **Already 0/96 live.** There is no headroom on this axis — do not build a recall instrument to fix a non-existent recall failure |
+| **Zero-relevant rate** | fraction of queries whose entire top-5 holds no grade ≥1 document | **The metric that actually matters here.** §2.3 defect 3 shows zero-hit cannot detect a useless answer: `argocd health check` scores 20.0 on an unrelated document. Report for every candidate, lexical included |
+| **Distinct-document variants** | every rank-sensitive metric computed twice — as returned, and over de-duplicated documents | Without both, a de-duplication fix and a ranking fix are indistinguishable in the aggregate (§2.3 defect 1) |
 | **Precision@5** | relevant hits within the top 5 | The top-5 is saturated (mean 4.72/5), so *ordering inside it* is what an operator or the agent actually experiences |
 | **Recall@5 / Recall@10** | relevant hits found within k | The classic vector-store claim; must be shown against labels, not asserted |
 | **MRR** | mean reciprocal rank of the first relevant hit | Single-number summary of "is the right runbook first" |
@@ -583,15 +658,19 @@ Non-negotiables:
 
 ## 10. Go/no-go gates and next decision
 
-1. **Approve the measurement-first step — no code, no infrastructure.** Extract the
-   63 distinct audit queries, have operations label relevance against the 30-skill
-   catalog, add a reviewed paraphrase set, and publish the lexical baseline
-   (Precision@5, MRR, nDCG@10, zero-hit rate, p50/p95). This is the cheapest
-   possible next step and it either justifies or kills everything below it.
-   **Gate: without these numbers, no retrieval change is approved.**
-2. **Decide whether Option D is tried first** — `ts_rank_cd` cover density, a
-   curated alias map, and (only if an image change is already accepted) `pg_trgm`.
-   If D closes the measured gap, no embedding work is needed at all.
+1. **Approve the measurement-first step — no code, no infrastructure.** The
+   evaluation set is **built** (§7.1, [eval-set artifact](./semantic-skill-retrieval-eval-set.md));
+   what remains is the human part: operations labels relevance against the
+   18-document catalogue and reviews the paraphrase stratum. Then publish the
+   lexical baseline (Precision@5, MRR, nDCG@10, zero-relevant rate, distinct-document
+   variants, p50/p95). **Gate: without these numbers, no retrieval change is
+   approved.**
+2. **Work the lexical fixes in cost order, measuring each.** First de-duplication
+   and the tokenizer/tie-break fixes (§4.4, already measured as defects in §2.3);
+   then `ts_rank_cd` cover density and a curated alias map; then, only if an image
+   change is already accepted, `pg_trgm`. **If any cheaper step closes the measured
+   gap, everything below is cancelled and the backlog row closes** — a null result
+   is a publishable outcome, not a failure.
 3. **If semantics proceed, approve the substrate:** sidecar `real[]` + in-process
    exact cosine (Option C — no extension, no image swap, reversible), **or** the
    `postgres:16-alpine` → pgvector image swap on the shared StatefulSet now,
@@ -602,7 +681,7 @@ Non-negotiables:
    secret, no egress, no spend) **or** DashScope (billable, external egress, a new
    `skills-hub-runtime-secrets` entry, and skill body text leaving the cluster).
 5. **Record the scale trigger for pgvector now, as a number.** Exact in-process
-   cosine is the right substrate at 30 skills and the wrong one at some larger
+   cosine is the right substrate at 18 documents and the wrong one at some larger
    count; "when it feels slow" is not a trigger. Propose: promote to pgvector at
    **>2,000 skills** or **search p95 >300 ms**, whichever comes first.
 6. **Only then promote a spec.** Promotion needs §7's measurements in hand, the §8
@@ -650,3 +729,24 @@ Non-negotiables:
   `real[]` + exact cosine over pgvector, with lexical improvement (Option D) tried
   first. **Assessment only — no implementation, no embedding generated, no extension
   installed, no image swapped, no manifest changed, no ADR, and no spec promotion.**
+- 2026-10-01 — **correction pass** after building the §7.1 evaluation set
+  ([semantic-skill-retrieval-eval-set.md](./semantic-skill-retrieval-eval-set.md)),
+  which required re-running the real
+  [`scoring.py`](../../products/skills-hub/src/skills_hub/services/scoring.py)
+  over a full corpus export and re-reading
+  [`runtime-config.env`](../../shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env)
+  and [`kustomization.yaml`](../../shared/platform-ops/gitops/dev-k8s/base/kustomization.yaml).
+  Added **§2.3** with three measured defects: the corpus is 18 distinct documents
+  carried in 30 rows (`md5(body)`: 12 byte-identical pairs) because a git source and
+  two ConfigMap sources ingest the same files, so 32 of 63 queries return fewer
+  distinct documents than result slots; CamelCase titles tokenize to one opaque
+  token, so the exactly-right alert ranks 3rd for `pod keeps restarting
+  CrashLoopBackOff` and loses its slot to an alphabetical tie-break; and `argocd
+  health check` scores 20.0 on an unrelated document, proving zero-hit rate is not a
+  recall proxy. **Corrected §2.2**: the claim that the 5-word query mode "confirms
+  natural phrasing" was overstated — 14 of 63 queries carry a target identifier, so
+  the masking hypothesis is untested rather than disproved. Retitled for the 18-document
+  corpus; added zero-relevant rate and distinct-document metric variants (§7.2); added
+  the two cheapest Option D fixes (§4.4); re-ordered §1 and §10 so candidates are
+  measured in cost order and any cheaper fix that closes the gap cancels the rest.
+  Read-only throughout: no product code, manifest, or configuration was changed.

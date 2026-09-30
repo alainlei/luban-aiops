@@ -1,7 +1,7 @@
 # Eval set: Lexical Skill-Retrieval Baseline
 
 Status: **measurement artifact — gate 1 of the spike memo. Read-only. No implementation, ADR, or spec is authorized by this document.**
-Date: 2026-09-30
+Date: 2026-09-30 · Revised: 2026-10-01 (§2.4 correction applied to the memo)
 Companion to: [semantic-skill-retrieval-spike.md](./semantic-skill-retrieval-spike.md) — this file instantiates its [§7.1 Evaluation set](./semantic-skill-retrieval-spike.md#71-evaluation-set)
 Roadmap home: [Exploration Backlog](../agentic-aiops-platform/delivery-roadmap.md#exploration-backlog), "Semantic (vector) skill retrieval"
 Evidence baseline: repository at v0.45.0 (`26fbd9b`); corpus exported from the `skills` database and queries from the `audit` database on `postgres-0` in the `dev-luban-aiops` cluster. **Every query was read-only.** Nothing was installed, embedded, deployed, mutated, or labeled.
@@ -132,7 +132,7 @@ be reported as one; the metric that captures this failure is *zero-relevant rate
 — the fraction of queries whose entire top-5 contains no document an operator
 would accept (§8).
 
-### 2.4 Correction owed to the memo
+### 2.4 Correction to the memo — applied 2026-10-01
 
 Memo [§2.2](./semantic-skill-retrieval-spike.md#22-the-corpus-and-the-real-query-record-live-2026-09-30)
 asserts that "the observed 5-word mode confirms natural phrasing reaches the
@@ -149,7 +149,9 @@ The honest statement is weaker and better: **the query mix is dominated by
 searcher-composed keyword sets, so the pool cannot measure paraphrase tolerance at
 all** — which is precisely why §6.1 requires a paraphrase stratum that the audit
 trail cannot supply. The memo's conclusion is unchanged; its supporting argument
-was overstated and should be corrected.
+was overstated, and the memo's 2026-10-01 revision pass has corrected it — §2.2 now
+records the hypothesis as **untested rather than disproved**, and its new §2.3
+carries the three defects above.
 
 ## 3. Reproduction
 
@@ -469,3 +471,4 @@ mutations:
 | Date | Change |
 |---|---|
 | 2026-09-30 | Created. Instantiates memo §7.1: 18-document catalogue, 63-query pool at depth 10 reproduced with the real scorer (validated against audit `skill_ids`, with two catalog-drift mismatches documented), strata A/B/C, grading scale, label sheet, and a cost-ordered pre-registered decision rule. Records three measured lexical defects — duplicate-source crowding (32/63 queries), opaque CamelCase titles, and confidently scored irrelevant top-1s — none of which requires a vector store to fix. Flags the correction owed to memo §2.2 on query shape. |
+| 2026-10-01 | §2.4 correction **applied** to the memo: its §2.2 query-shape claim is rewritten (masking hypothesis untested, not disproved — 14 of 63 queries carry a target identifier), a new memo §2.3 carries the three measured defects, §4.4 gains the two cheapest fixes, §7.2 gains zero-relevant rate and distinct-document metric variants, §1 and §10 are re-ordered cost-first, and the memo is retitled for an 18-document corpus. The delivery-roadmap backlog row is aligned to the same evidence. |
