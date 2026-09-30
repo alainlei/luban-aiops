@@ -26,16 +26,18 @@
 - [test_tool_registry.py](file://products/tool-gateway/tests/test_tool_registry.py)
 - [test_tool_invoke.py](file://products/tool-gateway/tests/test_tool_invoke.py)
 - [test_http_connector.py](file://products/tool-gateway/tests/test_http_connector.py)
+- [README.md](file://products/tool-gateway/README.md)
+- [mcp-ingestion-spike.md](file://docs/workspace/mcp-ingestion-spike.md)
 - [SPEC-062 spec.md](file://docs/specs/SPEC-062-secure-password-generation-and-delivery/spec.md)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive documentation for the new DELETE /api/v2/secrets/delivery/{delivery_id} endpoint and discard capability for active destruction of held deliveries as part of SPEC-062 security enhancement
-- Updated Secrets Connector section to include the complete implementation with both read and write tier tools
-- Enhanced Secret Delivery Buffer documentation with discard functionality
-- Updated API endpoints section to document the new delivery management endpoints
-- Expanded security considerations to include deny-path hardening and oracle-free responses
+- Updated MCP integration strategy section to clarify inbound consumption direction vs outbound exposure
+- Added comprehensive documentation of the planned MCP ingestion connector architecture
+- Clarified that MCP implementation remains under assessment with no current implementation
+- Enhanced security considerations to emphasize Luban governance controls over MCP boundaries
+- Updated roadmap section to reflect ServiceNow → Ansible → Windows pilot sequencing
 
 ## Table of Contents
 1. Introduction
@@ -43,15 +45,16 @@
 3. Core Components
 4. Architecture Overview
 5. Detailed Component Analysis
-6. Dependency Analysis
-7. Performance Considerations
-8. Troubleshooting Guide
-9. Conclusion
+6. MCP Integration Strategy
+7. Dependency Analysis
+8. Performance Considerations
+9. Troubleshooting Guide
+10. Conclusion
 
 ## Introduction
 The Tool Gateway is a normalized access layer that exposes external systems through pluggable tool connectors. It centralizes authentication, policy enforcement, parameter validation, output redaction, audit emission, and structured error handling. Built-in connectors provide safe, bounded access to Kubernetes, Elasticsearch, browser automation (web-check flows), HTTP services, incidents, skills repositories, and secure secret delivery mechanisms. The gateway enforces risk-tier admission for mutating actions and integrates with the platform's audit and policy systems to ensure consistent governance across all tool invocations.
 
-**Updated** Added support for HTTP service checks with bounded read/write operations, URL secret masking, and configurable origin allowlists. The platform now includes a complete implementation of SPEC-062 secure password generation and delivery system, featuring cryptographically strong password generation, secure one-time delivery mechanisms, and active destruction capabilities for held deliveries through the new DELETE endpoint.
+**Updated** The platform now includes a complete implementation of SPEC-062 secure password generation and delivery system, featuring cryptographically strong password generation, secure one-time delivery mechanisms, and active destruction capabilities for held deliveries through the new DELETE endpoint. Additionally, the MCP integration strategy has been refined to focus on inbound consumption where tool-gateway acts as an MCP client beneath Luban's governance controls.
 
 ## Project Structure
 The Tool Gateway service is organized into:
@@ -579,6 +582,57 @@ Emit --> Resp["JSONResponse"]
 - [audit_emitter.py:29-98](file://products/tool-gateway/src/tool_gateway/services/audit_emitter.py#L29-L98)
 - [gateway_service.py:32-59](file://products/tool-gateway/src/tool_gateway/services/gateway_service.py#L32-L59)
 
+## MCP Integration Strategy
+
+### Current Status and Direction
+**Assessment Phase** The MCP integration strategy is currently under assessment and planning. No MCP implementation exists in the codebase yet. The direction has been clarified to focus on **inbound consumption** where tool-gateway acts as an MCP client beneath Luban's governance controls, rather than outbound exposure of tool-gateway or Luban workflows.
+
+### Planned Architecture
+The proposed MCP ingestion connector would sit beneath tool-gateway as another `BaseTool` implementation, reusing the existing `ToolRegistry` seam alongside native connectors like `k8s.*`, `elastic.*`, `skills.*`, `incidents.*`, `web.*`, and `http.*`.
+
+```mermaid
+flowchart TD
+Operator["Operator"] --> AgentPlatform["Agent Platform<br/>Policy/HITL"]
+AgentPlatform --> ExecutionRuntime["Execution Runtime<br/>Signed Execution"]
+ExecutionRuntime --> ToolGateway["Tool Gateway<br/>Admission/Dispatch/Redaction/Audit"]
+ToolGateway --> NativeConnector["Native Connector<br/>(K8s, Elastic, etc.)"]
+ToolGateway --> MCPIngestion["MCP Ingestion Connector<br/>(Planned)"]
+MCPIngestion --> ExternalServer["External MCP Server"]
+ExternalServer --> TargetSystem["Target System"]
+```
+
+**Diagram sources**
+- [mcp-ingestion-spike.md:55-81](file://docs/workspace/mcp-ingestion-spike.md#L55-L81)
+
+### Key Design Principles
+- **Explicit Admission Control**: Operator-owned allowlist with fail-closed behavior for missing tools, incompatible schemas, and unknown arguments
+- **Local Risk Classification**: Luban assigns `read`/`write`/`admin` tiers independently of remote server hints
+- **Canonical Mapping**: Deterministic translation to Luban tool names and result envelopes with type/size validation
+- **Credential Boundaries**: Never forward `aud=tool-gateway` delegated tokens upstream; each server gets independent credentials
+- **Uncertain Outcome Handling**: No blind retry or automatic fallback after potentially-dispatched mutations
+- **Attribution Preservation**: Retain Luban's verified user/service attribution with explicit remote-execution correlation
+
+### Pilot Sequencing
+The strategy recommends staged pilots in risk order:
+
+| Target | Risk Tier | Blast Radius | Topology | Order |
+|---|---|---|---|---|
+| **ServiceNow** | read → write | System of record (tickets); reversible, auditable | Remote HTTP MCP server (SaaS/self-hosted) + egress | **1st** |
+| **Ansible** | write/admin | Live infrastructure; broad credentials; bundled multi-step | Control node near infra (sidecar or remote) | **2nd** |
+| **Windows UI** | read → write | Native apps/services; state-changing UI clicks | **Windows host/VM outside the cluster** | **3rd** |
+
+### Governance Controls
+Luban retains full governance over MCP-backed tools:
+- Policy enforcement through existing `tools:invoke` and `tools:mutate` actions
+- HITL confirmation for mutating flows (one gate per flow)
+- Signed execution requests through isolated execution-runtime worker
+- Redaction choke point for all tool results
+- Durable audit trails via existing audit emitter
+
+**Section sources**
+- [mcp-ingestion-spike.md:1-229](file://docs/workspace/mcp-ingestion-spike.md#L1-L229)
+- [README.md:53-67](file://products/tool-gateway/README.md#L53-L67)
+
 ## Dependency Analysis
 - Application wiring: app creates registry and optional browser connector; lifespan starts/stops browser pool.
 - Connectors depend on external clients (kubernetes, elasticsearch, httpx) and register tools conditionally based on configuration.
@@ -644,4 +698,6 @@ Common issues and diagnostics:
 ## Conclusion
 The Tool Gateway provides a secure, extensible, and observable framework for invoking external tools through standardized connectors. It enforces risk-tier admission, policy-based authorization, robust parameter validation, deterministic output redaction, and durable auditing. Built-in connectors cover Kubernetes, Elasticsearch, browser automation, HTTP services, incidents, skills repositories, and secure secret delivery, while the registry and base abstractions make it straightforward to add custom connectors with consistent behavior and governance.
 
-**Updated** The addition of HTTP connector capabilities extends the platform's ability to perform bounded HTTP service checks with the same security guarantees as other connectors, including origin allowlisting, credential set management, and URL secret masking. The complete implementation of SPEC-062 secure password generation and delivery system provides cryptographically strong password generation, secure one-time delivery mechanisms, and active destruction capabilities through the new DELETE endpoint. This enhancement addresses critical security requirements for operational workflows by ensuring that held deliveries can be immediately destroyed when needed, preventing potential security vulnerabilities from lingering temporary credentials.
+**Updated** The addition of HTTP connector capabilities extends the platform's ability to perform bounded HTTP service checks with the same security guarantees as other connectors, including origin allowlisting, credential set management, and URL secret masking. The complete implementation of SPEC-062 secure password generation and delivery system provides cryptographically strong password generation, secure one-time delivery mechanisms, and active destruction capabilities through the new DELETE endpoint. 
+
+The MCP integration strategy represents a significant architectural evolution toward inbound consumption where tool-gateway becomes an MCP client beneath Luban's governance controls. While no implementation exists yet, the assessment phase has established clear design principles emphasizing operator-controlled admission, local risk classification, and preservation of Luban's security boundaries. The planned ServiceNow → Ansible → Windows pilot sequence ensures careful validation of governance controls before expanding to higher-risk targets. This approach maintains the platform's commitment to bounded autonomy while enabling integration with external operational systems through standardized protocols.

@@ -13,6 +13,12 @@
 - [tool-gateway README.md](file://products/tool-gateway/README.md)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Updated the "Spec-Driven Development Workflow and Releases" section to reflect current delivered releases (0 through 3) based on repository state
+- Enhanced release descriptions with specific capabilities delivered in each release
+- Updated conclusion to accurately reflect the current platform maturity and delivery trajectory
+
 ## Table of Contents
 1. Introduction
 2. Project Structure
@@ -108,7 +114,7 @@ SPEC --> OP
 - [README.md:15-55](file://README.md#L15-L55)
 
 ## Core Components
-The platform’s core components are implemented as distinct products with clear responsibilities:
+The platform's core components are implemented as distinct products with clear responsibilities:
 
 - Agent Platform (agent-platform): Runtime and orchestration kernel based on AgentScope 2.0. It manages sessions, conversation state, event streaming, agent coordination, and interaction with policy, knowledge, and tool services. It exposes a platform-owned HTTP+SSE contract at /api/v2/, centralizes runtime construction, and implements cross-cutting kernel behavior via middleware hooks. It also supports per-turn model selection, live model discovery, evidence persistence, and HITL confirmation bridging.
 
@@ -274,10 +280,10 @@ Gateway-->>Agent : Tool result + evidence envelope
 The platform uses a spec-driven development workflow where every change that crosses product boundaries, affects trust, changes identity/policy/approval/audit behavior, or spans multiple focused pull requests is captured in a reviewable spec. Specs define requirements, technical plans, and task lists, and they are frozen after delivery. The spec index tracks status and links delivered specs to releases.
 
 Current delivered releases:
-- Release 0: Platform foundation (usable portal and runtime baseline)
-- Release 1: Read-only operations copilot (grounded answers, read-only tool execution, broker-mediated identity, pre-production hardening)
-- Release 2: Skills and grounded guidance (Git-based skill ingestion, validation, indexed retrieval, cited answers)
-- Release 3: Incident triage and collaboration (alert/manual intake, canonical incident model, agent triage with validated reports, connector dispatch, Incidents panel)
+- **Release 0**: Platform foundation - established the usable portal and runtime baseline with core infrastructure
+- **Release 1**: Read-only operations copilot - delivered grounded answers, read-only tool execution, broker-mediated identity, and pre-production hardening including tool-output redaction and workload-identity service tokens
+- **Release 2**: Skills and grounded guidance - introduced Git-based skill ingestion, validation, indexed retrieval, and cited answers through the skills-hub product
+- **Release 3**: Incident triage and collaboration - added alert/manual intake, canonical incident model, agent triage with validated reports, connector dispatch, and the Incidents panel
 
 Future releases continue stacking value themes: approval-gated bounded actions, hardening and external consumption, and ongoing enhancements such as browser web-check tools, skill composition, and audit reporting.
 
