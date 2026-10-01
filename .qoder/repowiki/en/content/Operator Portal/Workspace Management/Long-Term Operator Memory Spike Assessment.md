@@ -3,6 +3,7 @@
 <cite>
 **Referenced Files in This Document**   
 - [long-term-operator-memory-spike.md](file://docs/workspace/long-term-operator-memory-spike.md)
+- [delivery-roadmap.md](file://docs/agentic-aiops-platform/delivery-roadmap.md)
 - [session_store.py](file://products/agent-platform/src/agent_service/services/session_store.py)
 - [agent_state_store.py](file://products/agent-platform/src/agent_service/services/agent_state_store.py)
 - [evidence_store.py](file://products/agent-platform/src/agent_service/services/evidence_store.py)
@@ -15,6 +16,14 @@
 - [test_postgres_session_store.py](file://products/agent-platform/tests/test_postgres_session_store.py)
 </cite>
 
+## Update Summary
+**Changes Made**   
+- Updated conclusion section to reflect formal closure by operator on 2026-10-01
+- Added governance decision section documenting the final disposition
+- Updated reopen conditions to emphasize the acceptance of Option D
+- Enhanced documentation of SPEC-039/044/045 paths as sufficient for cross-session knowledge sharing
+- Clarified that no implementation was authorized or performed by the acceptance
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -23,14 +32,15 @@
 5. [Detailed Component Analysis](#detailed-component-analysis)
 6. [Dependency Analysis](#dependency-analysis)
 7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
+8. [Governance Decision](#governance-decision)
+9. [Troubleshooting Guide](#troubleshooting-guide)
+10. [Conclusion](#conclusion)
+11. [Appendices](#appendices)
 
 ## Introduction
-This document consolidates the long-term operator memory spike assessment for the Luban AI Ops platform. It answers whether agentscope’s long-term-memory middlewares (mem0, ReME, AgenticMemory) add real triage continuity across sessions, and if not, what would be required to build that capability safely. The assessment is based on a static read of the pinned agentscope 2.0.8 middleware surface, the agent-platform kernel and store implementations, and read-only queries against the live dev cluster’s audit, sessions, and incidents databases. No dependency was installed, no middleware was wired, and no schema or deployment change was made as part of this assessment.
+This document consolidates the long-term operator memory spike assessment for the Luban AI Ops platform. It answers whether agentscope's long-term-memory middlewares (mem0, ReME, AgenticMemory) add real triage continuity across sessions, and if not, what would be required to build that capability safely. The assessment is based on a static read of the pinned agentscope 2.0.8 middleware surface, the agent-platform kernel and store implementations, and read-only queries against the live dev cluster's audit, sessions, and incidents databases. No dependency was installed, no middleware was wired, and no schema or deployment change was made as part of this assessment.
 
-The central finding is that the observed continuity need is unrecorded, all three middlewares fail the platform’s four-point adoption gate, and the platform already ships governed cross-session knowledge mechanisms — operation documents and skill drafting/graduation — that are audited, role-gated, and human-reviewed. The recommended disposition is to close the backlog row unless operations can state a concrete continuity requirement and accept the retention-class, embedder, and evidence requirements documented here.
+The central finding is that the observed continuity need is unrecorded, all three middlewares fail the platform's four-point adoption gate, and the platform already ships governed cross-session knowledge mechanisms — operation documents and skill drafting/graduation — that are audited, role-gated, and human-reviewed. **On 2026-10-01, the operator formally accepted Option D (close backlog row), closing the exploration without authorizing any implementation.**
 
 ## Project Structure
 The assessment spans one workspace memo and several platform components:
@@ -63,7 +73,7 @@ Middleware --> Evidence["Evidence frames"]
 - [long-term-operator-memory-spike.md:1-7](file://docs/workspace/long-term-operator-memory-spike.md#L1-L7)
 
 ## Core Components
-The assessment evaluates three agentscope middlewares against the platform’s existing durability substrate and adoption gates.
+The assessment evaluates three agentscope middlewares against the platform's existing durability substrate and adoption gates.
 
 | Component | Responsibility | Relevance to long-term memory |
 |---|---|---|
@@ -79,7 +89,7 @@ The assessment evaluates three agentscope middlewares against the platform’s e
 - [operation_documents.py:1-40](file://products/agent-platform/src/agent_service/services/operation_documents.py#L1-L40)
 
 ## Architecture Overview
-The platform’s current architecture separates short-lived conversation state from longer-lived, governed artifacts. Long-term memory would introduce a fourth channel that bypasses both the gateway execution gate and the existing artifact governance.
+The platform's current architecture separates short-lived conversation state from longer-lived, governed artifacts. Long-term memory would introduce a fourth channel that bypasses both the gateway execution gate and the existing artifact governance.
 
 ```mermaid
 sequenceDiagram
@@ -226,7 +236,7 @@ Audit --> NotVisible
 - [session_transcript.py:34,75-92:34-92](file://products/agent-platform/src/agent_service/services/session_transcript.py#L34-L92)
 
 ### Identity and Cache Invariants
-Mem0 requires `user_id` at construction, but the kernel builds agents without a user parameter. Identity at the tool boundary is carried only by the delegated token in a context variable. The kernel also caches agents keyed by session so conversation memory does not cross sessions; long-term operator memory is defined by breaking that invariant. A shared middleware instance could leak one operator’s memories into another’s context, while a per-session instance would require threading identity through multiple kernel methods and deciding how it interacts with the LRU agent cache.
+Mem0 requires `user_id` at construction, but the kernel builds agents without a user parameter. Identity at the tool boundary is carried only by the delegated token in a context variable. The kernel also caches agents keyed by session so conversation memory does not cross sessions; long-term operator memory is defined by breaking that invariant. A shared middleware instance could leak one operator's memories into another's context, while a per-session instance would require threading identity through multiple kernel methods and deciding how it interacts with the LRU agent cache.
 
 ```mermaid
 sequenceDiagram
@@ -279,13 +289,13 @@ The memo records four options:
 | A — adopt a middleware as shipped | Rejected | Fails three of four gates, introduces unbounded retention, produces invisible memory, requires identity plumbing |
 | B — gateway-fronted memory connector | Recorded as the only viable shape | `memory.search` / `memory.record` as gateway tools, delegated-token identity, redaction before write, evidence frames, explicit retention class |
 | C — extend governed artifact path | Recommended if anything is done | Use operation documents, skill drafting/graduation, and the retrieval alias map |
-| D — close the row | Recommended now | No observed continuity need, middlewares fail the gate, governed alternatives exist |
+| D — close the row | **Accepted 2026-10-01** | No observed continuity need, middlewares fail the gate, governed alternatives exist |
 
 **Section sources**
 - [long-term-operator-memory-spike.md:519-586](file://docs/workspace/long-term-operator-memory-spike.md#L519-L586)
 
 ## Dependency Analysis
-The assessment establishes clear boundaries between the agentscope middlewares and the platform’s owned code.
+The assessment establishes clear boundaries between the agentscope middlewares and the platform's owned code.
 
 ```mermaid
 graph LR
@@ -313,7 +323,7 @@ The assessment identifies several performance and reliability concerns tied to l
 - **Pod-local state loss:** AgenticMemory and ReME default to filesystem storage under `AGENTSCOPE_WORKSPACE_DIR`, which is an `emptyDir` volume. Rescheduling loses the memory while authoritative rows may survive in Postgres.
 - **Non-deterministic retrieval:** ReME runs retrieval concurrently with the reply, so a single-shot reply may finish before the injected memory lands. Given that 107 of 124 observed sessions are single-turn, this affects the dominant session shape.
 - **Silent write failures:** mem0 wraps write calls in exception handlers that log warnings but do not emit audit events, metrics, or operator surfaces.
-- **TTL sweep pressure:** Adding a new mutable, per-user store would require a sweeper aligned with the platform’s existing opportunistic sweep pattern used by session, agent-state, evidence, confirmation-record, and operation-document stores.
+- **TTL sweep pressure:** Adding a new mutable, per-user store would require a sweeper aligned with the platform's existing opportunistic sweep pattern used by session, agent-state, evidence, confirmation-record, and operation-document stores.
 
 These are not reasons to optimize away the problem; they are reasons to avoid introducing a side-channel store without a bounded retention class, failure visibility, and deterministic delivery.
 
@@ -322,6 +332,36 @@ These are not reasons to optimize away the problem; they are reasons to avoid in
 - [long-term-operator-memory-spike.md:315-315](file://docs/workspace/long-term-operator-memory-spike.md#L315-L315)
 - [long-term-operator-memory-spike.md:360-365](file://docs/workspace/long-term-operator-memory-spike.md#L360-L365)
 - [long-term-operator-memory-spike.md:285-293](file://docs/workspace/long-term-operator-memory-spike.md#L285-L293)
+
+## Governance Decision
+**Formal Closure: 2026-10-01**
+
+On 2026-10-01, the operator formally accepted Option D (close backlog row) and passed §11 gate 5. This governance decision carries the following implications:
+
+### Final Disposition
+- **Status**: Closed — no further action required
+- **Authorization**: No implementation, dependency install, middleware wiring, storage table, ADR, or spec is authorized
+- **Backlog Row**: Recorded as closed in the Exploration Backlog
+- **Reopening Conditions**: Require §9 conditions 1, 3, and 5 — a stated operator continuity need, a written retention-class decision, and evidence that the governed Option C path is insufficient
+
+### Governance Principles Applied
+1. **Null results are publishable outcomes** — the absence of evidence for a continuity need is itself a valid finding
+2. **Governance precedes technology** — the existing SPEC-039/044/045 paths provide sufficient cross-session knowledge sharing
+3. **Adoption gates are binding** — all three middlewares failed three of four gate points as shipped
+4. **Retention decisions require explicit policy** — "long-term" is a new retention class requiring governance approval
+
+### Existing Paths Confirmed Sufficient
+The governance decision confirms that the platform's existing mechanisms adequately address cross-session knowledge sharing:
+
+- **SPEC-039 Operation Documents**: Immutable, typed snapshots with provenance anchoring, 30-day retention, and role-based access
+- **SPEC-044/045 Skill Authoring Export and Incident-Skill Drafts**: Governed workflow from triaged sessions to approved, replayable skills
+- **Retrieval Alias Map**: Deterministic vocabulary improvement addressing the observed repetition patterns
+
+These paths maintain the critical properties that a private memory store would remove: human review, auditability, role-based visibility, and bounded retention.
+
+**Section sources**
+- [long-term-operator-memory-spike.md:580-594](file://docs/workspace/long-term-operator-memory-spike.md#L580-L594)
+- [long-term-operator-memory-spike.md:745-752](file://docs/workspace/long-term-operator-memory-spike.md#L745-L752)
 
 ## Troubleshooting Guide
 If a future proposal revisits long-term operator memory, use these checks before proceeding:
@@ -348,7 +388,15 @@ For session-store failures specifically, the test suites assert:
 - [test_postgres_session_store.py:295-347](file://products/agent-platform/tests/test_postgres_session_store.py#L295-L347)
 
 ## Conclusion
-The long-term operator memory spike assessment recommends closing the backlog row. The continuity need is not evidenced in the platform’s own record, all three agentscope middlewares fail the adoption gate, and the platform already ships governed mechanisms for carrying knowledge across sessions. If operations later states a concrete need, the reopen conditions require a measured requirement, an explicit retention-class decision, an embedder decision, and evidence that the existing artifact path is insufficient. Any implementation should follow Option B — a gateway-fronted memory connector with delegated-token identity, redaction before write, evidence frames, audited events, and an explicit retention class — rather than adopting agentscope’s long-term memory middlewares.
+**The long-term operator memory spike assessment was formally closed by the operator on 2026-10-01, accepting Option D (close backlog row).** The continuity need is not evidenced in the platform's own record, all three agentscope middlewares fail the adoption gate, and the platform already ships governed mechanisms for carrying knowledge across sessions.
+
+The governance decision confirms that:
+- **No implementation was authorized** by the acceptance
+- **The existing SPEC-039/044/045 paths are sufficient** for cross-session knowledge sharing
+- **Reopening requires strict conditions**: a stated operator continuity need, a written retention-class decision, and evidence that the governed artifact path is insufficient
+- **Any future implementation must follow Option B**: a gateway-fronted memory connector with delegated-token identity, redaction before write, evidence frames, audited events, and an explicit retention class
+
+The null result is a publishable outcome that demonstrates the platform's commitment to governance-first development and evidence-based decision making.
 
 ## Appendices
 
@@ -375,3 +423,13 @@ The assessment defines five gates:
 
 **Section sources**
 - [long-term-operator-memory-spike.md:645-665](file://docs/workspace/long-term-operator-memory-spike.md#L645-L665)
+
+### Changelog
+The workspace memo includes detailed changelog entries documenting the progression from initial assessment through formal closure:
+
+- **2026-10-01 Initial Assessment**: Complete evaluation of all three middlewares, evidence gathering, and recommendation to close the row
+- **2026-10-01 Documentation Updates**: Applied recommended documentation changes to utilization audit and roadmap
+- **2026-10-01 Formal Closure**: Operator accepted Option D, passing §11 gate 5 and closing the backlog row
+
+**Section sources**
+- [long-term-operator-memory-spike.md:694-752](file://docs/workspace/long-term-operator-memory-spike.md#L694-L752)
