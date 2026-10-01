@@ -46,11 +46,14 @@ Two concerns must stay separate (the 2026-09-23 memo §1 drew this line):
 - **This memo — INBOUND consumption.** `tool-gateway` is an MCP *client* of
   external servers; Luban retains policy, approval, evidence, and audit. This is
   the "Independent MCP toolsets **consumed by** tool-gateway" backlog row.
-- **SPEC-066 — OUTBOUND exposure** ("stable API productization / external
-  consumption"): another application consumes *Luban's* workflows/APIs. That
+- **The parked "stable API productization / external consumption" backlog row —
+  OUTBOUND exposure** (formerly earmarked `SPEC-066`; that number was taken by
+  [skill retrieval ranking fidelity](../specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md)
+  on 2026-10-01, so this row is de-numbered and gets its number at drafting):
+  another application consumes *Luban's* workflows/APIs. That
   stays **parked** — no second consumer exists, and machine-consumer attribution
   is unsolved (identity-broker wires only `authorization_code` + `refresh_token`,
-  no `client_credentials`). Nothing in this memo advances SPEC-066.
+  no `client_credentials`). Nothing in this memo advances that row.
 
 ## 4. Non-negotiable architecture
 
@@ -192,7 +195,7 @@ This memo authorizes **no** implementation. Recommended next decisions, in order
 4. **Resolve the machine-consumer credential gap** (identity-broker
    `client_credentials` / approved-machine-consumer registration) as a
    prerequisite for any per-target service credential — this is shared with the
-   parked SPEC-066 and should be scoped once.
+   parked stable-API-productization backlog row and should be scoped once.
 5. **Frame R6.** If approved, record a new roadmap release theme ("External
    system integration via MCP ingestion") rather than leaving these as loose
    backlog rows.

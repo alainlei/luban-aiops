@@ -4,6 +4,7 @@ Status: assessment — **gate 1 executed 2026-10-01 and the cost-ordered measure
 Date: 2026-09-30 · Revised: 2026-10-01 (§2.3 measured defects; §2.2 query-shape claim corrected; §4.4, §7, §10 re-ordered by cost) · Revised again 2026-10-01 (§2.3 defect 1 resolved by configuration; corpus figures re-measured at 18 rows / 2 sources) · **Third pass 2026-10-01** (§2.3 gains defects 4–5; §4.4 gains the `skill_id`/IDF/length-norm fixes and strikes the tie-break fix; §10 gate 1 closed, gate 2 measured, gate 3 not reached)
 Evaluation set: [semantic-skill-retrieval-eval-set.md](./semantic-skill-retrieval-eval-set.md) — built, regenerated against the 18-row corpus, and **labeled**: 38 queries × 18 documents = 684 judgments, committed as [semantic-skill-retrieval-labels.json](./semantic-skill-retrieval-labels.json), with the lexical baseline and the candidate comparison published in its §8
 Roadmap home: [Exploration Backlog](../agentic-aiops-platform/delivery-roadmap.md#exploration-backlog), "Semantic (vector) skill retrieval"
+Promoted to: [SPEC-066 skill retrieval ranking fidelity](../specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md) — **`draft`, 2026-10-01**, covering §4.4's four measured fixes plus the cross-backend parity work this memo could not see and §11's open questions. **Drafting does not weaken this memo's boundary**: the spec is not approved, six Open Questions block `approved`, and nothing below is retroactively authorized. §4.4's claim that indexing `skill_id` needs "no schema change" is true of `score()` and **false of the deployed Postgres backend** — `skill_id` is in neither `_SEARCH_VECTOR` nor `idx_skills_search`, so slug-only matches return zero rows there today; SPEC-066 R-1/R-5 carry the correction. §4.4's "`parse_sources` still accepts two sources covering the same files" is likewise imprecise — `parse_sources` validates `SKILLS_SOURCES` JSON and never sees file content, so it cannot detect content overlap at all; SPEC-066 R-7 puts de-duplication in `rank()` and routes any ingestion-time rejection to sync.
 Evidence baseline: repository at v0.45.0 (`3c87723`); static read of the skills-hub retrieval path plus queries against the live dev cluster (`postgres-0` `skills` and `audit` databases, the `llm-hosting/ollama` deployment) and the pinned agentscope 2.0.8 venv. **The 2026-09-30 pass was entirely read-only** — nothing was installed, embedded, deployed, mutated, or committed. The 2026-10-01 revision follows two operator-authorized mutations (dropping the leftover `_idx_probe` table and removing the duplicate skill sources, §2.3 defect 1) and re-measures the corpus afterwards; **no product code was changed in either pass, and no embedding was computed.**
 
 ## 1. Question and recommendation
@@ -82,8 +83,8 @@ order, and a cheaper candidate that closes the gap ends the exercise — it did*
 | Weights: title **3.0**, tag **2.0**, each body occurrence **1.0**, saturating at `BODY_OCCURRENCE_CAP = 5` | [`scoring.py:21-24,44-52`](../../products/skills-hub/src/skills_hub/services/scoring.py) |
 | Zero-score records are **excluded**; ties break by `skill_id` ascending; ordering is `(-score, skill_id)` | [`scoring.py:85-96`](../../products/skills-hub/src/skills_hub/services/scoring.py) |
 | Excerpt is a ≤400-char window around the first body match, falling back to the description head | [`scoring.py:55-75`](../../products/skills-hub/src/skills_hub/services/scoring.py) |
-| One pure `rank()` is shared by **both** backends so ordering is byte-identical — a test-pinned invariant | [`scoring.py:1-9`](../../products/skills-hub/src/skills_hub/services/scoring.py), [`skill_store.py:1-6,144,463`](../../products/skills-hub/src/skills_hub/services/skill_store.py) |
-| Postgres pre-filters with a GIN index over `to_tsvector('simple', title || ' ' || body)` and re-ranks in Python | [`skill_store.py:202-205,437-463`](../../products/skills-hub/src/skills_hub/services/skill_store.py) |
+| One pure `rank()` is shared by **both** backends so ordering is byte-identical — a **documented** invariant (the `scoring.py` docstring, SPEC-014 R-3) that is **not** test-pinned: no test drives both backends over one corpus and compares ordering. SPEC-066 R-6 adds that harness | [`scoring.py:1-9`](../../products/skills-hub/src/skills_hub/services/scoring.py), [`skill_store.py:1-6,144,463`](../../products/skills-hub/src/skills_hub/services/skill_store.py) |
+| Postgres pre-filters with a GIN index over `to_tsvector('simple', title \| ' ' \| body)` and re-ranks in Python | [`skill_store.py:202-205,437-463`](../../products/skills-hub/src/skills_hub/services/skill_store.py) |
 | Lexemes are **OR**-joined (`" \| ".join(tokens)`), because `plainto_tsquery` ANDs and silently drops partial matches | [`skill_store.py:243-256,452`](../../products/skills-hub/src/skills_hub/services/skill_store.py) |
 | `tags` cannot join the index expression (`array_to_string`/`array_out` are STABLE, not IMMUTABLE) and are matched in a second tsvector branch + query-time filter | [`skill_store.py:199-205,251-256,474-482`](../../products/skills-hub/src/skills_hub/services/skill_store.py) |
 | DDL is idempotent by convention: `CREATE TABLE IF NOT EXISTS` then `ALTER ... ADD COLUMN IF NOT EXISTS` per spec version, run in `initialize()` | [`skill_store.py:158-206,324-328`](../../products/skills-hub/src/skills_hub/services/skill_store.py) |
@@ -947,3 +948,30 @@ Non-negotiables:
   gate 2 now carries an abstention note recommending a **separate backlog row** for
   it as a product/contract question. No product code, manifest, or configuration was
   changed in this pass; the work was labeling, offline scoring, and documentation.
+- 2026-10-01 — **promoted to [SPEC-066](../specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md)
+  as `draft`.** Documentation-only; this memo's boundary and its "authorizes no
+  implementation" standing are unchanged, and the spec carries six unresolved Open
+  Questions. Drafting read the shipped `scoring.py`, `skill_store.py` and
+  `config.py`, both store backends, the tool-gateway connector, the portal and the
+  skills-hub test suite, which produced three corrections to this memo and one to
+  SPEC-014: (1) §4.4's "no schema change" for `skill_id` indexing holds for
+  `score()` but **not for the deployed Postgres backend** — `skill_id` is in neither
+  `_SEARCH_VECTOR` nor `idx_skills_search`, so a slug-only match returns zero rows
+  there while scoring positive in memory, and stratum-A recovery is exactly the class
+  that would not ship; (2) §4.4's "`parse_sources` still accepts two sources covering
+  the same files" is imprecise — `parse_sources` validates `SKILLS_SOURCES` JSON and
+  never sees file content, so it structurally cannot detect content overlap, which
+  relocates the fix to `rank()` (or to sync, where body hashes exist); (3) the eval's
+  **0.500 → 0.711 is a memory-path upper bound**, since it ran `rank()` over a corpus
+  export with no prefilter — and because no single fix reaches significance alone, a
+  backend-neutral *subset* would be an unmeasured subset, against eval-set §8's own
+  rule; (4) SPEC-014's `tasks.md` claims a delivered "byte-identical ordering parity
+  test vs in-memory store" that **does not exist** in the suite, and names
+  `plainto_tsquery` where the shipped code OR-joins `to_tsquery` lexemes. §11's first
+  two open questions are inherited by the spec as OQ-1 and OQ-3; the label-ownership
+  question stays unsettled. Two consequential edits to this memo's own text: §2.1's
+  "byte-identical … a test-pinned invariant" row now records that the invariant is
+  **documented but not test-pinned** (finding 4 above), and its adjacent
+  `to_tsvector` row escapes the `||` inside the code span, which rendered as six
+  cells in a two-column table. No product code, manifest, configuration, or
+  measurement was changed in this pass.
