@@ -1,6 +1,6 @@
 # Spike: Long-Term Operator Memory
 
-Status: assessment — recommends **do not adopt, and close the backlog row**. **No implementation, dependency install, middleware wiring, storage table, ADR, or spec is authorized by this memo.**
+Status: assessment — **do not adopt; close the backlog row**. **Accepted by the operator 2026-10-01** (§11 gate 5), so the [Exploration Backlog](../agentic-aiops-platform/delivery-roadmap.md#exploration-backlog) row is recorded as closed and reopening needs the §9 conditions. **No implementation, dependency install, middleware wiring, storage table, ADR, or spec is authorized by this memo.**
 Date: 2026-10-01
 Roadmap home: [Exploration Backlog](../agentic-aiops-platform/delivery-roadmap.md#exploration-backlog), "Long-term operator memory"
 Prior evaluation: [agentscope-utilization-audit.md](./agentscope-utilization-audit.md) §2 row "Long-term memory middlewares (Mem0 / ReME / Agentic)" — ReME evaluated 2026-08-20, "does not fit as-is"
@@ -577,7 +577,7 @@ exist and already have governance, rather than adding a parallel ungoverned one:
 All three keep a human in the write path. That is the property a memory store
 removes.
 
-### 8.4 Option D — close the row (recommended)
+### 8.4 Option D — close the row (recommended, and accepted 2026-10-01)
 
 The row asks whether the middlewares "add real triage continuity across
 sessions". On the evidence: the continuity need is unobserved, the surfaces fail
@@ -588,6 +588,9 @@ in §9 recorded, and let Option C absorb any future requirement.
 A null result is a publishable outcome — the same posture the semantic-retrieval
 memo takes, and the reason its gate 1 says "without these numbers, no retrieval
 change is approved".
+
+**The operator accepted this option on 2026-10-01** (§11 gate 5); the backlog row
+is closed and the acceptance authorized no implementation.
 
 ## 9. What would have to be true to reopen
 
@@ -739,3 +742,11 @@ the operator's approval of this memo.
   gate 5 is the operator's to pass, not the author's. Still no product, config,
   dependency, schema, contract, or manifest change; no CHANGELOG entry, matching
   the docs-only-memo precedent (`mcp-ingestion-spike.md` has none).
+- 2026-10-01 — **§11 gate 5 passed: the operator accepted Option D.** The
+  backlog row is now recorded as **closed 2026-10-01** rather than as
+  recommended-pending, and the [utilization audit](./agentscope-utilization-audit.md)
+  §2 row drops its "pending the operator's acceptance" qualifier. Reopening
+  requires §9 conditions 1, 3, and 5 — a stated operator continuity need, a
+  written retention-class decision, and evidence that the governed Option C path
+  is insufficient — and not a library upgrade. No implementation was authorized
+  or performed by the acceptance.

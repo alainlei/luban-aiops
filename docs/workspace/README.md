@@ -36,7 +36,7 @@ This folder contains the documents that define how the platform should be organi
   - defines the current Python container baseline, evaluates the environment-specific base image option, and records the recommended migration path
 
 - [long-term-operator-memory-spike.md](long-term-operator-memory-spike.md)
-  - evaluates the three agentscope 2.0.8 long-term-memory middlewares (`AgenticMemory`, `Mem0`, `ReME`) against SPEC-018's four-point adoption gate and the live audit record; finds all three fail gate points 1–3 with no passing configuration, finds the cross-session continuity need unevidenced (107 of 124 sessions single-turn, every session and incident table TTL-swept to 0 rows), and recommends closing the backlog row in favour of the governed SPEC-039 / SPEC-044/045 knowledge path; assessment only
+  - evaluates the three agentscope 2.0.8 long-term-memory middlewares (`AgenticMemory`, `Mem0`, `ReME`) against SPEC-018's four-point adoption gate and the live audit record; finds all three fail gate points 1–3 with no passing configuration, finds the cross-session continuity need unevidenced (107 of 124 sessions single-turn, every session and incident table TTL-swept to 0 rows), and recommends closing the backlog row in favour of the governed SPEC-039 / SPEC-044/045 knowledge path — accepted by the operator 2026-10-01, so the row is closed; assessment only, no implementation authorized
 
 - [mcp-exposure-spike.md](mcp-exposure-spike.md)
   - assesses independent MCP toolsets consumed by tool-gateway; recommends retaining native connectors until a concrete use case justifies a pilot, not exposing Luban workflows or promoting an implementation spec
