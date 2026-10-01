@@ -1,0 +1,1461 @@
+{
+  "artifact": "semantic-skill-retrieval gate-1 relevance labels",
+  "schema_version": 1,
+  "labeled": "2026-10-01",
+  "specifies": "docs/workspace/semantic-skill-retrieval-eval-set.md §7 (label sheet)",
+  "grade_scale": {
+    "2": "directly applicable — an operator with this problem would follow it",
+    "1": "partially relevant — useful background, not followed on its own",
+    "0": "not relevant"
+  },
+  "grading_policy": [
+    "2 goes to a document that owns the stated symptom or task.",
+    "1 goes to a document covering a plausible cause, the verification step, or the systematic entry point when a more specific document owns the symptom.",
+    "Generic k8s troubleshooting guides get 2 only when the query is a generic pod problem with no specific owner, else 1.",
+    "A document about a different system is 0 no matter how similar the task shape is.",
+    "Graded from each document's own content (title, description, tags, section structure), blind to pool ranks and scores, per §6.3 rules 2 and 3."
+  ],
+  "corpus_snapshot": {
+    "taken": "2026-10-01",
+    "rows": 18,
+    "distinct_body_md5": 18,
+    "total_body_bytes": 75680,
+    "note": "Labels pin this snapshot. A document whose body_md5 differs must be re-graded before these labels are reused (§3).",
+    "documents": [
+      {
+        "code": "D01",
+        "skill_id": "platform-skills/platform-runbooks/guides/crashloopsandoom",
+        "title": "Crash Loops and OOM Kills",
+        "tags": [
+          "kubernetes",
+          "pod",
+          "troubleshooting",
+          "oom",
+          "crashloop"
+        ],
+        "body_bytes": 1141,
+        "body_md5": "7bbf4b1cb9a6e21ab064b1ec08d054e0"
+      },
+      {
+        "code": "D02",
+        "skill_id": "platform-skills/platform-runbooks/guides/debugpods",
+        "title": "Debug Pods",
+        "tags": [
+          "kubernetes",
+          "pod",
+          "troubleshooting",
+          "debugging"
+        ],
+        "body_bytes": 1309,
+        "body_md5": "a28b96b33c4c15725c8a3d34305d7b22"
+      },
+      {
+        "code": "D03",
+        "skill_id": "platform-skills/platform-runbooks/guides/debugservices",
+        "title": "Debug Services",
+        "tags": [
+          "kubernetes",
+          "service",
+          "troubleshooting",
+          "dns",
+          "networking"
+        ],
+        "body_bytes": 1230,
+        "body_md5": "9011849f71b6ac44f4b74a8b10cf25b2"
+      },
+      {
+        "code": "D04",
+        "skill_id": "platform-skills/platform-runbooks/guides/generatepassword",
+        "title": "Generate a Password and Deliver It Securely",
+        "tags": [
+          "password",
+          "generate",
+          "secret",
+          "delivery",
+          "reset",
+          "account-recovery",
+          "portal-copy",
+          "email"
+        ],
+        "body_bytes": 2907,
+        "body_md5": "c6f153abd04108a8e0bbc16231d2e7fa"
+      },
+      {
+        "code": "D05",
+        "skill_id": "platform-skills/platform-runbooks/guides/imagepullfailures",
+        "title": "Image Pull Failures",
+        "tags": [
+          "kubernetes",
+          "pod",
+          "troubleshooting",
+          "image"
+        ],
+        "body_bytes": 1133,
+        "body_md5": "025ae005ca11df439b07a34b9479f38d"
+      },
+      {
+        "code": "D06",
+        "skill_id": "platform-skills/platform-runbooks/guides/podschedulingfailures",
+        "title": "Pod Scheduling Failures",
+        "tags": [
+          "kubernetes",
+          "pod",
+          "troubleshooting",
+          "scheduling"
+        ],
+        "body_bytes": 1186,
+        "body_md5": "d30eb459a000ae8ea586c157835367b4"
+      },
+      {
+        "code": "D07",
+        "skill_id": "platform-skills/sre-alerting/alerts/kubecontainerwaiting",
+        "title": "KubeContainerWaiting",
+        "tags": [
+          "kubernetes",
+          "pod",
+          "alerting",
+          "KubeContainerWaiting"
+        ],
+        "body_bytes": 1364,
+        "body_md5": "eba157a6ff7efe9f933cace90653eb67"
+      },
+      {
+        "code": "D08",
+        "skill_id": "platform-skills/sre-alerting/alerts/kubedeploymentreplicasmismatch",
+        "title": "KubeDeploymentReplicasMismatch",
+        "tags": [
+          "kubernetes",
+          "deployment",
+          "alerting",
+          "KubeDeploymentReplicasMismatch"
+        ],
+        "body_bytes": 1289,
+        "body_md5": "4f7020364cc450e06b69244c072f917e"
+      },
+      {
+        "code": "D09",
+        "skill_id": "platform-skills/sre-alerting/alerts/kubememorypressure",
+        "title": "KubeMemoryPressure",
+        "tags": [
+          "kubernetes",
+          "node",
+          "alerting",
+          "KubeMemoryPressure",
+          "memory"
+        ],
+        "body_bytes": 1096,
+        "body_md5": "04e8387d4759c90f8c9b8ba04fcf924b"
+      },
+      {
+        "code": "D10",
+        "skill_id": "platform-skills/sre-alerting/alerts/kubenodenotready",
+        "title": "KubeNodeNotReady",
+        "tags": [
+          "kubernetes",
+          "node",
+          "alerting",
+          "KubeNodeNotReady"
+        ],
+        "body_bytes": 1440,
+        "body_md5": "9b32438d6c83ae1d6785d00231217bde"
+      },
+      {
+        "code": "D11",
+        "skill_id": "platform-skills/sre-alerting/alerts/kubepodcrashlooping",
+        "title": "KubePodCrashLooping",
+        "tags": [
+          "kubernetes",
+          "pod",
+          "alerting",
+          "KubePodCrashLooping",
+          "CrashLoopBackOff"
+        ],
+        "body_bytes": 1308,
+        "body_md5": "c5e8eae7e642cbfeca5fcde83a53d4f4"
+      },
+      {
+        "code": "D12",
+        "skill_id": "platform-skills/sre-alerting/alerts/kubepodnotready",
+        "title": "KubePodNotReady",
+        "tags": [
+          "kubernetes",
+          "pod",
+          "alerting",
+          "KubePodNotReady"
+        ],
+        "body_bytes": 1733,
+        "body_md5": "3f467e096293c935b90ee736f28bf801"
+      },
+      {
+        "code": "D13",
+        "skill_id": "samples/adhoc-password-reset-resetpasswordadhoc",
+        "title": "Reset a Password Ad Hoc (Per-Action Approval)",
+        "tags": [
+          "admin",
+          "portal",
+          "password",
+          "reset",
+          "ad-hoc",
+          "per-action",
+          "approval",
+          "browser",
+          "web-check",
+          "troubleshooting"
+        ],
+        "body_bytes": 11745,
+        "body_md5": "a697f6f39ea5124bad35de6b6a40b75c"
+      },
+      {
+        "code": "D14",
+        "skill_id": "samples/composition-recoveracmeaccount",
+        "title": "Recover a Locked-Out ACME Admin Account",
+        "tags": [
+          "acme-admin",
+          "composition",
+          "runbook",
+          "account-recovery",
+          "password-reset",
+          "unlock",
+          "user-management"
+        ],
+        "body_bytes": 10434,
+        "body_md5": "8a8e3be102cb1c29613a28ce19ecef82"
+      },
+      {
+        "code": "D15",
+        "skill_id": "samples/health-check-checkservicehealth",
+        "title": "Check ACME Admin Service Health",
+        "tags": [
+          "acme-admin",
+          "health",
+          "healthz",
+          "http",
+          "service-check",
+          "read-only",
+          "api",
+          "uptime",
+          "monitoring"
+        ],
+        "body_bytes": 7421,
+        "body_md5": "736d8f586e1d9583a436e4bed89a7cff"
+      },
+      {
+        "code": "D16",
+        "skill_id": "samples/lock-unlock-user-lockunlockuser",
+        "title": "Lock or Unlock an ACME Admin User Account",
+        "tags": [
+          "acme-admin",
+          "user",
+          "account",
+          "lock",
+          "unlock",
+          "suspend",
+          "http",
+          "mutation",
+          "user-management"
+        ],
+        "body_bytes": 8869,
+        "body_md5": "39a2128a73e60f7ea2e214581fe51cde"
+      },
+      {
+        "code": "D17",
+        "skill_id": "samples/password-reset-resetacmepassword",
+        "title": "Reset a Password in the ACME Admin Console",
+        "tags": [
+          "acme-admin",
+          "console",
+          "password",
+          "reset",
+          "browser-flow",
+          "web-check",
+          "mutation",
+          "temporary-password",
+          "user-management"
+        ],
+        "body_bytes": 11820,
+        "body_md5": "377cbccf8904d4147d11141952c31012"
+      },
+      {
+        "code": "D18",
+        "skill_id": "samples/user-status-checkuserstatus",
+        "title": "Check ACME Admin User Account Status",
+        "tags": [
+          "acme-admin",
+          "user",
+          "account",
+          "status",
+          "locked",
+          "web-check",
+          "read-only",
+          "verification",
+          "user-management"
+        ],
+        "body_bytes": 8255,
+        "body_md5": "08052268282b1590599b76c4839873ef"
+      }
+    ]
+  },
+  "queries": [
+    {
+      "id": "Q03",
+      "stratum": "B",
+      "text": "KubePodNotReady",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 1,
+        "D02": 1,
+        "D03": 0,
+        "D04": 0,
+        "D05": 1,
+        "D06": 0,
+        "D07": 1,
+        "D08": 1,
+        "D09": 0,
+        "D10": 1,
+        "D11": 1,
+        "D12": 2,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "Q04",
+      "stratum": "B",
+      "text": "KubePodNotReady alert",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 1,
+        "D02": 1,
+        "D03": 0,
+        "D04": 0,
+        "D05": 1,
+        "D06": 0,
+        "D07": 1,
+        "D08": 1,
+        "D09": 0,
+        "D10": 1,
+        "D11": 1,
+        "D12": 2,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "Q11",
+      "stratum": "B",
+      "text": "acme",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 1,
+        "D14": 1,
+        "D15": 1,
+        "D16": 1,
+        "D17": 1,
+        "D18": 1
+      }
+    },
+    {
+      "id": "Q13",
+      "stratum": "B",
+      "text": "acme-admin password reset runbook",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 1,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 2,
+        "D14": 1,
+        "D15": 0,
+        "D16": 0,
+        "D17": 2,
+        "D18": 1
+      }
+    },
+    {
+      "id": "Q14",
+      "stratum": "B",
+      "text": "adhoc password reset admin panel",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 1,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 2,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 1,
+        "D18": 1
+      }
+    },
+    {
+      "id": "Q18",
+      "stratum": "B",
+      "text": "admin portal password reset user",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 1,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 2,
+        "D14": 1,
+        "D15": 0,
+        "D16": 0,
+        "D17": 2,
+        "D18": 1
+      }
+    },
+    {
+      "id": "Q21",
+      "stratum": "B",
+      "text": "admin portal reset user password",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 1,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 2,
+        "D14": 1,
+        "D15": 0,
+        "D16": 0,
+        "D17": 2,
+        "D18": 1
+      }
+    },
+    {
+      "id": "Q22",
+      "stratum": "B",
+      "text": "admin portal user password reset",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 1,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 2,
+        "D14": 1,
+        "D15": 0,
+        "D16": 0,
+        "D17": 2,
+        "D18": 1
+      }
+    },
+    {
+      "id": "Q26",
+      "stratum": "B",
+      "text": "admin portal write action user management approval",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 1,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 2,
+        "D14": 1,
+        "D15": 0,
+        "D16": 2,
+        "D17": 2,
+        "D18": 1
+      }
+    },
+    {
+      "id": "Q31",
+      "stratum": "B",
+      "text": "argocd health check",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "Q35",
+      "stratum": "B",
+      "text": "demo deployment triage warning",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 1,
+        "D02": 1,
+        "D03": 0,
+        "D04": 0,
+        "D05": 1,
+        "D06": 1,
+        "D07": 1,
+        "D08": 2,
+        "D09": 0,
+        "D10": 0,
+        "D11": 1,
+        "D12": 1,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "Q39",
+      "stratum": "B",
+      "text": "lock account acme-admin disable user",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 0,
+        "D14": 1,
+        "D15": 0,
+        "D16": 2,
+        "D17": 0,
+        "D18": 1
+      }
+    },
+    {
+      "id": "Q45",
+      "stratum": "B",
+      "text": "pod health check readiness verify running ready conditions",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 1,
+        "D02": 2,
+        "D03": 1,
+        "D04": 0,
+        "D05": 0,
+        "D06": 1,
+        "D07": 1,
+        "D08": 1,
+        "D09": 0,
+        "D10": 0,
+        "D11": 1,
+        "D12": 2,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "Q46",
+      "stratum": "B",
+      "text": "pod keeps restarting CrashLoopBackOff",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 2,
+        "D02": 1,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 1,
+        "D08": 0,
+        "D09": 1,
+        "D10": 0,
+        "D11": 2,
+        "D12": 1,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "Q48",
+      "stratum": "B",
+      "text": "reset acme-admin password",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 1,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 2,
+        "D14": 1,
+        "D15": 0,
+        "D16": 0,
+        "D17": 2,
+        "D18": 1
+      }
+    },
+    {
+      "id": "Q50",
+      "stratum": "B",
+      "text": "reset alice acme-admin password",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 1,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 2,
+        "D14": 1,
+        "D15": 0,
+        "D16": 0,
+        "D17": 2,
+        "D18": 1
+      }
+    },
+    {
+      "id": "Q55",
+      "stratum": "B",
+      "text": "reset user password admin portal",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 1,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 2,
+        "D14": 1,
+        "D15": 0,
+        "D16": 0,
+        "D17": 2,
+        "D18": 1
+      }
+    },
+    {
+      "id": "Q56",
+      "stratum": "B",
+      "text": "restart pod",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 1,
+        "D02": 1,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 1,
+        "D09": 0,
+        "D10": 0,
+        "D11": 1,
+        "D12": 1,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "Q62",
+      "stratum": "B",
+      "text": "web check confirmation gate HITL blocked or page not advancing",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 2,
+        "D14": 1,
+        "D15": 0,
+        "D16": 0,
+        "D17": 2,
+        "D18": 1
+      }
+    },
+    {
+      "id": "Q63",
+      "stratum": "B",
+      "text": "web check sign in inventory portal does not transition successful login troubleshooting",
+      "source": "audit pool (eval-set §5)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 1,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 1,
+        "D14": 1,
+        "D15": 1,
+        "D16": 0,
+        "D17": 1,
+        "D18": 2
+      }
+    },
+    {
+      "id": "C01",
+      "stratum": "C",
+      "text": "pod won't start",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 1,
+        "D02": 2,
+        "D03": 0,
+        "D04": 0,
+        "D05": 1,
+        "D06": 2,
+        "D07": 2,
+        "D08": 1,
+        "D09": 0,
+        "D10": 1,
+        "D11": 1,
+        "D12": 2,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "C02",
+      "stratum": "C",
+      "text": "container keeps dying",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 2,
+        "D02": 1,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 1,
+        "D08": 0,
+        "D09": 1,
+        "D10": 0,
+        "D11": 2,
+        "D12": 1,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "C03",
+      "stratum": "C",
+      "text": "app crash looping after deploy",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 2,
+        "D02": 1,
+        "D03": 0,
+        "D04": 0,
+        "D05": 1,
+        "D06": 0,
+        "D07": 0,
+        "D08": 1,
+        "D09": 0,
+        "D10": 0,
+        "D11": 2,
+        "D12": 1,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "C04",
+      "stratum": "C",
+      "text": "process out of memory killed",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 2,
+        "D02": 1,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 2,
+        "D10": 0,
+        "D11": 1,
+        "D12": 0,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "C05",
+      "stratum": "C",
+      "text": "disk full on node",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 1,
+        "D10": 2,
+        "D11": 0,
+        "D12": 0,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "C06",
+      "stratum": "C",
+      "text": "node went offline",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 1,
+        "D09": 1,
+        "D10": 2,
+        "D11": 0,
+        "D12": 1,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "C07",
+      "stratum": "C",
+      "text": "image won't download",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 0,
+        "D02": 1,
+        "D03": 0,
+        "D04": 0,
+        "D05": 2,
+        "D06": 0,
+        "D07": 1,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 1,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "C08",
+      "stratum": "C",
+      "text": "pod stuck in pending",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 0,
+        "D02": 1,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 2,
+        "D07": 1,
+        "D08": 0,
+        "D09": 1,
+        "D10": 1,
+        "D11": 0,
+        "D12": 0,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "C09",
+      "stratum": "C",
+      "text": "service name not resolving",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 2,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "C10",
+      "stratum": "C",
+      "text": "user locked out of admin console",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 1,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 1,
+        "D14": 2,
+        "D15": 0,
+        "D16": 2,
+        "D17": 1,
+        "D18": 1
+      }
+    },
+    {
+      "id": "C11",
+      "stratum": "C",
+      "text": "issue a temporary password for alice",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 2,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 1,
+        "D14": 1,
+        "D15": 0,
+        "D16": 0,
+        "D17": 2,
+        "D18": 1
+      }
+    },
+    {
+      "id": "C12",
+      "stratum": "C",
+      "text": "is the admin portal up",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 0,
+        "D14": 0,
+        "D15": 2,
+        "D16": 0,
+        "D17": 0,
+        "D18": 1
+      }
+    },
+    {
+      "id": "C13",
+      "stratum": "C",
+      "text": "check whether the account is suspended",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 0,
+        "D14": 1,
+        "D15": 0,
+        "D16": 1,
+        "D17": 0,
+        "D18": 2
+      }
+    },
+    {
+      "id": "C14",
+      "stratum": "C",
+      "text": "replica count is wrong",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 0,
+        "D02": 1,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 1,
+        "D07": 0,
+        "D08": 2,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 1,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "C15",
+      "stratum": "C",
+      "text": "container waiting to start",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 0,
+        "D02": 1,
+        "D03": 0,
+        "D04": 0,
+        "D05": 1,
+        "D06": 1,
+        "D07": 2,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 1,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "C16",
+      "stratum": "C",
+      "text": "certificate expired on the ingress",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "C17",
+      "stratum": "C",
+      "text": "argocd sync keeps failing",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    },
+    {
+      "id": "C18",
+      "stratum": "C",
+      "text": "database connection pool exhausted",
+      "source": "authored paraphrase / negative control (eval-set §6.1)",
+      "grades": {
+        "D01": 0,
+        "D02": 0,
+        "D03": 0,
+        "D04": 0,
+        "D05": 0,
+        "D06": 0,
+        "D07": 0,
+        "D08": 0,
+        "D09": 0,
+        "D10": 0,
+        "D11": 0,
+        "D12": 0,
+        "D13": 0,
+        "D14": 0,
+        "D15": 0,
+        "D16": 0,
+        "D17": 0,
+        "D18": 0
+      }
+    }
+  ],
+  "ungraded": {
+    "stratum_A": {
+      "ids": [
+        "Q01",
+        "Q02",
+        "Q05",
+        "Q06",
+        "Q07",
+        "Q08",
+        "Q09",
+        "Q10",
+        "Q15",
+        "Q33",
+        "Q34",
+        "Q38",
+        "Q58",
+        "Q60"
+      ],
+      "reason": "§6.1 excludes stratum A from headline metrics as regression-only. Held ungraded here; see the doc for the measured objection that these queries do not in fact 'match trivially'."
+    },
+    "stratum_B_not_selected": {
+      "ids": [
+        "Q12",
+        "Q16",
+        "Q17",
+        "Q19",
+        "Q20",
+        "Q23",
+        "Q24",
+        "Q25",
+        "Q27",
+        "Q28",
+        "Q29",
+        "Q30",
+        "Q32",
+        "Q36",
+        "Q37",
+        "Q40",
+        "Q41",
+        "Q42",
+        "Q43",
+        "Q44",
+        "Q47",
+        "Q49",
+        "Q51",
+        "Q52",
+        "Q53",
+        "Q54",
+        "Q57",
+        "Q59",
+        "Q61"
+      ],
+      "reason": "§6.4 minimum viable effort is 20 stratum-B queries; the remaining 29 stay in the pool for a later widening pass."
+    }
+  },
+  "selection_rule": {
+    "description": "Ranking-blind and reproducible. Uses audit frequency and topic clustering only; never a pool rank or score.",
+    "step1_n_ge_2": [
+      "Q03",
+      "Q04",
+      "Q18",
+      "Q21",
+      "Q22",
+      "Q31",
+      "Q48",
+      "Q50",
+      "Q55",
+      "Q56"
+    ],
+    "clusters": {
+      "K2 crash-loop prose": [
+        "Q46",
+        "Q47",
+        "Q59"
+      ],
+      "K4 readiness prose": [
+        "Q45"
+      ],
+      "K5 deployment triage (demo)": [
+        "Q35",
+        "Q36",
+        "Q37"
+      ],
+      "P4 account recovery": [
+        "Q13",
+        "Q41"
+      ],
+      "P5 ad-hoc per-action reset": [
+        "Q14"
+      ],
+      "P6 write-action approval": [
+        "Q26",
+        "Q44"
+      ],
+      "S1 acme generic": [
+        "Q11"
+      ],
+      "S2 lock/unlock account": [
+        "Q39"
+      ],
+      "S4 HITL gate blocked": [
+        "Q62"
+      ],
+      "S5 sign-in does not transition": [
+        "Q63"
+      ]
+    },
+    "dropped_as_subsumed": {
+      "P3 bare password reset": [
+        "Q40",
+        "Q42"
+      ],
+      "S3 web check generic": [
+        "Q24"
+      ]
+    }
+  },
+  "notes": {
+    "Q31": "All 18 codes graded 0. No ArgoCD document exists in the corpus, so the correct answer is 'nothing applies'. Lexical returns D15 at 20.0 — this is the §2.3 defect-3 query, and it makes zero-relevant rate measurable on real traffic rather than only on the authored negative controls.",
+    "Q56": "No grade 2. The corpus holds no 'restart a pod' runbook: restarting is a mutation performed through tools, not a document. Five codes are grade 1 (debug/triage background). Zero-relevant at grade 2, non-zero at grade >=1.",
+    "Q11": "No grade 2. A single-token query states no problem, so nothing is directly applicable; all six acme-admin documents are grade 1. Shows zero-relevant rate also responds to under-specification, not only to vocabulary gaps.",
+    "C05": "CORRECTION to §6.1, which predicted D09. D09 KubeMemoryPressure is about memory; D10 KubeNodeNotReady is the document whose triage step 1 explicitly reads node conditions including DiskPressure. Graded D10=2, D09=1.",
+    "C13": "NARROWING of §6.1, which predicted 'D18 / D16'. The query asks to check, so the read-only D18 is directly applicable and the mutating D16 is background.",
+    "C16": "Negative control. Nearest miss is D03 Debug Services (DNS/networking), graded 0: it covers Service endpoints and resolution, not TLS certificate expiry.",
+    "C18": "Negative control. Nearest miss is D01 (crash on startup from a failing dependency), graded 0: it helps you observe the symptom, not fix pool sizing.",
+    "Q45": "Lexical top-1 is D15 'Check ACME Admin Service Health' at 25.0, graded 0 — an HTTP healthz check against a sample app, for a query about pod readiness conditions. Both grade-2 documents (D02, D12) sit below it.",
+    "Q46": "Lexical top-1 is D06 'Pod Scheduling Failures' at 10.0, graded 0, tied with D11 at 10.0 and separated only by alphabetical skill_id. Confirms the §2.2 defect-2 tie-break under labels.",
+    "Q14": "Lexical top-1 is D17 at 30 against D13 at 29 — the bound-flow reset beats the ad-hoc reset for a query that explicitly says 'adhoc'. A one-point margin inverts the answer."
+  },
+  "corrections_to_eval_set": [
+    {
+      "id": "C05",
+      "section": "§6.1",
+      "predicted": "D09",
+      "graded": "D10=2, D09=1",
+      "basis": "D09 is memory pressure; D10 KubeNodeNotReady is the document whose triage step 1 explicitly reads DiskPressure."
+    },
+    {
+      "id": "C13",
+      "section": "§6.1",
+      "predicted": "D18 / D16",
+      "graded": "D18=2, D16=1, D14=1",
+      "basis": "The query asks to check, so the read-only status document is directly applicable and the mutating lock/unlock document is background."
+    }
+  ],
+  "protocol_deviations": [
+    {
+      "rule": "§6.3 rule 4 (two labelers, 20-query overlap, Cohen's kappa)",
+      "deviation": "Single labeler. No kappa is computable, so inter-rater reliability is unmeasured and must be reported as unmeasured.",
+      "authorized_by": "operator, 2026-10-01 (draft-then-ratify path)"
+    },
+    {
+      "rule": "§6.3 rule 5 (the labeler must own the runbooks)",
+      "deviation": "Labels were drafted by the spike author from document content and submitted for operator ratification of the decisive subset, rather than authored by operations. Gate 1 therefore passes as 'author-proposed, operator-ratified', not as blind operations labeling.",
+      "authorized_by": "operator, 2026-10-01 (draft-then-ratify path)"
+    }
+  ],
+  "ratification_surface": {
+    "description": "What the operator reviews: only judgments that could change a conclusion, not all 684.",
+    "includes": [
+      "every stratum-C grade 2 (the decisive stratum)",
+      "every query where the top-graded document differs from the lexical top-1",
+      "the three negative controls (C16, C17, C18) and the real-traffic zero-relevant query Q31"
+    ]
+  },
+  "counts": {
+    "queries_graded": 38,
+    "documents": 18,
+    "judgments": 684,
+    "nonzero": 173,
+    "grade_2": 52,
+    "grade_1": 121
+  }
+}

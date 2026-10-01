@@ -44,6 +44,65 @@ Release 1 entries are grouped retrospectively under 0.1.0.
   and never skill content, so an empty list keeps it hermetic — no git clone out of
   the acceptance namespace and no dependency on a mount the dev overlay no longer
   creates.
+- **Semantic skill retrieval: gate 1 closed, vector retrieval not authorized.**
+  All 38 recorded audit queries were graded against all 18 corpus documents
+  (684 pairs) from document content, blind to pool ranks, and the labels are
+  published as
+  [`semantic-skill-retrieval-labels.json`](docs/workspace/semantic-skill-retrieval-labels.json)
+  with the numbers written into the
+  [evaluation set](docs/workspace/semantic-skill-retrieval-eval-set.md) and the
+  [memo](docs/workspace/semantic-skill-retrieval-spike.md). Labeling was
+  author-proposed and operator-ratified rather than blind operations labeling,
+  recorded as a deviation from the memo's protocol. The best lexical candidate
+  — IDF weighting, a sublinear body-length norm, CamelCase title splitting, and
+  indexing `skill_id` — reaches **P@5 0.711** (stratum B 0.800 / C 0.611),
+  **MRR 0.868**, **nDCG 0.904** and **R@5 0.977** on grade-2 documents. Against
+  the shipped scorer, paired bootstrap (10,000 resamples) puts MRR
+  **+0.0943 [+0.0329, +0.1667]**, nDCG **+0.0918** and grade-2 MRR **+0.1268**
+  clear of zero, with P@5 **+0.0474 [+0.0000, +0.1000]** borderline and an exact
+  sign test at **p = 0.0117**. The decisive fact is that **zero grade-2
+  documents are missing from the top 10 on any of the 38 queries**: there is no
+  recall gap for a vector store to recover, so under the memo's pre-registered
+  cost-ordered rule the cheap lexical step closes the row and **no embedding
+  work is authorized**. Two further defects were measured and documented —
+  document-length bias with unweighted function words (samples average 9,718
+  characters against runbooks' 1,424, and one document scores 3.0 from a *title*
+  match on "the"), and `skill_id` not being an indexed field at all. The memo's
+  recommended relevance-aware alphabetical tie-break is **struck**: measured, it
+  is numerically identical to CamelCase splitting alone on every metric for
+  every stratum, because IDF already breaks the tie on the merits.
+  **Not fixed here:** `rank()` still admits any document scoring above zero and
+  so **cannot abstain** when nothing applies — a product decision, not a
+  retrieval-algorithm one, now carried as its own delivery-roadmap row.
+- **SPEC-063 failure harness: admission timestamps come from the database
+  clock.** Envelope `requested_at` was stamped from the host clock while
+  admission evaluates `requested_at <= clock_timestamp() < expires_at` against
+  the disposable Postgres clock, so a host sleep suspending the VM left the
+  container behind the host by more than the 30s backdate and produced a
+  spurious `request_not_yet_valid` in legs that assert nothing about time —
+  observed after a 973s sleep. The new
+  `products/execution-runtime/tests/failure/support/host_clock.py` *measures*
+  the offset instead of budgeting for it, bracketing one `clock_timestamp()`
+  round trip between two host reads and taking the midpoint, and re-measures
+  once when a wall-vs-monotonic divergence shows the host slept
+  (`time.monotonic()` does not advance during macOS sleep while `time.time()`
+  does) — so the first envelope stamped after a suspension is already correct.
+  The offset is measured once per session, not per envelope: a 25-minute
+  campaign records `measurements: 1`. `signed_request` and the agent invocation
+  probe (which runs in its own interpreter and carried a second copy of the
+  same host-clock stamp) both use it, leaving all 85 call sites unchanged.
+  `e2e/execution-failure-test.sh` now execs the campaign under `caffeinate -is`
+  where available to prevent the suspension in the first place, and the proof
+  manifest gains `database_clock` and `host_suspension` so any future skew is
+  diagnosable rather than mysterious. A new `F-36/clock_reconciliation` harness
+  contract case proves the wiring — that the window straddles the real database
+  clock, that a clock skewed 600s beyond any margin carries `requested_at` with
+  it, and that a divergence forces a re-measurement. Measuring also **falsified
+  the previously documented assumption**: the at-rest skew is +3ms and +7ms with
+  the container marginally *ahead*, not the ~0.75s lag the old comment claimed,
+  which is why no constant is safe to hardcode. Full campaign green:
+  **792 passed in 1542.82s**, exit 0, no coverage errors. No product code,
+  contract, or schema changed.
 - **Docs.** `skills-guide.md` is rewritten git-first for adding a platform skill and
   gains a "never register the same files twice" caution and a duplicate-result
   troubleshooting row; `configuration-reference.md` records the non-overlap
@@ -52,7 +111,9 @@ Release 1 entries are grouped retrospectively under 0.1.0.
   memo](docs/workspace/semantic-skill-retrieval-spike.md) and its
   [evaluation set](docs/workspace/semantic-skill-retrieval-eval-set.md) are
   regenerated against the 18-row corpus, and the delivery-roadmap backlog row
-  records defect 1 as resolved by configuration with defects 2–3 still open.
+  records defect 1 as resolved by configuration with defects 2–5 open; the row
+  itself is closed by the retrieval entry above, and a new row carries the
+  abstention question.
 
 ## 0.45.0 — 2026-09-29
 

@@ -1,8 +1,8 @@
 # Spike: Semantic Skill Retrieval — pgvector vs. the Lexical Baseline on an 18-Document Corpus
 
-Status: assessment — recommends **measure before building**. **No implementation, embedding run, extension install, image swap, ADR, or spec is authorized by this memo.**
-Date: 2026-09-30 · Revised: 2026-10-01 (§2.3 measured defects; §2.2 query-shape claim corrected; §4.4, §7, §10 re-ordered by cost) · Revised again 2026-10-01 (§2.3 defect 1 resolved by configuration; corpus figures re-measured at 18 rows / 2 sources)
-Evaluation set: [semantic-skill-retrieval-eval-set.md](./semantic-skill-retrieval-eval-set.md) — built, regenerated against the 18-row corpus, awaiting operations' relevance labels
+Status: assessment — **gate 1 executed 2026-10-01 and the cost-ordered measurement closed the row.** The recommendation was *measure before building*; the measurement is now in hand and says the cheap lexical fixes close the ordering gap while the recall gap a vector store would address **does not exist**. **No implementation, embedding run, extension install, image swap, ADR, or spec is authorized by this memo** (eval-set [§8.5](./semantic-skill-retrieval-eval-set.md#85-decision-rule-outcome)).
+Date: 2026-09-30 · Revised: 2026-10-01 (§2.3 measured defects; §2.2 query-shape claim corrected; §4.4, §7, §10 re-ordered by cost) · Revised again 2026-10-01 (§2.3 defect 1 resolved by configuration; corpus figures re-measured at 18 rows / 2 sources) · **Third pass 2026-10-01** (§2.3 gains defects 4–5; §4.4 gains the `skill_id`/IDF/length-norm fixes and strikes the tie-break fix; §10 gate 1 closed, gate 2 measured, gate 3 not reached)
+Evaluation set: [semantic-skill-retrieval-eval-set.md](./semantic-skill-retrieval-eval-set.md) — built, regenerated against the 18-row corpus, and **labeled**: 38 queries × 18 documents = 684 judgments, committed as [semantic-skill-retrieval-labels.json](./semantic-skill-retrieval-labels.json), with the lexical baseline and the candidate comparison published in its §8
 Roadmap home: [Exploration Backlog](../agentic-aiops-platform/delivery-roadmap.md#exploration-backlog), "Semantic (vector) skill retrieval"
 Evidence baseline: repository at v0.45.0 (`3c87723`); static read of the skills-hub retrieval path plus queries against the live dev cluster (`postgres-0` `skills` and `audit` databases, the `llm-hosting/ollama` deployment) and the pinned agentscope 2.0.8 venv. **The 2026-09-30 pass was entirely read-only** — nothing was installed, embedded, deployed, mutated, or committed. The 2026-10-01 revision follows two operator-authorized mutations (dropping the leftover `_idx_probe` table and removing the duplicate skill sources, §2.3 defect 1) and re-measures the corpus afterwards; **no product code was changed in either pass, and no embedding was computed.**
 
@@ -11,8 +11,15 @@ Evidence baseline: repository at v0.45.0 (`3c87723`); static read of the skills-
 > Does a vector store measurably beat skills-hub's lexical `rank()` scoring
 > (title/tag/body substring weighting) on our corpus?
 
-Recommendation: **the question is not yet answerable, and the honest next step is a
-measurement, not an implementation.** Three verified findings reshape it:
+Recommendation: **answered 2026-10-01 — by measurement, not implementation, and the
+answer is that no vector store is needed.** When this memo was first written the
+question was genuinely not answerable and the honest next step was a measurement;
+that measurement has now been made (eval-set §8, on a labeled 684-judgment set). The
+three findings below reshaped the question, and the labels settled it: **the recall
+gap a vector store exists to close is measured absent** (0 of 38 queries have a
+grade-2 document outside the top 10), while the *ordering* gap is real and is closed
+by four cheap lexical fixes that need no model, no extension, and no image change
+(combined top-1 correctness **0.500 → 0.711**, sign test **p = 0.0117**).
 
 1. **The defect the backlog row assumes is not visible in the evidence.** All 96
    `skill_searched` audit events (2026-09-02 → 2026-09-22, 63 distinct queries)
@@ -38,21 +45,32 @@ measurement, not an implementation.** Three verified findings reshape it:
    place only when catalog scale makes SQL-side filtering or ANN necessary.
 
 So: build a labeled evaluation set and measure the lexical baseline first (§7) —
-**the set is now built**: [semantic-skill-retrieval-eval-set.md](./semantic-skill-retrieval-eval-set.md)
+**the set is built, labeled, and measured**: [semantic-skill-retrieval-eval-set.md](./semantic-skill-retrieval-eval-set.md)
 holds the deduplicated 18-document catalogue, all 63 audit queries with their
-lexical candidate pools at depth 10, the strata, the grading scale, and a
-pre-registered decision rule; what remains is the human labeling. Candidates are
-evaluated in **cost order, and a cheaper candidate that closes the gap ends the
-exercise**:
+lexical candidate pools at depth 10, the strata, the grading scale, a
+pre-registered decision rule, and now the **684 judgments** that instantiate it plus
+the baseline and candidate metrics in its §8. Candidates were evaluated in **cost
+order, and a cheaper candidate that closes the gap ends the exercise — it did**:
 
-1. **Finish de-duplication in the product and fix the tokenizer** (§4.4, defects 1–2
+1. **Finish de-duplication in the product and fix the tokenizer** (§4.4, defects 1–5
    of §2.3) — no model, no vector, no new dependency, no image change. Defect 1's
-   *configuration* half is done; its *product* half is not.
-2. **Then** the heavier lexical options — cover-density ranking, trigram tolerance,
-   a curated alias map.
-3. **Only then** semantics. If they are shown to help, the cheapest substrate is a
-   **sidecar embedding table over `real[]` with in-process exact cosine** (§4.3,
-   §5.2), reversible into `pgvector` later without a data migration.
+   *configuration* half is done; its *product* half is not, and is now defensible
+   only as a **guardrail against regression** rather than as a retrieval improvement,
+   because with the dev corpus already clean there is no crowding left to measure a
+   fix against. The tokenizer half — IDF weighting, sublinear length norm, CamelCase
+   splitting, and indexing `skill_id` — **is measured as sufficient** for the ordering
+   gap. Whether to promote those four to a spec is a *separate* decision this memo
+   still does not make.
+2. ~~**Then** the heavier lexical options — cover-density ranking, trigram tolerance,
+   a curated alias map.~~ **Cancelled by step 1's result.** They were never measured,
+   and the rule this memo pre-committed to cancels them: each is more expensive than
+   the fixes that already closed the gap.
+3. ~~**Only then** semantics.~~ **Not authorized.** The precondition was that
+   semantics beat the best of steps 1–2 outside the noise band, and they cannot on
+   this evidence because the defect they would address does not exist. If the row is
+   ever reopened, the cheapest substrate remains a **sidecar embedding table over
+   `real[]` with in-process exact cosine** (§4.3, §5.2), reversible into `pgvector`
+   later without a data migration.
 
 ## 2. Verified baseline — what "lexical" means today
 
@@ -141,21 +159,26 @@ Read honestly, with its limits:
   pattern is demo, e2e, and verification traffic. The absence of zero-hit queries
   is therefore *weak* evidence, not proof that operators never hit the gap.
 
-### 2.3 Three measured defects in the lexical baseline — defect 1 resolved 2026-10-01
+### 2.3 Five measured defects in the lexical baseline — defect 1 resolved 2026-10-01
 
 Building the §7.1 evaluation set
 ([semantic-skill-retrieval-eval-set.md](./semantic-skill-retrieval-eval-set.md))
 required re-running the real scorer over the real corpus, which produced evidence
-this memo did not have when first written. All three defects below are measured,
+this memo did not have when first written. All five defects below are measured,
 reproducible, and **fixable without a vector store** — which is why §4.4 and §10
 now put them ahead of the substrate decision. Defect 1 has since been fixed in the
-dev overlay; defects 2 and 3 are unchanged and still reproduce today.
+dev overlay; defects 2 and 3 are unchanged and still reproduce today. **Defects 4
+and 5 were found later, by gate 1's labeling pass** (2026-10-01): they change
+*which document wins* rather than how many slots are filled, so the pool analysis
+alone could not see them.
 
 | # | Defect | Measured |
 |---|---|---|
 | 1 | **The corpus was 18 documents in 30 rows — *resolved by configuration 2026-10-01; the product gap behind it is not*.** [`runtime-config.env`](../../shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env) registered `platform-skills` as a git source at `shared/platform-ops/skills` while the base `kustomization.yaml` generated two local ConfigMap sources from *those same files*. One file reached the store by two routes under two `source_id`s. `rank()` does no content de-duplication and breaks ties on `skill_id` ascending | `md5(body)` grouping: **12 byte-identical pairs + 6 singletons**. **32 of 63 queries (50.8%)** returned fewer distinct documents than result slots; 22 of 49 in the discriminating stratum. **After** dropping the two local sources: **0 of 63**, 18 rows / 18 distinct bodies, no top-1 changed, and 28 pools widened (+88 candidates). Still open: `rank()` de-duplicates nothing and `parse_sources` accepts overlapping coverage, so any overlapping registration reproduces 32-of-63 |
 | 2 | **CamelCase titles are opaque.** `tokenize("KubePodCrashLooping")` → `['kubepodcrashlooping']`, a single token, so no `sre-alerting` title can match a sub-word query term at the 3.0 title weight. Matching is strict token equality with no stemming, so `crashloop` cannot reach the `CrashLoopBackOff` tag | For `pod keeps restarting CrashLoopBackOff` the exactly-right document ranks **2nd** (was 3rd before de-duplication), tied at 10.0 with a *scheduling-failures* guide that takes the slot on alphabetical tie-break alone (`platform-runbooks` < `sre-alerting`). Adding the single word "restart" moves it to 1st at 11.0 |
 | 3 | **A non-zero `result_count` is not a useful answer.** §2.2's zero-hit finding is true and, read alone, misleading | `argocd health check` — 7 occurrences, the trail's second most frequent query — scores **20.0** on "Check ACME Admin Service Health". **No ArgoCD document exists in the corpus.** Unchanged by de-duplication |
+| 4 | **Document length and function words are unweighted.** `score()` sums `BODY_WEIGHT × min(occurrences, 5)` with no normalisation for document length, and weights every query token identically — so a long document wins by volume and a stopword scores as much as the subject | Eval-set [§2.5](./semantic-skill-retrieval-eval-set.md#25-document-length-bias-and-unweighted-function-words--measured-2026-10-01): `samples/*` bodies average **9,718 chars** against **1,424** for `platform-*` runbooks (**6.8×**). Body matches supply **70–100%** of the winning score on every stratum-C query whose lexical top-1 is graded 0, and samples take top-1 on **10 of 18** paraphrase queries though only 4 of 18 concern them. `D17` earns a full **3.0** from a *title* match on the stopword "the" on a TLS-certificate query |
+| 5 | **`skill_id` is not an indexed field.** `score()` reads `skill.title`, `skill.tags` and `skill.body` and never `skill.skill_id`, so an operator who types an exact skill name gets zero signal from the one field guaranteed to carry it | Eval-set [§2.6](./semantic-skill-retrieval-eval-set.md#26-skill_id-is-not-an-indexed-field--measured-2026-10-01), confirmed by reading the shipped function: `ResetPasswordAdHoc` and `RecoverAcmeAccount` appear *only* in their own document's slug and match **nothing**; `LockUnlockUser` and `CheckServiceHealth` score body credit for **non-owners** (`D14`/`D17`/`D18` and `D18`) while their owner scores **0**. Of the 14 stratum-A queries only 3 name an identifier that exists, and the shipped scorer ranks the owning document first for **0 of those 3** |
 
 Defect 2 also cuts the other way, and the eval-set measures it: the exact identifier
 `KubePodNotReady` matches only **2 of 18** documents, while the prose paraphrase
@@ -325,12 +348,26 @@ and are cheaper than anything else in this memo:**
   overlapping registration silently reproduces the defect. De-duplicating in `rank()`
   (or rejecting the overlap at ingestion) is the remaining highest-value change here
   and needs no ranking change at all.
-- **Tokenize CamelCase and stop breaking ties alphabetically.** Splitting
-  `KubePodCrashLooping` into `kube/pod/crash/looping` makes every alert title
-  matchable at the 3.0 weight, and a stemming or trigram step lets `crashloop`
-  reach the `CrashLoopBackOff` tag. Replacing the `skill_id`-ascending tie-break
-  with anything relevance-aware stops an alphabetical sort from deciding which of
-  two equally scored documents an operator sees first (§2.3 defect 2).
+- **Index `skill_id` — the cheapest fix on the list, and the only one that reaches
+  defect 5.** One added scored field: no new dependency, no schema change, no image
+  question. Measured on its own it moves combined top-1 correctness **0.500 → 0.526**
+  and stratum-A identifier recovery **0/3 → 1/3**; combined with CamelCase splitting
+  it reaches **3 of 3** (eval-set [§8.2](./semantic-skill-retrieval-eval-set.md#82-candidates-in-the-pre-registered-cost-order)).
+- **Weight tokens by document frequency, and damp document length.** A corpus-derived
+  IDF table (`ln((1+N)/(1+df))+1`) removes the stopword problem with no hand-written
+  list to maintain, and a sublinear length norm (`1/log2(2 + len(body)/1000)`) removes
+  the **6.8×** sample-vs-runbook advantage (§2.3 defect 4).
+- **Tokenize CamelCase.** Splitting `KubePodCrashLooping` into `kube/pod/crash/looping`
+  makes every alert title matchable at the 3.0 weight, and a stemming or trigram step
+  lets `crashloop` reach the `CrashLoopBackOff` tag (§2.3 defect 2).
+
+  **The alphabetical tie-break change this memo recommended is struck.** Replacing the
+  `skill_id`-ascending tie-break with anything relevance-aware was listed here as part
+  of defect 2's fix. Measured, it contributes **nothing**: it is numerically identical
+  to CamelCase splitting alone on every metric for every stratum, because IDF weighting
+  already breaks the `D06`/`D11` tie on the merits, so the alphabetical fallback never
+  fires. Dropping it removes a change that would touch the byte-identical-ordering
+  invariant for zero measured gain.
 - **Cover-density ranking.** PostgreSQL `ts_rank_cd` / `ts_rank` over the existing
   `to_tsvector` GIN index weights phrase proximity and term frequency, which the
   current flat per-token point total ignores. This is an ordering improvement —
@@ -688,20 +725,39 @@ Non-negotiables:
 
 ## 10. Go/no-go gates and next decision
 
-1. **Approve the measurement-first step — no code, no infrastructure.** The
-   evaluation set is **built** (§7.1, [eval-set artifact](./semantic-skill-retrieval-eval-set.md))
-   and was regenerated on 2026-10-01 against the de-duplicated 18-row corpus;
-   what remains is the human part: operations labels relevance against the
-   18-document catalogue and reviews the paraphrase stratum. Then publish the
-   lexical baseline (Precision@5, MRR, nDCG@10, zero-relevant rate, distinct-document
-   variants, p50/p95). **Gate: without these numbers, no retrieval change is
-   approved.**
-2. **Work the lexical fixes in cost order, measuring each.** First the *product* half
-   of de-duplication and the tokenizer/tie-break fixes (§4.4, already measured as
-   defects in §2.3); then `ts_rank_cd` cover density and a curated alias map; then,
-   only if an image change is already accepted, `pg_trgm`. **If any cheaper step
-   closes the measured gap, everything below is cancelled and the backlog row
-   closes** — a null result is a publishable outcome, not a failure.
+1. **CLOSED 2026-10-01 — the measurement-first step is done.** The evaluation set is
+   **built and labeled** (eval-set [§7.1](./semantic-skill-retrieval-eval-set.md#71-the-labeled-set),
+   [labels fixture](./semantic-skill-retrieval-labels.json)) over its §6.4 minimum
+   viable scope: **38 queries × 18 documents = 684 judgments** (173 non-zero), pinned
+   to a `body_md5` per document so that a catalog move invalidates them explicitly
+   rather than silently. The lexical baseline is published with every metric this gate
+   asked for (eval-set §8.1). **The gate is satisfied, so a retrieval change is now
+   approvable — and the measurement says the expensive one is not needed.** Two limits
+   recorded rather than glossed: this is an *author-proposed, operator-ratified* label
+   set, not blind operations labeling, so Cohen's κ is uncomputable (a deviation from
+   eval-set §6.3 rules 4–5, authorized by the operator); and the traffic behind
+   stratum B is demo/e2e rather than sustained operator triage.
+2. **Work the lexical fixes in cost order, measuring each — *measured 2026-10-01, and
+   the cheap step closed the gap*.** First the *product* half of de-duplication and
+   the tokenizer fixes (§4.4, measured as defects in §2.3); then `ts_rank_cd` cover
+   density and a curated alias map; then, only if an image change is already accepted,
+   `pg_trgm`. **If any cheaper step closes the measured gap, everything below is
+   cancelled and the backlog row closes** — a null result is a publishable outcome,
+   not a failure.
+
+   **That condition is now met.** Simulating the §4.4 fixes offline against the
+   labeled set — each candidate fidelity-gated on reproducing the shipped scorer
+   exactly with its own flags off, **38/38 identical** — moves combined top-1
+   correctness **0.500 → 0.711** and stratum-C top-1 **0.333 → 0.611**, with MRR,
+   MRR(2) and nDCG@10 gains whose bootstrap 95% CIs exclude zero and an exact sign
+   test at **p = 0.0117** (eval-set §8.2–§8.3). The winning combination is
+   IDF weighting + sublinear length norm + CamelCase splitting + indexing `skill_id`;
+   no single one of them reaches significance alone. **Gate 3 is therefore not
+   reached: no embedding work is authorized and the backlog row closes** (eval-set
+   [§8.5](./semantic-skill-retrieval-eval-set.md#85-decision-rule-outcome)). The
+   decisive fact is that **there is no recall gap to recover** — zero grade-2
+   documents are missing from the top 10 on any of the 38 queries, under the baseline
+   as well as under every candidate, and `R@5(=2)` on real traffic is already 1.000.
 
    De-duplication's *configuration* half was executed on 2026-10-01 under separate
    operator authorization, and its effect is now measured rather than predicted:
@@ -715,12 +771,35 @@ Non-negotiables:
    Defects 2 and 3 are untouched by it: `pod keeps restarting CrashLoopBackOff`
    still ranks the scheduling guide above `KubePodCrashLooping` on an alphabetical
    tie-break at 10.0, and `argocd health check` still scores 20.0 on a sample app's
-   health check. Those are the fixes the labels must grade.
-3. **If semantics proceed, approve the substrate:** sidecar `real[]` + in-process
+   health check. **Those are now graded rather than awaiting labels.** Defect 2's fix
+   is inside the winning combination. Defect 3's is not, and is not available to any
+   lexical candidate at all — which is the one part of this gate that stays open.
+
+   **What the cheap step does *not* fix: abstention.** Zero-relevant rate is unchanged
+   at **4/38** by every candidate including the best, and the same four queries still
+   return confident, wholly irrelevant answers. This is structural, not a tuning
+   failure: a scorer that admits any document with `score > 0` **cannot abstain**, and
+   better ranking cannot create an abstention it was never able to express — a dense
+   retriever is worse still, since it always finds a nearest neighbour. Fixing it needs
+   a score threshold or an explicit "nothing applies" path, and a threshold is a
+   **product decision** that trades this failure against silently dropping documents
+   that are genuinely relevant but weakly matched. The labels do not authorize that
+   trade-off and this memo does not make it. Two of the four are vocabulary gaps no
+   retriever can close — there is no ArgoCD and no database-pool document in the
+   corpus — which is a content problem. **This warrants its own backlog row**
+   (eval-set [§8.4](./semantic-skill-retrieval-eval-set.md#84-what-no-lexical-candidate-fixes)).
+3. **Not reached — 2026-10-01.** Gate 2's cheap step closed the measured gap, so the
+   substrate question this gate exists to answer is not live. *If it ever becomes
+   live*, approve the substrate: sidecar `real[]` + in-process
    exact cosine (Option C — no extension, no image swap, reversible), **or** the
    `postgres:16-alpine` → pgvector image swap on the shared StatefulSet now,
    accepting the blast radius over `audit`, `skills`, `incidents`, and `sessions`
-   plus a written rollback plan.
+   plus a written rollback plan. Nothing measured supports either today, because the
+   **recall** premise that would justify a vector store is measured absent: 0 of 38
+   queries have a grade-2 document outside the top 10 (gate 2, eval-set §8.1).
+   **Gates 4, 5 and 6 are conditional on this one and are therefore also not
+   reached** — they are retained as written so that a reopened row inherits them
+   unchanged rather than having to re-derive them.
 4. **If a model embedder is used, approve the provider and its egress posture:**
    in-cluster Ollama (enable embeddings, pull and pin an embedding model, no new
    secret, no egress, no spend) **or** DashScope (billable, external egress, a new
@@ -746,8 +825,14 @@ Non-negotiables:
   manifests, not about retrieval.
 - Should `ollama/ollama:latest` be pinned as part of this work, given the SPEC-028
   R-3 fixed-point-pinning convention?
-- Who owns the relevance labels, and how is the labeled set versioned so a catalog
-  change re-runs the evaluation?
+- ~~Who owns the relevance labels, and how is the labeled set versioned so a catalog
+  change re-runs the evaluation?~~ **Half-answered 2026-10-01.** Versioning is solved:
+  the labels are a committed fixture pinning a `body_md5` per document, so a catalog
+  move is mechanically detectable and forces re-grading rather than silently
+  invalidating the numbers. **Ownership is not settled** — the set is
+  author-proposed and operator-ratified, not operations-owned, and no second labeler
+  has produced the κ §6.3 rule 4 requires. If this row is ever reopened, operations
+  ownership of the label set is a precondition, not a follow-up.
 - What is the pgvector scale trigger (§10.5), and who re-measures it?
 - Does an embedding call belong in the audit vocabulary (e.g. a `skill_embedded`
   event per sync) or is a metric sufficient? Audit-event-type additions are a
@@ -826,3 +911,39 @@ Non-negotiables:
   collapses nothing and `parse_sources` still accepts two sources covering the same
   files — rather than as an open measurement. No product code was modified; the
   changes are dev-overlay configuration, e2e/guide documentation, and this memo.
+- 2026-10-01 (third pass) — **gate 1 executed and closed; the row's question is
+  answered and the answer is a null result for vectors.** The eval-set's labeling
+  pass ran over its §6.4 minimum viable scope (**38 queries × 18 documents = 684
+  judgments**, 173 non-zero), was ratified by the operator, and is committed as
+  [`semantic-skill-retrieval-labels.json`](./semantic-skill-retrieval-labels.json)
+  with a `body_md5` per document so a catalog move invalidates it explicitly. Two
+  more defects were measured and added to §2.3: **defect 4**, document-length bias
+  and unweighted function words (`samples/*` bodies average **9,718 chars** against
+  **1,424** for runbooks, a **6.8×** advantage, and body matches supply **70–100%**
+  of the winning score wherever the lexical top-1 is graded 0), and **defect 5**,
+  **`skill_id` is not an indexed field** — verified by reading the shipped `score()`,
+  which touches `title`/`tags`/`body` and never the slug, so `ResetPasswordAdHoc`
+  matches nothing and `LockUnlockUser`/`CheckServiceHealth` score body credit for
+  *non-owners* while their owner scores 0. Defect 5 falsified §6.1's premise that the
+  identifier-bearing stratum "matches trivially": the shipped scorer recovers the
+  owner at top-1 for **0 of the 3** stratum-A queries whose identifier exists. §4.4
+  accordingly gains the three fixes that were measured (`skill_id` indexing, IDF
+  weighting, sublinear length norm) and **strikes the relevance-aware tie-break it
+  had recommended** — that change is numerically identical to CamelCase splitting
+  alone on every metric for every stratum, because IDF already breaks the tie on the
+  merits, so it would touch the byte-identical-ordering invariant for zero gain.
+  §10's gates were then decided rather than deferred: **gate 1 closed**, **gate 2
+  measured** (combined top-1 **0.500 → 0.711**, stratum C **0.333 → 0.611**,
+  MRR/MRR(2)/nDCG@10 CIs excluding zero, exact sign test **p = 0.0117**, stratum-A
+  identifier recovery **0/3 → 3/3**, one mild regression), and **gate 3 not reached**
+  — the recall premise is measured absent (**0** grade-2 documents outside the top 10
+  on any query; `R@5(=2)` already **1.000** on real traffic), so per the
+  pre-registered rule no embedding work is authorized and the backlog row closes.
+  Gates 4–6 are retained as conditional-on-3 rather than deleted. Recorded honestly:
+  the label set is **author-proposed and operator-ratified**, not blind operations
+  labeling, so Cohen's κ is uncomputable (a deviation from eval-set §6.3 rules 4–5,
+  operator-authorized); zero-relevant rate is **4/38** and is fixed by *no* lexical
+  candidate, because a scorer admitting any `score > 0` cannot abstain — so §10
+  gate 2 now carries an abstention note recommending a **separate backlog row** for
+  it as a product/contract question. No product code, manifest, or configuration was
+  changed in this pass; the work was labeling, offline scoring, and documentation.

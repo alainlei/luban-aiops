@@ -227,6 +227,97 @@ was overstated, and the memo's 2026-10-01 revision pass has corrected it — §2
 records the hypothesis as **untested rather than disproved**, and its new §2.3
 carries the three defects above.
 
+### 2.5 Document-length bias and unweighted function words — measured 2026-10-01
+
+Grading the labelled set exposed a fourth defect that the pool analysis could not
+see, because it changes *which* document wins rather than how many slots are
+filled. `score()` sums `BODY_WEIGHT × min(occurrences, 5)` with no normalisation
+for document length, and weights every query token identically.
+
+Measured over the 18-row snapshot:
+
+| Family | Documents | Mean body size |
+|---|---|---|
+| `samples/*` (acme-admin) | 6 | **9,718 chars** |
+| `platform-skills/*` (guides + alerts) | 12 | **1,424 chars** |
+
+The sample documents are **6.8× longer**, so at the cap of 5 occurrences a sample
+earns up to `5 × 1.0` per matched token where a runbook earns fewer simply by being
+short. Decomposing `score()` into its title/tag/body contributions for every
+stratum-C query where the lexical top-1 is graded 0:
+
+| Query | Lexical top-1 (grade) | Body's share of the winning score | Correct document |
+|---|---|---|---|
+| C03 `app crash looping after deploy` | `D17` Reset a Password in the ACME Admin Console (0) | 100% | `D01`/`D11` |
+| C04 `process out of memory killed` | `D14` Recover a Locked-Out ACME Admin Account (0) | 100% | `D01`/`D09` |
+| C09 `service name not resolving` | `D15` Check ACME Admin Service Health (0) | **15.0 of 20.0** (`D03` scores 9.0) | `D03` |
+| C14 `replica count is wrong` | `D14` Recover a Locked-Out ACME Admin Account (0) | 100% | `D08` |
+
+Body matches supply **70–100% of the winning score in every one of these cases**.
+The tally across stratum C: the six sample documents take top-1 on **10 of 18**
+paraphrases, although only 4 of the 18 are about the samples at all, and **8 of 18
+top-1 results are graded 0**.
+
+Token weighting compounds it. Because every token counts the same, a function word
+in a *title* scores the full `TITLE_WEIGHT`: for C16 `certificate expired on the
+ingress`, `D17` earns **3.0 from a title match on the stopword "the"** — enough to
+make a password-reset runbook the top answer to a TLS-certificate question. There
+is no stoplist and no inverse-document-frequency weighting anywhere in the path.
+
+Both halves are purely lexical and neither needs a model. They are measured here
+rather than fixed, because §9 authorises no change to `scoring.py`.
+
+### 2.6 `skill_id` is not an indexed field — measured 2026-10-01
+
+`score()` reads exactly three fields:
+
+```python
+title_tokens = set(tokenize(skill.title))
+tag_tokens = {token for tag in skill.tags or [] for token in tokenize(tag)}
+body_counts = Counter(tokenize(skill.body))
+```
+
+`skill.skill_id` is never read. The consequence is that **an operator who types a
+skill's exact name gets zero signal from it**, because the name lives in the slug
+and nowhere else. Probing each identifier §6.1 lists against every indexed field of
+every document:
+
+| Identifier typed by an operator | Appears in | Effect under the shipped scorer |
+|---|---|---|
+| `ResetPasswordAdHoc` | `D13`'s `skill_id` only | **invisible** — contributes 0 |
+| `RecoverAcmeAccount` | `D14`'s `skill_id` only | **invisible** — contributes 0 |
+| `LockUnlockUser` | `D16`'s `skill_id`; bodies of `D14`/`D17`/`D18` | owner gets **0**, three non-owners get body credit |
+| `CheckServiceHealth` | `D15`'s `skill_id`; body of `D18` | owner gets **0**, `D18` gets the credit |
+| `CheckUserStatus` | `D18`'s `skill_id`; bodies of `D14`/`D15`/`D16`/`D18` | owner gets body credit; so do three non-owners |
+| `DemoTriage` | **nothing anywhere** | retired sample (§2.3) — unmatchable |
+| `ResetUserPassword` | **nothing anywhere** | retired by SPEC-060 — unmatchable |
+
+The cross-reference rows are worse than the invisible ones: where a skill name
+appears in *other* documents' bodies as a cross-reference, those documents earn the
+credit that the owner cannot.
+
+Measured effect on stratum A, using an objective check that needs no relevance
+labels — *is the document that owns the identifier ranked first?* Only 3 of the 14
+stratum-A queries name an identifier that exists in the corpus, and all three name
+`ResetPasswordAdHoc` (owner `D13`):
+
+| Candidate | Identifier owner recovered at top-1 |
+|---|---|
+| Shipped scorer | **0 of 3** (`D17` wins each time) |
+| + `skill_id` indexed at `TAG_WEIGHT` | 1 of 3 |
+| + IDF | 1 of 3 |
+| + CamelCase splitting | 2 of 3 |
+| + CamelCase **and** `skill_id` | **3 of 3** |
+
+The remaining 11 stratum-A queries name an identifier that matches no document at
+all, yet each still returns 7–10 confident hits (§2.3's failure mode, inside the
+stratum that was excluded from the zero-relevant metric).
+
+Indexing `skill_id` is **cheaper than any tokenizer fix** — one added field, no IDF
+table, no stemming, no change to the tie-break — so §8's cost order requires it to
+be measured first. It is recorded here as a measurement; implementing it touches
+`scoring.py` and the `to_tsvector` pre-filter in `skill_store.py`, which §9 forbids.
+
 ## 3. Reproduction
 
 Every number above is reproducible read-only. No product code was modified, and
@@ -357,6 +448,20 @@ reordering any of it.
 it was seeking, so it cannot discriminate retrieval quality (§6.1). The stratum
 assignment is a property of the query text and is unchanged by the regeneration.
 
+> **Correction, measured 2026-10-01 (§2.6).** The second half of that sentence is
+> false. `score()` never reads `skill_id`, so the identifier these queries carry is
+> not matched at all: `ResetPasswordAdHoc` and `RecoverAcmeAccount` appear only in
+> their own document's slug, and `DemoTriage` and `ResetUserPassword` appear nowhere
+> in the corpus. Of the 14 stratum-A queries, only 3 name an identifier that exists,
+> and the shipped scorer ranks the owning document first for **0 of those 3**. The
+> other 11 name an unmatchable identifier yet still return 7–10 confident hits.
+> Stratum A therefore *does* discriminate retrieval quality — it is the stratum that
+> exposes §2.6 — and it was excluded from the headline metrics on a premise the
+> measurement contradicts. It is still reported separately (its queries are
+> identifier lookups, not paraphrases, so mixing it into B or C would distort both),
+> but "regression check only" should be read as "graded separately", not as
+> "already correct".
+
 | # | Query | n | avg hits | distinct@5 | Pool (rank:code:score) |
 |---|---|---|---|---|---|
 | Q01 † | DemoTriage synthetic demo deployment SPEC-015 triage | 1 | 5.00 | 5/5 | 1:D08:9 2:D16:6 3:D13:5 4:D03:3 5:D17:3 6:D09:2 7:D10:2 8:D12:2 9:D14:2 10:D04:1 |
@@ -458,7 +563,7 @@ the catalog they will be scored against.
 
 | Stratum | Size | Contents | Use |
 |---|---|---|---|
-| **A** | 14 | Audit queries containing a target identifier (`DemoTriage`, `ResetPasswordAdHoc`, `ResetUserPassword`, `scratch-restart-demo`, `browser-check-target`, `svc-check`, `SPEC-015`) | **Regression check only.** Excluded from headline metrics — they match trivially and would flatter any retriever |
+| **A** | 14 | Audit queries containing a target identifier (`DemoTriage`, `ResetPasswordAdHoc`, `ResetUserPassword`, `scratch-restart-demo`, `browser-check-target`, `svc-check`, `SPEC-015`) | **Graded separately.** Excluded from headline metrics because they are identifier lookups rather than paraphrases — *not* because they match trivially. **That premise is falsified by §2.6**: `score()` never reads `skill_id`, so the shipped scorer recovers the identifier's owner at top-1 for **0 of the 3** stratum-A queries whose identifier exists in the corpus |
 | **B** | 49 | Remaining audit queries, in searcher-composed operator vocabulary | **Headline metrics.** This is the real-traffic baseline |
 | **C** | ≥18 to author | Paraphrases sharing **no token** with the target document, plus negative controls | **The decisive stratum.** The audit trail cannot supply it (§2.4); it is the only stratum that can separate lexical from semantic |
 
@@ -470,7 +575,7 @@ Stratum C seeds, derived from the measured defects rather than guessed:
 | C02 | container keeps dying | `D11` / `D01` | Tests the CamelCase opacity of §2.2 |
 | C03 | app crash looping after deploy | `D11` | `crash looping` ≠ `crashloopbackoff` |
 | C04 | process out of memory killed | `D01` / `D09` | `oom` tag unreachable from prose |
-| C05 | disk full on node | `D09` | Memo §7.1's named example |
+| C05 | disk full on node | ~~`D09`~~ **`D10`** *(corrected on labeling)* | Memo §7.1's named example. The prediction was wrong: `D09` is *memory* pressure, while `D10` KubeNodeNotReady is the document whose triage step 1 explicitly reads `DiskPressure` |
 | C06 | node went offline | `D10` | No token overlap with `KubeNodeNotReady` |
 | C07 | image won't download | `D05` | `pull` vs `download` |
 | C08 | pod stuck in pending | `D06` | `scheduling` vs `pending` |
@@ -478,7 +583,7 @@ Stratum C seeds, derived from the measured defects rather than guessed:
 | C10 | user locked out of admin console | `D14` / `D16` | Memo §7.1's named example |
 | C11 | issue a temporary password for alice | `D17` / `D04` | Two plausible targets — graded labels matter |
 | C12 | is the admin portal up | `D15` | `healthz`/`uptime` vs `is it up` |
-| C13 | check whether the account is suspended | `D18` / `D16` | `suspend` is a tag, not a title token |
+| C13 | check whether the account is suspended | ~~`D18` / `D16`~~ **`D18`** *(narrowed on labeling)* | `suspend` is a tag, not a title token. Narrowed because the query asks to *check*: the read-only `D18` is directly applicable (2) and the mutating `D16` is background (1) |
 | C14 | replica count is wrong | `D08` | CamelCase title, prose query |
 | C15 | container waiting to start | `D07` | CamelCase title, prose query |
 | C16 | certificate expired on the ingress | **none** | Negative control |
@@ -489,6 +594,18 @@ Stratum C seeds, derived from the measured defects rather than guessed:
 document, so they are the only queries that can measure *zero-relevant rate* and
 detect a retriever that answers confidently when it should say "nothing applies".
 Q31 shows the current system scores 20.0 on exactly that failure.
+
+**How the predictions held up against the graded labels (§7).** The "Expected
+target" column above was written before any labeling, from the defects rather than
+from the pool. Comparing each prediction to the graded grade-2 set, mechanically:
+**14 of 18 exact**, **2 widened** (C01 added `D02` and `D07`; C03 added `D01`),
+**1 narrowed** (C13 dropped `D16` to grade 1), **1 changed target** (C05 `D09` →
+`D10`). Both substantive changes are recorded inline in the table above. All three
+negative controls were confirmed all-zero, and §7 records the nearest miss for each
+so a reviewer can challenge those specifically. That one of 18 predictions named the
+wrong *document* outright, and a second named a document that is only background, is
+the reason rule 5 exists — and the reason this pass is recorded as a deviation from
+it rather than as compliance.
 
 ### 6.2 Grading scale
 
@@ -517,8 +634,20 @@ genuine near-ties (Q11 `acme` scores `D15`/`D16`/`D17`/`D18` all at 10.0).
 4. **Two labelers, 20-query overlap, agreement reported.** Compute Cohen's κ on
    the overlap; resolve disagreements by discussion and record the resolution. A
    single labeler's set measures that labeler.
+   > **DEVIATED FROM, 2026-10-01, with operator authorization.** One labeler. No
+   > overlap set exists, so **κ is not computable and inter-rater reliability is
+   > unmeasured**. Every number in §8 inherits that limitation: a systematic bias in
+   > this label set moves the baseline and every candidate together, so *relative*
+   > candidate comparisons survive it better than *absolute* rates do.
 5. **The labeler must own the runbooks.** Per memo §7.1, an unreviewed set measures
    the author's guesses.
+   > **DEVIATED FROM, 2026-10-01, with operator authorization.** The labels were
+   > drafted by the spike author from document content and submitted for operator
+   > ratification of the decisive subset (§7.2), rather than authored by operations.
+   > Gate 1 therefore passes as **"author-proposed, operator-ratified"**, which is
+   > weaker than blind operations labeling and must never be reported as that. The
+   > author's §6.1 predictions being wrong on 2 of 18 stratum-C targets is direct
+   > evidence that this rule was worth having.
 
 ### 6.4 Minimum viable effort
 
@@ -529,10 +658,85 @@ stratum-C queries** — 38 queries, roughly 250 judgments. Report it as a 38-que
 sample with confidence intervals, and treat any difference inside the noise band as
 **no evidence of improvement** (memo §7.1).
 
-## 7. Label sheet
+> **Correction, 2026-10-01.** The pass was run at exactly this scope (38 queries) but
+> the judgment count was mis-estimated. Rule 3 requires judging the whole catalogue
+> for every query, so the real figure is **38 × 18 = 684 judgments**, not ~250: 173
+> non-zero (52 grade 2, 121 grade 1) and 511 explicit zeros. Recording zeros
+> explicitly rather than by omission is what makes zero-relevant rate computable, and
+> it is why the count is closer to the ~500 "full coverage" figure than to the
+> estimate. Also note the sample's composition is dictated by the traffic, not by
+> design: **4 of the 20 selected stratum-B queries are permutations of "reset password
+> admin portal user"**, because that is what the audit trail actually contains.
+> Stratum-B-only deltas should be read with that skew in mind (§8.1).
 
-Copy this block per labeler. One row per (query, document) pair judged; omit pairs
-graded 0 only if the labeler confirms they reviewed the full catalogue.
+## 7. Label sheet — completed 2026-10-01
+
+### 7.1 The labeled set
+
+The labels are versioned as a committed machine-readable fixture, not a
+spreadsheet, per memo §7.1:
+**[`semantic-skill-retrieval-labels.json`](./semantic-skill-retrieval-labels.json)**.
+
+| Field | Value |
+|---|---|
+| Labeler | spike author (single) — **deviation from rules 4 and 5, see §6.3** |
+| Date | 2026-10-01 |
+| Corpus snapshot | 2026-10-01, **18 rows / 18 distinct `md5(body)` / 75,680 body bytes** |
+| Queries graded | **38** (20 stratum B + 18 stratum C) |
+| Judgments | **684** = 38 × 18, whole-catalogue per rule 3 |
+| Non-zero | **173** — 52 grade 2, 121 grade 1; **511 explicit zeros** |
+| Held ungraded | 14 stratum A (§6.1) + 29 unselected stratum B (§6.4 scope) |
+
+The fixture pins a `body_md5` per document. **A document whose hash differs must be
+re-graded before these labels are reused** — the corpus already drifted once between
+the audit window and the 2026-09-30 extraction (§3).
+
+**Stratum-B selection rule** (recorded in the fixture so it is auditable). It is
+ranking-blind by construction — it reads audit frequency and query text only, never a
+pool rank or score, per rule 2:
+
+1. **Every stratum-B query with audit frequency n ≥ 2** — the traffic-weighted core,
+   10 queries: Q03 (n=9), Q31 (7), Q55 (7), Q18 (5), Q21 (4), Q04 (2), Q22 (2),
+   Q48 (2), Q50 (2), Q56 (2).
+2. **One representative per remaining topic cluster**, taking the numerically-first
+   member (deterministic, no judgment call): 10 clusters → Q11, Q13, Q14, Q26, Q35,
+   Q39, Q45, Q46, Q62, Q63. Two further clusters were **dropped as subsumed** —
+   "bare password reset" (Q40/Q42, covered by the n=7 and n=5 clusters) and "web
+   check generic" (Q24, covered by Q62/Q63).
+
+10 + 10 = the 20 required by §6.4.
+
+### 7.2 Ratification record
+
+The operator ratified the set on **2026-10-01** via a draft-then-ratify path chosen
+in place of rules 4–5. The ratification surface was restricted to judgments that
+could change a conclusion, not all 684:
+
+- **Every stratum-C grade 2** — the decisive stratum. Outcome: **12 of 18** have the
+  lexical top-1 *not* at grade 2, which is the measurement that makes §8 possible.
+- **Every query whose top-graded document differs from the lexical top-1** — **14 of
+  38** (C02, C03, C04, C06, C09, C10, C12, C14, C15, Q13, Q14, Q45, Q46, Q56).
+- **The four all-zero rows**, which alone determine zero-relevant rate: Q31
+  `argocd health check`, C16 `certificate expired on the ingress`, C17
+  `argocd sync keeps failing`, C18 `database connection pool exhausted`. Nearest
+  misses recorded for challenge: C16 → `D03` (Service resolution, not TLS expiry),
+  C18 → `D01` (observes the symptom, cannot fix pool sizing).
+
+Two rows carry no grade 2 **without** being vocabulary gaps, and were ratified as
+such: **Q56 `restart pod`** — the corpus holds no restart runbook because restarting
+is a tool mutation, not a document (5 codes at grade 1); **Q11 `acme-admin`** — a
+single-token query states no problem, so nothing is directly applicable (6 codes at
+grade 1). These make zero-relevant rate respond to under-specification as well as to
+vocabulary gaps.
+
+**Status: gate 1 passes as "author-proposed, operator-ratified".** It is not blind
+operations labeling and inter-rater reliability is unmeasured (§6.3 rules 4–5).
+
+### 7.3 Blank sheet for a second labeler
+
+Retained so a future pass can compute the κ that §6.3 rule 4 requires. Copy per
+labeler; omit pairs graded 0 only if the labeler confirms they reviewed the full
+catalogue.
 
 ```
 Labeler: ______________________   Date: __________   Corpus snapshot: 2026-10-01 (18 rows)
@@ -544,6 +748,7 @@ Labeler: ______________________   Date: __________   Corpus snapshot: 2026-10-01
 
 Negative controls judged (must include C16, C17, C18): ______
 Whole-catalogue review confirmed (Y/N): ______
+Overlap set for κ (20 queries, must match §7.1's 20 stratum-B): ______
 ```
 
 ## 8. Metrics and the pre-registered decision rule
@@ -582,6 +787,183 @@ the tool timeout, and fails open to lexical. If step 1 or 2 closes the gap, **no
 embedding work is authorized and the backlog row closes** — that is a publishable
 result, not a failure.
 
+### 8.1 The lexical baseline — measured 2026-10-01
+
+The shipped `scoring.py`, run offline against the pinned snapshot. **Harness
+fidelity: the reproduction is byte-identical to §5's pinned pool for 63 of 63
+queries** (codes *and* scores), which is what licenses every number below.
+
+| Stratum | n | top-1 grade 2 | zero-hit | **zero-relevant** | P@5 | MRR | MRR(2) | nDCG@10 | R@5(≥1) | R@10(≥1) | R@5(=2) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| B (real traffic) | 20 | 13 = **0.650** | 0/20 | 1/20 = 0.050 CI [0.009, 0.236] | 0.700 | 0.875 | 0.750 | 0.868 | 0.704 | 0.869 | 1.000 |
+| C (paraphrase) | 18 | 6 = **0.333** | 0/18 | 3/18 = 0.167 CI [0.058, 0.392] | 0.467 | 0.662 | 0.524 | 0.742 | 0.698 | 0.850 | 0.817 |
+| **Combined** | **38** | 19 = **0.500** | **0/38** | **4/38 = 0.105 CI [0.042, 0.241]** | 0.589 | 0.774 | 0.643 | 0.813 | 0.701 | 0.861 | 0.914 |
+
+Zero-*grade-2* rate (stricter: nothing directly applicable in the top 5) is 3/20
+on B, 4/18 on C, **7/38 = 0.184** combined.
+
+Four facts from this table drive everything after it:
+
+1. **There is no recall gap.** Not one grade-2 document is absent from the top 10 on
+   any of the 38 queries — the count is **0**, under the baseline and under every
+   candidate. At the product's default `limit=5` exactly **1 of 38** (C14) has a
+   grade-2 document but none in the top 5. `R@5(=2)` is already **1.000** on real
+   traffic. A vector store is a recall instrument; there is no recall to recover.
+2. **Stratum C is roughly half as good as stratum B at top-1** (0.333 vs 0.650). That
+   gap is the paraphrase penalty, and it is the whole case for doing anything at all.
+3. **Zero-hit rate is 0/38 while zero-relevant rate is 4/38** — §2.3's warning, now
+   quantified on a labeled set. Reporting only zero-hit would have shown a perfect
+   retriever.
+4. **Distinct-document variants are identical to the as-returned numbers.** Verified:
+   **0 of 63** pools contain a repeated document code after the §2.1 configuration
+   fix. The two metric families §8 requires therefore collapse into one, which is
+   itself the measurement that the de-duplication worked.
+
+Latency, offline: **p50 2.726 ms, p95 3.228 ms, max 3.633 ms** for 38 queries × 18
+documents. This is pure-Python `rank()` only — it excludes the Postgres `tsvector`
+prefilter, HTTP, auth, and the audit write, and it is machine-dependent. It is **not**
+an end-to-end route measurement and must not be compared to the tool-gateway's 10.0 s
+timeout as though it were. It does establish that the scorer is nowhere near the
+budget, so a candidate cannot be rejected on latency at this corpus size.
+
+### 8.2 Candidates, in the pre-registered cost order
+
+Simulated offline against the same 38 queries and the same labels. Each candidate is
+gated on reproducing the shipped scorer exactly when its own flags are off —
+**fidelity check: 38/38 identical**, so the comparison is against the real baseline
+and not against a reimplementation.
+
+| # | Candidate | Cost | B MRR | C MRR | C MRR(2) | C nDCG@10 | **combined top-1 grade 2** | top-1 changes vs baseline |
+|---|---|---|---|---|---|---|---|---|
+| — | **V0 shipped scorer** | — | 0.875 | 0.662 | 0.524 | 0.742 | **19/38 = 0.500** | — |
+| 1a | **V5 + index `skill_id`** (§2.6) | one added field | 0.875 | 0.662 | 0.524 | 0.742 | 20/38 | 1 (1 improved, 0 regressed) |
+| 2a | V1 + IDF weighting | corpus-derived table | 0.900 | 0.704 | 0.604 | 0.780 | 22/38 | 6 (4↑ 1↓ 1 lateral) |
+| 2b | V2 + sublinear body-length norm | one formula | 0.900 | 0.778 | 0.685 | 0.844 | 23/38 | 9 (6↑ 2↓ 1 lateral) |
+| 2c | V3 + CamelCase splitting | tokenizer regex | 0.950 | 0.778 | 0.708 | 0.864 | 26/38 | 12 (9↑ 1↓ 2 lateral) |
+| 2d | V4 + relevance-aware tie-break | sort key | 0.950 | 0.778 | 0.708 | 0.864 | 26/38 | **identical to V3 on every metric** |
+| 2e | **V6 = V3 + `skill_id`** | 2c plus 1a | **0.950** | **0.778** | **0.708** | **0.864** | **27/38 = 0.711** | 13 (10↑ **1↓** 2 lateral) |
+
+Best candidate **V6** on the full metric set:
+
+| Stratum | top-1 grade 2 | zero-relevant | P@5 | MRR | MRR(2) | nDCG@10 | R@5(=2) |
+|---|---|---|---|---|---|---|---|
+| B | 16/20 = **0.800** (was 0.650) | 1/20 *(unchanged)* | 0.760 | 0.950 | 0.825 | 0.936 | 1.000 |
+| C | 11/18 = **0.611** (was 0.333) | 3/18 *(unchanged)* | 0.500 | 0.778 | 0.708 | 0.864 | 0.950 |
+| Combined | 27/38 = **0.711** (was 0.500) | 4/38 *(unchanged)* | 0.637 | 0.868 | 0.770 | 0.904 | 0.977 |
+
+Plus, on stratum A (ungraded, so checked objectively — §2.6): identifier-owner
+recovery at top-1 goes **0 of 3 → 3 of 3**.
+
+**V4 contributes nothing and should be struck from the fix list.** The
+relevance-aware tie-break is numerically identical to V3 on every metric for every
+stratum. Its premise (§2.2's `D06`/`D11` tie at 10.0) is real, but IDF weighting
+already breaks that tie on the merits — once tokens are weighted by document
+frequency, the two documents no longer score equally, so the alphabetical fallback
+never fires. Removing it from memo §10.2's list removes a change that would touch
+the byte-identical-ordering invariant for zero measured gain.
+
+### 8.3 Significance — is the gain outside the noise band?
+
+n=38, so §6.4's noise-band rule is applied literally rather than eyeballed. Two
+independent tests: a **paired bootstrap** over queries (10,000 resamples, seed
+20261001) giving a 95% CI on each per-query metric delta, and an **exact two-sided
+sign test** on discordant top-1 pairs.
+
+**V0 → V6, combined (n=38):**
+
+| Metric | Delta | 95% CI | Outside noise band |
+|---|---|---|---|
+| MRR (≥1) | **+0.0943** | [+0.0329, +0.1667] | **yes** |
+| MRR (=2) | **+0.1268** | [+0.0439, +0.2189] | **yes** |
+| nDCG@10 | **+0.0918** | [+0.0421, +0.1479] | **yes** |
+| Precision@5 | +0.0474 | [+0.0000, +0.1000] | **borderline** — the lower bound rounds to zero, so this is *not* a clean pass and is not relied on |
+
+**Sign test on top-1 grade:** 10 improved, 1 regressed, 2 lateral → **p = 0.0117**
+on 11 discordant pairs, significant at 0.05.
+
+By stratum, V0 → V6:
+
+| Stratum | Metric | Delta | 95% CI | Verdict |
+|---|---|---|---|---|
+| B | MRR (≥1) | +0.0750 | [+0.0000, +0.1500] | inside |
+| B | MRR (=2) | +0.0750 | [−0.0250, +0.1750] | inside |
+| B | Precision@5 | +0.0600 | [−0.0100, +0.1500] | inside |
+| B | nDCG@10 | +0.0681 | [+0.0106, +0.1303] | **outside** |
+| C | MRR (≥1) | +0.1157 | [+0.0185, +0.2361] | **outside** |
+| C | MRR (=2) | +0.1843 | [+0.0593, +0.3278] | **outside** |
+| C | Precision@5 | +0.0333 | [−0.0111, +0.0889] | inside |
+| C | nDCG@10 | +0.1218 | [+0.0335, +0.2253] | **outside** |
+
+**The honest reading.** Most stratum-B-only deltas sit inside the band; the
+statistically solid gains are on **stratum C and on the combined set**. That is
+expected rather than disappointing — B is real traffic that already leans on
+keywords the lexical scorer handles, and 4 of its 20 queries are permutations of one
+intent (§6.4). C is the paraphrase stratum the baseline is bad at, so it is where a
+fix has room to show. Intermediate candidates do **not** reach significance on the
+sign test alone (V5 p = 1.0000, V1 p = 0.3750, V2 p = 0.2891; V3 p = 0.0215), so the
+result is a property of the *combination*, not of any single cheap fix.
+
+**The one regression.** Q63 `web check sign in inventory portal does not transition
+successful login troubleshooting`: top-1 moves `D18` (grade 2) → `D13` (grade 1).
+Severity is mild — `D18` falls to **rank 2 of 5**, so the correct document stays
+inside the returned window and `R@5(=2)` is unaffected. It is a re-ordering, not a
+loss.
+
+### 8.4 What no lexical candidate fixes
+
+**Zero-relevant rate is unchanged by every candidate: 4/38 under V0 and 4/38 under
+V6.** The same four queries still return confident, wholly irrelevant answers:
+
+| Query | Hits returned | Top-1 under V6 |
+|---|---|---|
+| Q31 `argocd health check` | 10 | `D15` Check ACME Admin Service Health |
+| C16 `certificate expired on the ingress` | 10 | `D17` Reset a Password in the ACME Admin Console |
+| C17 `argocd sync keeps failing` | 9 | `D08` KubeDeploymentReplicasMismatch |
+| C18 `database connection pool exhausted` | 4 | `D05` Image Pull Failures |
+
+This is structural, not a tuning failure. A scorer that admits any document with
+`score > 0` **cannot abstain**, and better ranking does not create an abstention it
+was never able to express. Fixing it needs either a score threshold or an explicit
+"nothing applies" path — and a threshold is a **product decision**, because it
+trades this failure mode against silently dropping documents that are genuinely
+relevant but weakly matched. **The labels do not authorize that trade-off**; nothing
+in this measurement says where the threshold belongs, or that one is acceptable.
+
+Two of the four are vocabulary gaps no retriever can close (there is no ArgoCD and no
+database-pool document in the corpus), which is a content problem, not a ranking one.
+
+### 8.5 Decision-rule outcome
+
+Applying the pre-registered rule as written:
+
+- **Step 1 — de-duplicate.** The *configuration* half is done (§2.1) and now measured
+  rather than predicted: **0 of 63** pools contain a duplicate, so the
+  distinct-document metric variants collapse into the as-returned ones (§8.1 fact 4).
+  The *product* half — content-level de-duplication in `rank()` and/or overlap
+  rejection in `parse_sources` — **remains open**, and this measurement cannot
+  justify or refute it: with the dev corpus already clean, there is no crowding left
+  to measure a fix against. It is defensible as a guardrail against regression, not
+  as a retrieval improvement.
+- **Step 2 — tokenizer + `skill_id`.** **Substantially closes the measured gap.**
+  Combined top-1 correctness **0.500 → 0.711**; MRR, MRR(2) and nDCG@10 gains outside
+  the noise band; sign test **p = 0.0117**; stratum-A identifier recovery **0/3 →
+  3/3**; one mild regression (§8.3). The cheapest single item, indexing `skill_id`,
+  is also the one that fixes a defect nothing else reaches.
+- **Step 3 — hybrid/vector retrieval. NOT AUTHORIZED.** The precondition is that
+  step 3 beat the best of steps 1–2 outside the noise band. It cannot, on this
+  evidence, because **the defect it would address does not exist**: zero grade-2
+  documents are missing from the top 10 on any query, and `R@5(=2)` on real traffic
+  is already 1.000 under the *baseline*. Per the rule, "if step 1 or 2 closes the
+  gap, **no embedding work is authorized and the backlog row closes**."
+
+**Closing caveat, so the null result is not over-read.** Step 2 closes the *ordering*
+gap. It does **not** close the *abstention* gap (§8.4), which is unchanged at 4/38 and
+which an embedding model would not fix either — a dense retriever is even less able to
+say "nothing applies" than a lexical one, because it always finds a nearest neighbour.
+The backlog row for semantic retrieval should close; **a separate row for abstention
+behaviour is warranted**, and it is a product/contract question rather than a
+retrieval-algorithm one.
+
 ## 9. Boundary
 
 This document authorizes exactly two activities: **labeling** (a human task) and
@@ -616,3 +998,4 @@ authority onto a measurement artifact.
 | 2026-09-30 | Created. Instantiates memo §7.1: 18-document catalogue, 63-query pool at depth 10 reproduced with the real scorer (validated against audit `skill_ids`, with two catalog-drift mismatches documented), strata A/B/C, grading scale, label sheet, and a cost-ordered pre-registered decision rule. Records three measured lexical defects — duplicate-source crowding (32/63 queries), opaque CamelCase titles, and confidently scored irrelevant top-1s — none of which requires a vector store to fix. Flags the correction owed to memo §2.2 on query shape. |
 | 2026-10-01 | §2.4 correction **applied** to the memo: its §2.2 query-shape claim is rewritten (masking hypothesis untested, not disproved — 14 of 63 queries carry a target identifier), a new memo §2.3 carries the three measured defects, §4.4 gains the two cheapest fixes, §7.2 gains zero-relevant rate and distinct-document metric variants, §1 and §10 are re-ordered cost-first, and the memo is retitled for an 18-document corpus. The delivery-roadmap backlog row is aligned to the same evidence. |
 | 2026-10-01 (2) | **Regenerated against the de-duplicated 18-row corpus** after the operator authorized both §9 cleanups. `_idx_probe` dropped; the two local ConfigMap skill sources removed so `platform-skills` (git) is the only route to those trees. §2.1 rewritten as a resolved defect with a before/after table (crowding **32 of 63 → 0 of 63**; distinct documents in top-5 windows 265 → 309 of 315; pool entries 582 → 526) and the verified claim that the change was purely subtractive — **no top-1 changed** and the old de-duplicated pool is an exact prefix of the new one for all 63 queries. §2.2 gains the Q03 paraphrase measurements and records that defect 2 survives (Q46 still ranks `D06` above `D11` on an alphabetical tie-break at 10.0). §2.3 records that defect 3 is unchanged. §3 replaces the now-unusable audit cross-check with a three-part validation and warns that live searches append audit events. §4 collapses to one row per code. §5 pool regenerated; summary re-tabulated as two corpora. §8 step 1 marked half-done — `rank()` still de-duplicates nothing and `parse_sources` still accepts overlapping coverage. |
+| 2026-10-01 (3) | **Gate 1 executed and closed.** Labels drafted over the §6.4 minimum viable scope (38 queries × 18 documents = **684 judgments**, 173 non-zero) and materialized as the committed fixture [`semantic-skill-retrieval-labels.json`](./semantic-skill-retrieval-labels.json), which pins a `body_md5` per document; §7 filled in with the labeled set, the ranking-blind stratum-B selection rule, and the ratification record. **Two new defects measured**: §2.5 document-length bias and unweighted function words (sample bodies are **6.8×** longer than runbooks; body matches supply **70–100%** of the winning score wherever the lexical top-1 is graded 0; `D17` earns 3.0 from a *title* match on the stopword "the"), and §2.6 **`skill_id` is not an indexed field**, so an operator typing an exact skill name gets zero signal from it. §8.1–§8.5 publish the baseline, the candidate comparison in cost order, bootstrap + sign-test significance, and the decision-rule outcome: combined top-1 correctness **0.500 → 0.711**, MRR/nDCG gains outside the noise band, sign test **p = 0.0117**, **no recall gap at depth 10** (0 grade-2 documents absent), therefore **step 3 embedding work is not authorized and the backlog row closes**. Records that the relevance-aware tie-break contributes nothing and should be struck, that zero-relevant rate (**4/38**) is fixed by no lexical candidate and needs a product decision on abstention, and — as **deviations from §6.3 rules 4 and 5** — that this is a single author-proposed, operator-ratified label set with no computable Cohen's κ. Corrects §6.1's stratum-A premise ("they match trivially") and its C05/C13 target predictions, and §6.4's "~250 judgments" estimate. |
