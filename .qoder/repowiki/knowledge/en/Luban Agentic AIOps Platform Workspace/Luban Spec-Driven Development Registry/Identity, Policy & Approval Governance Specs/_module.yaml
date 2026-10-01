@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: specs/identity_trust_policy
+title: Identity, Policy & Approval Governance Specs
+scope:
+    - docs/specs/SPEC-008-service-to-service-identity/
+    - docs/specs/SPEC-004-policy-enforcement/
+    - docs/specs/SPEC-030-require-approval-policy-semantics/
+source_files: []
+depends_on: []
+related_to: []

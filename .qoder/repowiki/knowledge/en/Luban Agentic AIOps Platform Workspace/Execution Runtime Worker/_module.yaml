@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: execution_runtime
-title: Execution Runtime Worker
-scope:
-    - products/execution-runtime/
-source_files: []
-depends_on: []
-related_to:
-    - path: agent_platform/execution_orchestration

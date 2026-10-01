@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: specs/sessions_workflows
+title: Session Durability & Multi-Session Workspace Specs
+scope:
+    - docs/specs/SPEC-006-session-durability/
+    - docs/specs/SPEC-016-session-store-postgres-separation/
+    - docs/specs/SPEC-022-multi-session-operator-workspace/
+source_files: []
+depends_on: []
+related_to: []

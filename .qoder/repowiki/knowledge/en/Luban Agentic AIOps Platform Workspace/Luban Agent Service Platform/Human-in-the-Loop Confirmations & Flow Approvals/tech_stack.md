@@ -1,1 +1,0 @@
-Python dataclasses + `typing.Protocol` for the record-store interface; Postgres backend uses raw `psycopg` connections with JSONB columns and inline SQL strings (`_CONFIRMATION_RECORDS_DDL`, `_MARK_RESOLVED`, …); environment-driven backend selection via `AGENT_STATE_STORE_BACKEND` / `AGENT_STATE_DB_URL` / `AGENT_HITL_CONFIRM_TIMEOUT`.

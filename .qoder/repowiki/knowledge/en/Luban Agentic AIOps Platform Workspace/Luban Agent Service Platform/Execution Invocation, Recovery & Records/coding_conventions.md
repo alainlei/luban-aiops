@@ -1,6 +1,0 @@
-- Closed enums of allowed values are declared as module-level `frozenset` or tuple constants (e.g. `_PRE_DISPATCH`, `_UNCERTAIN`, `RECOVERY_STATES`, `TOOL_REPORT_STATUSES`, `EXECUTION_STATUSES`) and all inputs are validated against them before being accepted.
-- Database access goes through a `connection()` context manager that wraps `psycopg.Error` into `ProtocolError("store_unavailable")`, so callers never see raw DB exceptions.
-- All SQL mutations are wrapped in explicit transactions (`conn.transaction()` or manual commit) and read paths set `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY` before querying.
-- Integrity checks validate both the stored payload and its precomputed `content_digest` via `canonical_digest`, raising `ProtocolError("integrity_conflict")` on mismatch.
-- Owner-scoped cursor tokens are built by HMAC-signing a domain-prefixed JSON array plus position bytes (`_encode_cursor`), then base64-encoded, and rejected if length/signature does not match.
-- Public interfaces expose a `Protocol` (`ExecutionRecordStore`) with multiple backends (`InMemory*`, `Postgres*`) selected by a factory function reading environment variables.

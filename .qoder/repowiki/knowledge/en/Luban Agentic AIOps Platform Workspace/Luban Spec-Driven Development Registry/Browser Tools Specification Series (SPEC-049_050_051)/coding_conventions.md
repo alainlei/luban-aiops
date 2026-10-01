@@ -1,0 +1,5 @@
+- Each spec follows the standard triple-file layout (`plan.md`, `spec.md`, `tasks.md`) with a status block listing owner, dates, release slice, and related ADRs/SPECs.
+- Requirements are enumerated as `R-N:` blocks with prose followed by an `Acceptance criteria:` subsection that enumerates testable conditions.
+- Design decisions are captured as `D-N:` entries contrasting the resolved choice against rejected alternatives, including rationale for why direct-browser-in-agent-platform was rejected.
+- New capabilities are scoped to avoid changing shared contracts: specs explicitly state when they add no new policy actions, audit event types, or shared-contract schemas and instead reuse existing `ToolResult`, `tools:invoke`/`tools:mutate`, SPEC-020, and SPEC-037 paths.
+- Samples are organized as self-contained directories under `samples/<name>/` bundling `skill/`, `demo/`, and docs, with shared infrastructure (target pages, credentials, NetworkPolicy) kept in `shared/platform-ops/gitops/` and referenced rather than duplicated.

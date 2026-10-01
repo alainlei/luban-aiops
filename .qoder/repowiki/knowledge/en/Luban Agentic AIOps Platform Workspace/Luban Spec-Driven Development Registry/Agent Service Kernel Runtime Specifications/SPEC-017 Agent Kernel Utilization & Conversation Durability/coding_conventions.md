@@ -1,0 +1,4 @@
+- Each requirement carries testable acceptance criteria rather than prose-only goals, and every acceptance criterion is tracked as a checked task against concrete file paths.
+- New runtime knobs follow the existing env-backed `RuntimeSettings` pattern: environment variable name, integer/float/string type, default equal to the upstream library default, range validation, and startup failure on invalid values.
+- Persistence failures degrade gracefully: failed snapshots log a WARNING and increment a counter without failing the turn; corrupt rows are discarded and the agent starts fresh; initial Postgres connection failure falls back to the in-memory store with a warning and a fallback counter.
+- Backward compatibility is explicit: unknown `AGENT_STATE_STORE_BACKEND` values fail startup, while unset settings retain today's behavior (memory backend, unmodified chat response shape, fenced-block triage fallback).

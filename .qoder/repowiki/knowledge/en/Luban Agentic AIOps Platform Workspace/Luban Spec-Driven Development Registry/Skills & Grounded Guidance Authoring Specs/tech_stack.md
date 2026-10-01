@@ -1,0 +1,1 @@
+Python FastAPI service (`products/skills-hub`) with psycopg v3 Postgres store, Pydantic models bound to shared JSON schemas, and a TypeScript/React operator portal (antd) — all governed by the repository's shared contracts under `shared/shared-contracts`.

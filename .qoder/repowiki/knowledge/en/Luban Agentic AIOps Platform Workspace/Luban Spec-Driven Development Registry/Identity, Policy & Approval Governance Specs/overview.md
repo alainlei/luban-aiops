@@ -1,0 +1,1 @@
+Authoritative design specifications for the platform's deny-by-default authorization, broker-mediated service-to-service token delegation, and tiered approval policy semantics.

@@ -1,5 +1,0 @@
-- Architecture decisions are captured as sequentially numbered files `NNNN-<slug>.md` in `adr/` using the provided `template.md`, with statuses limited to proposed / accepted / superseded by ADR-NNNN.
-- Feature specs follow a fixed directory layout `SPEC-NNN-<slug>/` containing exactly `spec.md`, `plan.md`, and `tasks.md`, with status headers cycling through draft → approved → in-progress → delivered → superseded.
-- Requirement IDs inside specs use stable `R-1`, `R-2`, ... identifiers that tasks and tests reference to maintain requirement-to-code traceability.
-- New architectural decisions are written as new ADRs rather than edited into the long-form Tier 1 documents in `agentic-aiops-platform/`, which remain frozen except for corrections and explicit supersession links.
-- Release notes are date-prefixed single-topic markdown files under `agentic-aiops-platform/release-notes/`, each tied to a specific version slice of the delivery roadmap.

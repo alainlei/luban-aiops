@@ -1,1 +1,0 @@
-In-memory HITL confirmation registry, session-scoped browser-flow authority, and durable confirmation record store that bridge kernel tool calls to operator approval.

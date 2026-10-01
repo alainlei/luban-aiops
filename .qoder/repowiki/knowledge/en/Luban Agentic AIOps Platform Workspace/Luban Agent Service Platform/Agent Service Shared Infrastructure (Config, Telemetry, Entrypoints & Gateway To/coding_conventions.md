@@ -1,6 +1,0 @@
-- Optional external subsystems (OpenTelemetry providers, agentscope-runtime classes) are imported inside functions/methods rather than at module top, so the service starts even when those optional dependencies are absent.
-- Configuration values are read from environment variables through `get_env_value` / `get_env_int` helpers that accept multiple candidate names and a default, instead of direct `os.environ` access.
-- Prometheus metric families are declared as module-level `Counter`/`Histogram`/`Gauge` objects and mirrored into OTel via `MetricsMirror.count`/`observe`/`set_gauge` calls alongside the prometheus mutation, keeping the two surfaces byte-identical.
-- Fail-open error handling: OTel setup failures, gateway discovery/invocation failures, and best-effort cleanup paths log warnings and return safe defaults rather than raising into the request path.
-- Per-request/call-scoped state is propagated through `contextvars.ContextVar` instances (`DELEGATED_TOKEN`, `CHAT_SESSION_ID`, execution envelope vars) so cached toolkit closures see the current caller's credentials.
-- Structured error results use a uniform dict shape `{tool_name, status, request_id, error: {code, message, reason}}` so downstream evidence middleware and resumed-stream handlers can consume them uniformly.

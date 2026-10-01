@@ -1,1 +1,0 @@
-Central documentation repository for the Luban Agentic AIOps platform, organizing architecture decisions, feature specs, operator guides, release notes, and workspace design documents.

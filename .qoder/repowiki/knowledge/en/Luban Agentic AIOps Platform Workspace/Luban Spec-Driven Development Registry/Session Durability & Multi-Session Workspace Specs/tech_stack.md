@@ -1,0 +1,1 @@
+Python session store backed by redis>=6.2,<7.0 (SPEC-006) and psycopg[binary] against an in-cluster Postgres instance (SPEC-016); Kubernetes Kustomize overlays (`dev-k8s`, `runtime-profiles/mutating-dev`) for environment-scoped configuration.

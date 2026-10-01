@@ -1,0 +1,5 @@
+- Each spec directory follows the fixed tri-file layout: `spec.md` (requirements + acceptance criteria), `plan.md` (technical approach), `tasks.md` (execution checklist derived from the plan).
+- Specs are sequentially numbered `SPEC-NNN-kebab-slug` and track requirement IDs as stable `R-1`, `R-2`, … once approved.
+- Cross-spec dependencies are declared explicitly via an `extends SPEC-NNN` chain in the spec summary rather than implicit coupling.
+- Delivered specs are frozen — corrections go into the spec changelog or a new superseding spec, never in-place rewriting.
+- Every delivered spec includes a task updating affected Tier 3 living state docs (root README, CHANGELOG, product READMEs) to keep documentation from drifting.

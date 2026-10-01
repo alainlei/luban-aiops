@@ -1,1 +1,0 @@
-FastAPI worker that admits, executes, and durably records approved bounded tool invocations against a PostgreSQL ledger with signed protocol envelopes.

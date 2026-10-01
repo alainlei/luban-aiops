@@ -1,1 +1,0 @@
-FastAPI edge service that mounts domain-specific route proxies behind a shared auth/policy enforcement layer and exposes the portal-facing HTTP surface to upstream platform services.

@@ -1,1 +1,0 @@
-Spec delivery requires every acceptance criterion (`R-x`) in `spec.md` to map to at least one asserting test recorded in `tasks.md`, and any shipped `samples/` demo must be exercised by its own script in the verification path; the canonical gate is `make verify` from the repository root.

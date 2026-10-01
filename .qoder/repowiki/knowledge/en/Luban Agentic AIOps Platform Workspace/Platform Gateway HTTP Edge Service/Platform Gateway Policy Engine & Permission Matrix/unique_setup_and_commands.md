@@ -1,1 +1,0 @@
-Bundle source is controlled by `PlatformGatewaySettings.policy_path` (env `PLATFORM_GATEWAY_POLICY_PATH`): if set and valid, that file is loaded; if set but missing/invalid, `PolicyLoadError` is raised (no silent fallback); unset falls back to the packaged `policy-default.yaml`. Tests can reset module state via `reset_policy_state()`.

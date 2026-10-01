@@ -1,6 +1,0 @@
-Layered FastAPI application with clear separation of concerns:
-- `api/` — HTTP surface. `router.py` aggregates three route modules under `/api/v1`: `health.py`, `incidents.py` (manual intake, query, triage trigger), `webhooks.py`. Routes depend on services via `request.app.state` (`incident_store`, `connectors`) populated by the lifespan.
-- `services/` — domain logic. `incident_store.py` abstracts persistence behind an async interface; `triage.py` calls the external agent-service; `connectors.py` defines a `Connector` Protocol plus a registry (`CONNECTOR_REGISTRY`) for pluggable collaboration sinks (default: `audit`); `normalization.py`, `query_auth.py`, `audit_emitter.py` support those layers.
-- `core/` — cross-cutting infrastructure: `config.py` loads frozen `IncidentSettings` from `INCIDENT_*` env vars (cached via `lru_cache`); `metrics.py` exposes Prometheus counters; `observability.py` / `telemetry.py` wrap OpenTelemetry + structured logging; `request_context.py` resolves request IDs.
-- `schemas/incident.py` — Pydantic models shared between routes, store, and connectors.
-Dependency direction is strictly api → services → core/schemas; the app entrypoint `main.py` only boots uvicorn after resolving `IncidentRunSettings`, while `app.py` wires lifespan, middleware, metrics, and telemetry into the FastAPI instance.

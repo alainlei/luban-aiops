@@ -1,1 +1,0 @@
-FastAPI application bootstrap, environment-driven configuration, structured logging, Prometheus metrics, and optional OpenTelemetry push pipeline for the platform-gateway service.

@@ -1,9 +1,0 @@
-Each file is a FastAPI `APIRouter` mounted under `/api/v1` (or `/health`) and follows a uniform two-layer split: thin route handlers in `routes/*.py` perform request-id resolution (`resolve_request_id`), caller identity extraction (`resolve_request_identity`), RBAC enforcement (`enforce_policy` with action constants from `policy_engine`), optional parameter validation, and observability logging; the actual HTTP calls to downstream services live in dedicated client modules such as `services/incident_client.py`, which use `httpx.AsyncClient` with Basic auth derived from `PlatformGatewaySettings`.
-
-- `incidents.py` — incident intake/list/read/report/skill-draft/triage endpoints; triage additionally obtains a delegated bearer token via `obtain_delegated_token` and forwards it as `X-Delegated-Token` plus operator name as `X-User-ID` so the agent turn runs under the operator's identity (SPEC-008 chain).
-- `approvals.py` — single `GET /api/v1/approvals/inbox` endpoint gated by `ACTION_APPROVALS_LIST`.
-- `audit.py` — direct `httpx` proxy over `/api/v1/audit/{events,summary,export}` against `settings.audit_service_url` using `audit_client_id`/`audit_client_secret`; export returns a raw `Response` with only whitelisted headers forwarded.
-- `policy.py` — serves the live role×action permission matrix via `build_policy_matrix`, scoped per caller and wrapped in `PolicyLoadError → 503`.
-- `runtime.py` and `health.py` — lightweight introspection endpoints delegating to `gateway_service.runtime_status`, `live_status`, `ready_status`.
-
-Dependency direction is strictly routes → core config/request-context/observability → gateway_service/policy_engine/delegation_client → upstream http clients; routes never import each other.

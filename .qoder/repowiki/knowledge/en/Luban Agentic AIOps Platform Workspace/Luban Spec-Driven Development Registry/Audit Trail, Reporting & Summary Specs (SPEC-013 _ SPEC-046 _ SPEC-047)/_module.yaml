@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: specs/audit_reporting_evidence
+title: Audit Trail, Reporting & Summary Specs (SPEC-013 / SPEC-046 / SPEC-047)
+scope:
+    - docs/specs/SPEC-013-durable-audit-trail/
+    - docs/specs/SPEC-046-audit-reporting-and-export/
+    - docs/specs/SPEC-047-audit-summary-drilldown/
+source_files: []
+depends_on: []
+related_to: []

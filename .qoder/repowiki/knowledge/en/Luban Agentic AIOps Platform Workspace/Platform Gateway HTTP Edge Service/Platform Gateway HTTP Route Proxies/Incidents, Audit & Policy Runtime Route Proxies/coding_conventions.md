@@ -1,6 +1,0 @@
-- Route handlers follow a fixed sequence: resolve `x-request-id`, extract caller identity, call `enforce_policy(settings, identity, ACTION_*, request_id)`, then delegate to a service function.
-- Upstream failures are normalized to 502 on transport errors or upstream 5xx, while 4xx responses are passed through unchanged so callers can distinguish bad requests from outages.
-- Service-unconfigured cases raise HTTP 503 with a human-readable detail (e.g. 'incident service not configured', 'audit service not configured').
-- Every successful operation emits an observability event via `log_event(LOGGER, '<event_name>', request_id=..., user_id=...)` before returning.
-- Action names are imported as constants from `platform_gateway.services.policy_engine` (e.g. `ACTION_INCIDENT_READ`, `ACTION_APPROVALS_LIST`, `ACTION_POLICY_READ`) instead of being string-literal'd at the call site.
-- Path templates for upstream URLs are declared as module-level constants (e.g. `LIST_PATH`, `DETAIL_PATH_TEMPLATE`) and interpolated via f-strings or `.format()` rather than inline literals.

@@ -1,1 +1,0 @@
-FastAPI + uvicorn for the sample app; Python tests via pytest; shell-based demo/suite harness; Kubernetes/Kustomize manifests for deployment; skills installed as a ConfigMap consumed by the platform's `skills-hub` component.

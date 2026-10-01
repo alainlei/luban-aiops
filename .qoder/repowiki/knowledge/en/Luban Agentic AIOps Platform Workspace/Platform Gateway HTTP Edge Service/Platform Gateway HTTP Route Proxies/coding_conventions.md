@@ -1,3 +1,0 @@
-- Each domain owns a `routes/<domain>.py` file that defines a module-level `router = APIRouter()` and registers its endpoints against it.
-- Route handlers normalize identity, enforce policy, then delegate to an upstream client from `platform_gateway.services` instead of performing I/O directly.
-- Sub-routers are mounted centrally in `api/router.py` via `include_router`, keeping URL prefix registration out of individual route files.

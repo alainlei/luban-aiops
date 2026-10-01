@@ -1,1 +1,0 @@
-FastAPI service that ingests incidents, runs agent-driven triage against the agent-service, persists them, and dispatches triage reports to pluggable collaboration connectors.

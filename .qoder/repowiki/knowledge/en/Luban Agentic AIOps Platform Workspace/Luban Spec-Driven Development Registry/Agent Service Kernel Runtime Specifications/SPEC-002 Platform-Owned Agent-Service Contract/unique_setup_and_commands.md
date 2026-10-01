@@ -1,0 +1,1 @@
+Implementation acceptance requires 87 green tests across both products and CI (`ci.yml`) passing without workflow changes; delivery gates include updating root README, product READMEs, CHANGELOG.md, and the spec index in `docs/specs/README.md` before setting status to `delivered`.

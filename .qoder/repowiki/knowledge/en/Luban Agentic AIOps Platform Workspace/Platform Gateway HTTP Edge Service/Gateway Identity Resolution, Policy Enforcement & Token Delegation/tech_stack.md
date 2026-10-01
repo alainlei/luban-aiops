@@ -1,1 +1,0 @@
-FastAPI + httpx for HTTP, PyJWT (`jwt.decode` + `PyJWKClient`) for RS256 JWT verification, cryptography's `rsa.generate_private_key` for dev-mode signing, and `cryptography.hazmat.serialization` for PEM key I/O.

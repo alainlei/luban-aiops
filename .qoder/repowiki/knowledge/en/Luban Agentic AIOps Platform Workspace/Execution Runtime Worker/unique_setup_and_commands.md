@@ -1,1 +1,0 @@
-Entry point is the `execution-runtime` console script defined in `pyproject.toml`. Unit tests live under `tests/` and exclude the `failure/` harness directory via pytest config; failure-mode integration tests are executed separately through `tests/failure/run.py` as required by the root verification gate.

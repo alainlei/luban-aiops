@@ -1,1 +1,0 @@
-FastAPI service that exposes a normalized tool-discovery and invocation API, enforcing local JWT auth, policy-based authorization, output redaction, and audit emission for platform connectors.

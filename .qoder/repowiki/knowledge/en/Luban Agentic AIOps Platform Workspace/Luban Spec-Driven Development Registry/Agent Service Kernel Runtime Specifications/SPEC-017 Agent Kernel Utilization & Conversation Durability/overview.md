@@ -1,0 +1,1 @@
+Specification, implementation plan, and task tracker for hardening the AgentScope kernel configuration, switching triage to structured output, and persisting `AgentState` in Postgres.

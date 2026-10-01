@@ -1,1 +1,0 @@
-JSON Schema Draft 2020-12 (`$schema: https://json-schema.org/draft/2020-12/schema`) for all wire contracts; PyYAML + jsonschema (`Draft202012Validator`) for policy bundle validation scripts; RSA-SHA256 JWTs verified against JWKS (RFC 7517) for identity tokens documented in `identity-token.schema.json`.

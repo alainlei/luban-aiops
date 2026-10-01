@@ -12,15 +12,15 @@
 - [skills_connector.py](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py)
 - [runtime-config.env](file://shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env)
 - [kustomization.yaml](file://shared/platform-ops/gitops/dev-k8s/base/kustomization.yaml)
+- [SPEC-066 spec.md](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md)
 </cite>
 
 ## Update Summary
 **Changes Made**   
-- Updated Gate 1 completion status with comprehensive evaluation results
-- Added detailed findings from 684-judgment labeled dataset analysis
-- Documented document-length bias and skill_id indexing defects discovered during labeling
-- Updated decision rule outcome showing lexical improvements closing the gap without embedding work
-- Enhanced conclusion section reflecting the closure of semantic retrieval backlog
+- Updated to reflect SPEC-066 promotion as successor while maintaining evidence base role
+- Added clarifications about measurement license implications (memory path vs deployed environment)
+- Enhanced parse_sources validation limitation documentation
+- Updated conclusion section with SPEC-066 relationship and closure status
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -31,13 +31,14 @@
 6. [Enhanced Test Coverage](#enhanced-test-coverage)
 7. [Evaluation Methodology Improvements](#evaluation-methodology-improvements)
 8. [Gate 1 Completion Results](#gate-1-completion-results)
-9. [Dependency Analysis](#dependency-analysis)
-10. [Performance Considerations](#performance-considerations)
-11. [Troubleshooting Guide](#troubleshooting-guide)
-12. [Conclusion](#conclusion)
+9. [SPEC-066 Relationship](#spec-066-relationship)
+10. [Dependency Analysis](#dependency-analysis)
+11. [Performance Considerations](#performance-considerations)
+12. [Troubleshooting Guide](#troubleshooting-guide)
+13. [Conclusion](#conclusion)
 
 ## Introduction
-This document describes the **Semantic Skill Retrieval Evaluation Set**, which has now completed Gate 1 with comprehensive evaluation results. The evaluation set pins the current lexical skill-retrieval baseline for the platform's skills catalog and was used to determine whether semantic retrieval is worth building.
+This document describes the **Semantic Skill Retrieval Evaluation Set**, which has completed Gate 1 with comprehensive evaluation results and has been promoted to reference [SPEC-066 skill retrieval ranking fidelity](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md) as its successor specification. The evaluation set pins the current lexical skill-retrieval baseline for the platform's skills catalog and was used to determine whether semantic retrieval is worth building.
 
 The workspace is organized as a modular platform with product-oriented projects (`products/`), shared contracts and operations assets (`shared/`), and design/specification documentation (`docs/`). The evaluation set lives under `docs/workspace/`, while the code it measures lives under `products/skills-hub/` and integrates with `products/tool-gateway/`.
 
@@ -57,6 +58,7 @@ TestSuite["Test Suite<br/>products/skills-hub/tests/test_scoring.py"]
 Store["Skill Store<br/>products/skills-hub/services/skill_store.py"]
 Tool["Tool Gateway Connector<br/>products/tool-gateway/tools/skills_connector.py"]
 Sources["Dev Source Registration<br/>shared/platform-ops/gitops/dev-k8s/base/*"]
+Spec["SPEC-066<br/>docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md"]
 Docs --> Spike
 Docs --> Labels
 Docs --> Scorer
@@ -64,6 +66,7 @@ Docs --> TestSuite
 Docs --> Store
 Docs --> Tool
 Docs --> Sources
+Docs --> Spec
 ```
 
 **Diagram sources**
@@ -76,6 +79,7 @@ Docs --> Sources
 - [skills_connector.py:31-38](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py#L31-L38)
 - [runtime-config.env:19](file://shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env#L19)
 - [kustomization.yaml:25-40](file://shared/platform-ops/gitops/dev-k8s/base/kustomization.yaml#L25-L40)
+- [SPEC-066 spec.md:1-25](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L1-L25)
 
 The evaluation set is pinned to repository state v0.45.0 and was built from read-only exports of the live `skills` and `audit` databases on the development cluster. Its purpose was to freeze the corpus, reproduce the real scorer's candidate pools, define labeling rules, and pre-register the decision rule that would determine whether semantic retrieval is worth building.
 
@@ -374,6 +378,58 @@ The key finding is that **there is no recall gap to recover**: zero grade-2 docu
 - [semantic-skill-retrieval-eval-set.md:790-965](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L790-L965)
 - [semantic-skill-retrieval-labels.json:684-688](file://docs/workspace/semantic-skill-retrieval-labels.json#L684-L688)
 
+## SPEC-066 Relationship
+
+The evaluation set has been promoted to reference [SPEC-066 skill retrieval ranking fidelity](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md) as its successor specification while maintaining its role as the evidence base. This relationship establishes clear boundaries between measurement artifacts and implementation specifications.
+
+### Evidence Base vs Implementation Specification
+
+The evaluation set serves as the **committed label fixture** (§7.1) that SPEC-066's R-8 must re-measure against, **through the Postgres backend** rather than through `rank()` directly. This distinction is critical because §8's numbers were produced offline over a corpus export with no prefilter in the path, so **0.500 → 0.711 is a memory-path upper bound for deployed environments**, not a shipped figure.
+
+### Measurement License Implications
+
+The evaluation set's measurement licenses specific claims while explicitly not licensing others:
+
+**Licensed:**
+- Memory-path scoring improvements (offline `rank()` over corpus export)
+- Top-1 correctness improvement from 0.500 to 0.711
+- Statistical significance (p = 0.0117) for the combined lexical fixes
+- Closure of the semantic retrieval backlog row
+
+**Not Licensed:**
+- Backend-neutral behavior (three of four fixes are not backend-neutral as measured)
+- Deployed environment performance (Postgres prefilter may affect results)
+- Byte-identical ordering parity across backends (no parity test existed)
+- IDF corpus statistics computation method (backend-dependent)
+
+### Parse Sources Validation Limitations
+
+The evaluation set clarified important limitations in configuration validation:
+
+- `parse_sources` validates JSON shape, id patterns, required per-type keys, and duplicate `source_id` values
+- However, it **never sees file content** and therefore cannot detect two sources covering the same files
+- The duplicate-`skill_id` check in ingestion is scoped to a single source and cannot see across federation
+- This makes the dev-overlay change a measurement enabler but not a product guardrail
+
+### SPEC-066 Requirements Derived from Evaluation
+
+The evaluation set directly informed SPEC-066's requirements:
+
+| Requirement | Evaluation Finding | Impact |
+|---|---|---|
+| R-1: Score `skill_id` | `skill_id` not indexed, exact names invisible | Add slug scoring field |
+| R-2: IDF weighting | Function words score equally as domain terms | Corpus-derived frequency weighting |
+| R-3: Length normalization | Sample docs 6.8× longer than runbooks | Sublinear body-length dampening |
+| R-4: CamelCase splitting | Single-token opacity for alert titles | Split CamelCase runs |
+| R-5: Cross-backend parity | No parity test existed despite documented invariant | Enforce byte-identical ordering |
+| R-7: De-duplication guardrail | Configuration overlap exposed missing product capability | Content-level de-duplication |
+
+**Section sources**
+- [semantic-skill-retrieval-eval-set.md:7](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L7)
+- [SPEC-066 spec.md:1-25](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L1-L25)
+- [SPEC-066 spec.md:66-135](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L66-L135)
+- [SPEC-066 spec.md:153-357](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L153-L357)
+
 ## Dependency Analysis
 The evaluation set depends on several concrete paths:
 
@@ -388,6 +444,7 @@ StoreImpl["skill_store.py"]
 Connector["skills_connector.py"]
 DevConfig["runtime-config.env"]
 Kustomization["kustomization.yaml"]
+Spec066["SPEC-066 spec.md"]
 EvalSet --> SpikeMemo
 EvalSet --> LabelsFixture
 EvalSet --> ScorerModule
@@ -396,6 +453,7 @@ EvalSet --> StoreImpl
 EvalSet --> Connector
 EvalSet --> DevConfig
 EvalSet --> Kustomization
+EvalSet --> Spec066
 ```
 
 **Diagram sources**
@@ -408,6 +466,7 @@ EvalSet --> Kustomization
 - [skills_connector.py:31-38](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py#L31-L38)
 - [runtime-config.env:19](file://shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env#L19)
 - [kustomization.yaml:25-40](file://shared/platform-ops/gitops/dev-k8s/base/kustomization.yaml#L25-L40)
+- [SPEC-066 spec.md:1-25](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L1-L25)
 
 Coupling is strongest between the evaluation set and the scorer, because the set reproduces the exact `rank()` behavior against a pinned corpus. Coupling to the store and connector is structural: the set documents how the scorer fits into the broader retrieval boundary, but it does not authorize changing either.
 
@@ -444,6 +503,8 @@ When working with the evaluation set, the most common issues fall into several c
 | Labeling inconsistency | Low inter-rater reliability | Provide clearer grading guidelines and increase overlap |
 | Document-length bias | Long sample documents dominate rankings | Apply IDF weighting and length normalization |
 | skill_id invisibility | Exact skill names get no signal | Index `skill_id` field in scoring |
+| Backend parity issues | Different results between memory and Postgres | Implement R-5 cross-backend parity harness |
+| SPEC-066 measurement mismatch | Offline gains not reproduced on Postgres | Re-measure through Postgres backend per R-8 |
 
 The reproduction procedure is read-only: export the corpus, extract distinct queries and their audit statistics, import the real scorer, and call `rank()` offline. Validation compares reproduced `skill_ids` against historical audit records for cross-checked queries whose catalogs have not drifted.
 
@@ -452,7 +513,7 @@ The reproduction procedure is read-only: export the corpus, extract distinct que
 - [semantic-skill-retrieval-eval-set.md:377-400](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L377-L400)
 
 ## Conclusion
-The Semantic Skill Retrieval Evaluation Set has successfully completed Gate 1 with comprehensive evaluation results. The evaluation was deliberately conservative, freezing the current 18-document corpus, reproducing the real lexical scorer's candidate pools, defining a labeled evaluation protocol, and pre-registering a cost-ordered decision rule.
+The Semantic Skill Retrieval Evaluation Set has successfully completed Gate 1 with comprehensive evaluation results and has been promoted to reference SPEC-066 as its successor specification while maintaining its role as the evidence base. The evaluation was deliberately conservative, freezing the current 18-document corpus, reproducing the real lexical scorer's candidate pools, defining a labeled evaluation protocol, and pre-registering a cost-ordered decision rule.
 
 **Key Findings:**
 - **684 judgments** were analyzed across 38 queries and 18 documents
@@ -461,11 +522,14 @@ The Semantic Skill Retrieval Evaluation Set has successfully completed Gate 1 wi
 - **Lexical improvements substantially closed the measured gap** without requiring embedding work
 - **No recall gap exists** — zero grade-2 documents are missing from the top 10 on any query
 - **Semantic retrieval backlog has been closed** — no embedding work is authorized
+- **SPEC-066 established** as the successor specification for implementing the four measured lexical fixes
 
 The enhanced test coverage and improved evaluation methodology provided a solid foundation for measuring retrieval quality. The comprehensive labeled dataset revealed that the immediate defects — duplicate-source crowding (now resolved), CamelCase opacity, confident-but-irrelevant top hits, document-length bias, and skill_id indexing issues — are measurable and potentially fixable without introducing a vector store.
 
 The decision to close semantic retrieval work is significant: it demonstrates that careful measurement before implementation can prevent unnecessary infrastructure complexity. The lexical improvements (IDF weighting, length normalization, CamelCase splitting, and skill_id indexing) achieved substantial gains in top-1 correctness (0.500 → 0.711) and statistical significance (p = 0.0117), proving that simpler solutions can often address complex problems effectively.
 
 While the semantic retrieval backlog is closed, the evaluation identified remaining work items: implementing the product-side de-duplication guardrail, addressing the abstention problem (where the system returns confident but irrelevant answers), and potentially creating a separate backlog row for abstention behavior. These represent product decisions rather than retrieval algorithm questions, maintaining the principle that measurement should drive implementation choices.
+
+The relationship with SPEC-066 establishes clear boundaries: the evaluation set remains the committed evidence base and label fixture, while SPEC-066 specifies the implementation requirements derived from that evidence. The measurement license implications clarify that the 0.500 → 0.711 improvement is a memory-path upper bound, and the full deployment requires re-measurement through the Postgres backend per R-8.
 
 The comprehensive test suite ensures that the scoring system behaves deterministically and predictably, providing confidence that any improvements measured are genuine rather than artifacts of implementation inconsistencies. The evaluation process established a robust framework for future retrieval assessments, demonstrating the value of measurement-driven development in avoiding unnecessary complexity.

@@ -1,4 +1,0 @@
-- Service-layer errors are raised as domain exceptions carrying an HTTP `status_code` attribute (e.g. `ExchangeError`) so routes can translate them directly into responses.
-- Long-lived mutable state (RSA signing key, per-issuer JWKS clients) is held in module-level variables with a paired `reset_*_state()` function exported solely for test isolation.
-- Configuration is consumed through dataclasses loaded from environment variables (`IdentityRunSettings.from_env`, `IdentitySettings`), with defaults falling back to constants in `metadata.py`.
-- Observability is centralized: requests are logged via `log_event` with a `request_id` derived from headers or trace context, and token operations emit Prometheus counters through `core.metrics`.

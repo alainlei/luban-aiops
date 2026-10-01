@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: specs/runtime_model_switching
+title: Runtime LLM Model Switching & Discovery Specifications
+scope:
+    - docs/specs/SPEC-024-runtime-llm-model-switching/
+    - docs/specs/SPEC-026-multi-model-runtime-catalog/
+    - docs/specs/SPEC-027-live-model-discovery/
+source_files: []
+depends_on: []
+related_to: []

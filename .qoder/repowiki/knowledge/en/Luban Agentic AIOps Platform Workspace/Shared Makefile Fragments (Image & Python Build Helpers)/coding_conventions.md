@@ -1,4 +1,0 @@
-- Build configuration lives exclusively in `mk/defaults.mk` using `?=` assignments so command-line flags always take precedence.
-- Fragments guard against double inclusion (e.g. `ifndef LUBAN_DEFAULTS_INCLUDED`) when both the root Makefile and product Makefiles include them.
-- Each fragment declares its `.PHONY` targets and documents usage at the top of the file, explaining which variables the including Makefile must or may set.
-- Optional tooling falls back gracefully: hadolint checks are wrapped in `command -v` / docker-run fallbacks rather than failing the build.

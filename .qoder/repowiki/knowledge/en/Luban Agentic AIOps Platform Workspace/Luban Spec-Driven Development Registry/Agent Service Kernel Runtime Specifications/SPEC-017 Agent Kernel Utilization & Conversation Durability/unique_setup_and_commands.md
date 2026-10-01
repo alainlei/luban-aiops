@@ -1,0 +1,1 @@
+Delivery gate requires `make verify` to pass kustomize rendering of `dev-k8s/base/agent-platform/runtime-config.env` with `AGENT_STATE_STORE_BACKEND=postgres` and `AGENT_STATE_DB_URL`; live verification is delivery-time, not part of the gate.

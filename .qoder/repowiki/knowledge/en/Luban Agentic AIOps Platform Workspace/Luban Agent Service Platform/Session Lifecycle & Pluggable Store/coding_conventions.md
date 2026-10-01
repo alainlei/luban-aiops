@@ -1,5 +1,0 @@
-- Owner-scoped access returns HTTP 404 (not 403) so foreign session IDs are indistinguishable from unknown ones, enforced through the shared `_assert_session_owner` helper.
-- Bookkeeping mutations (`touch_session`, `set_session_title`, `set_session_model`) wrap their store calls in try/except that logs a warning and swallows the exception, making workspace metadata fail-open rather than failing the caller's turn.
-- Each backend class exposes a `backend_name` class attribute (`memory`/`redis`/`postgres`) and implements the full `SessionStore` Protocol, including `is_ready`, `server_version`, and `__len__`.
-- Environment configuration is read through local `_env_float`/`_env_int`/`_env_str` helpers that delegate to `os.getenv` with defaults, keeping env parsing uniform across the factory.
-- All database operations use per-call context managers around `self._connect()` and emit errors through `record_session_store_error(op)` before re-raising, centralizing error instrumentation.

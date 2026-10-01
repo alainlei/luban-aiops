@@ -1,1 +1,0 @@
-FastAPI + uvicorn for HTTP serving; prometheus_client for the always-on `/metrics` surface; OpenTelemetry SDK with OTLP HTTP/protobuf exporters (traces, metrics, logs) gated by `OTEL_ENABLED`; httpx for async gateway calls; agentscope Runtime and Toolkit integration.

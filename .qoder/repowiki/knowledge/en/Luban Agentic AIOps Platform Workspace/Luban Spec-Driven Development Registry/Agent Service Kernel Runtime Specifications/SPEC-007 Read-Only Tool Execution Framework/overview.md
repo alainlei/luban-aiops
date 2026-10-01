@@ -1,0 +1,1 @@
+Specification, plan, and task breakdown for the read-only tool execution framework that lets the AgentScope LLM kernel invoke Kubernetes tools through the tool-gateway with policy enforcement and audit.

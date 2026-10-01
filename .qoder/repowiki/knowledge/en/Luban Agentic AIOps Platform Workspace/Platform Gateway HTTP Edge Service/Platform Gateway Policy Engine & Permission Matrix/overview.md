@@ -1,1 +1,0 @@
-Deny-by-default action authorization engine that loads YAML policy bundles, evaluates role×action decisions (allow/deny/require_approval), and renders the live permission matrix.

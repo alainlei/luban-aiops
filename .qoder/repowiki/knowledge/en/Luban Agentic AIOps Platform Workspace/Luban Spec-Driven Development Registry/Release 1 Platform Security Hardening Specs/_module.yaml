@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: specs/platform_security_hardening
+title: Release 1 Platform Security Hardening Specs
+scope:
+    - docs/specs/SPEC-001-release-1-platform-hardening/
+    - docs/specs/SPEC-003-identity-trust-hardening/
+    - docs/specs/SPEC-009-pre-production-hardening/
+source_files: []
+depends_on: []
+related_to: []

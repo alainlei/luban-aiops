@@ -1,1 +1,0 @@
-Kubernetes manifests managed with Kustomize (no Helm); OpenObserve v5 dashboard JSON format; Python AST parsing for dashboard validation; shell scripts for all orchestration and secret sync.

@@ -1,0 +1,1 @@
+Python-based specification of a FastAPI tool-gateway layer over `kubernetes-client/python`; AgentScope Toolkit as the LLM-side integration surface; JSON Schema draft-07 for wire contracts; Kustomize overlays for dev RBAC.

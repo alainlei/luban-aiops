@@ -1,1 +1,0 @@
-Python asyncio with `psycopg` (dict_row, Jsonb) against a shared agent-state Postgres; advisory locks (`pg_try_advisory_lock`) for per-run serialization; HMAC-SHA256 cursors for owner-scoped pagination; retention sweep via `make_interval(days => ...)`.

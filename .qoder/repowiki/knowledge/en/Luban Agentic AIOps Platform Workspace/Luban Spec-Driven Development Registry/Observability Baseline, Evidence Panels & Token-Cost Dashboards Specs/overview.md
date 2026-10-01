@@ -1,0 +1,1 @@
+Three delivered product specs defining the platform's dual-surface observability contract: Prometheus /metrics + OTel push, Elastic connector with evidence panels, and token-cost emission with OpenObserve dashboards.

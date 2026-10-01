@@ -1,1 +1,0 @@
-Python ≥3.11, FastAPI + uvicorn as the HTTP server, AgentScope + agentscope-runtime as the agent runtime, Pydantic v2 for request/response contracts, PostgreSQL (psycopg[binary]) and Redis for persistence, Prometheus + OpenTelemetry OTLP for observability, and jsonschema for validating cross-process contract payloads.

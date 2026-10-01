@@ -1,4 +1,0 @@
-- Cross-cutting concerns (settings, telemetry, metrics, gateway tools) are loaded once from `core.config` / `core.env` / `core.telemetry` and passed down rather than re-imported inside each service.
-- External contracts are validated against JSON Schema files under `contracts/` at the service boundary before being persisted or forwarded to the execution-runtime worker.
-- Pluggable backends (LLM providers, session stores, model catalogs) are expressed as classes implementing a base interface from `providers.base` / `session_store` / `model_catalog` and selected via environment-driven registry lookup.
-- Each service module ships a sibling `test_*.py` under `tests/` that replaces persistent backends with in-memory or fakeredis fixtures instead of hitting real Postgres/Redis.

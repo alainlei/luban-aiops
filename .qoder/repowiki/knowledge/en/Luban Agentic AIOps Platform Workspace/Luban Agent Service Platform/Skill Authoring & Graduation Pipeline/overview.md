@@ -1,1 +1,0 @@
-Generates skill drafts from session/incident facts and graduates approved authoring traces into deterministic executable-flow Markdown artifacts for human review.

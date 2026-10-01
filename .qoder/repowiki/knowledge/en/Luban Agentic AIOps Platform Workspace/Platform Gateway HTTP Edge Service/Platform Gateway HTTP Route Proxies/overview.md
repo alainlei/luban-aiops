@@ -1,1 +1,0 @@
-FastAPI route layer that mounts per-domain sub-routers under a central APIRouter, exposing the portal-facing HTTP surface and proxying calls to upstream platform services.

@@ -1,0 +1,1 @@
+Python-based gateways consuming YAML policy bundles via PyYAML; JSON Schema contracts in `shared/shared-contracts/schemas`; Kustomize overlays provision secrets and ConfigMaps for dev clusters.

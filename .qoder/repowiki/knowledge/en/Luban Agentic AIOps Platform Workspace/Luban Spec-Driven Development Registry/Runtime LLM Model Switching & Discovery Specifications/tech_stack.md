@@ -1,0 +1,1 @@
+FastAPI lifespan tasks for background refresh, Postgres sessions DB (`SESSION_DB_URL`) for `model_discovery_cache(provider, models, updated_at)` persistence, OpenAI-compatible `GET /models` endpoints against provider base URLs, AgentScope kernel's `RuntimeKernel.ensure_agent` for agent rebuild with persisted `AgentState` restore.

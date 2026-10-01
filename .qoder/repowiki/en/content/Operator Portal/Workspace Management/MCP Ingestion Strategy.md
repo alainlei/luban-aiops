@@ -10,7 +10,14 @@
 - [gateway_service.py](file://products/tool-gateway/src/tool_gateway/services/gateway_service.py)
 - [kernel_middleware.py](file://products/agent-platform/src/agent_service/services/kernel_middleware.py)
 - [executor.py](file://products/execution-runtime/src/execution_runtime/services/executor.py)
+- [SPEC-066-skill-retrieval-ranking-fidelity/spec.md](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated references to SPEC-066 to reflect that the number was taken by skill retrieval ranking fidelity spec
+- Clarified that the stable API productization row remains de-numbered and will get its number at drafting time
+- Maintained all existing architectural and implementation details unchanged
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -454,6 +461,9 @@ Before implementation, the assessments require:
 
 Until those gates are met, the correct state is: assess, retain native connectors, and do not promote an implementation, pilot, ADR, or spec from these memos.
 
+**Updated** The stable API productization backlog row referenced in the ingestion strategy remains de-numbered, as the previously earmarked SPEC-066 number was taken by the skill retrieval ranking fidelity spec (SPEC-066). The stable API productization row will receive its number at drafting time, maintaining consistency with the project's spec numbering discipline.
+
 **Section sources**
 - [mcp-ingestion-spike.md:176-204](file://docs/workspace/mcp-ingestion-spike.md#L176-L204)
 - [mcp-exposure-spike.md:267-311](file://docs/workspace/mcp-exposure-spike.md#L267-L311)
+- [SPEC-066-skill-retrieval-ranking-fidelity/spec.md:581-585](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L581-L585)

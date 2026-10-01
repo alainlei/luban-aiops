@@ -1,1 +1,0 @@
-FastAPI `APIRouter` handlers over `httpx.AsyncClient` for upstream service calls; Basic authentication credentials are read from `PlatformGatewaySettings` rather than forwarding caller tokens.

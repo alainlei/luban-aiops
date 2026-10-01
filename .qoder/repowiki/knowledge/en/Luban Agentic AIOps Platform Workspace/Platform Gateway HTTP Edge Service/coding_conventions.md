@@ -1,3 +1,0 @@
-- Cross-cutting concerns (logging, metrics, telemetry, request ID propagation) are registered once in `create_app()` rather than per-route.
-- Route handlers delegate business logic to `services/*` clients instead of calling upstream HTTP directly.
-- Policy enforcement is applied uniformly via the policy engine/matrix before any upstream call is proxied.

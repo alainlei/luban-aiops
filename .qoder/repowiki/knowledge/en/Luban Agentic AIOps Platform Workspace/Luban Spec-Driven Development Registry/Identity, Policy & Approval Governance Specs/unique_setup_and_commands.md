@@ -1,0 +1,1 @@
+Spec delivery is gated on `make verify` (runs agent-platform, identity-broker, tool-gateway test suites plus overlay rendering), `make sync-policy` (propagates `policy-default.yaml` to every packaged copy), and `make validate-policy` (schema validation of the default bundle).

@@ -1,1 +1,1 @@
-Repository root that coordinates the Luban platform's product services, shared contracts, GitOps overlays, samples, and documentation behind a single Makefile-driven build/verify/deploy surface.
+Monorepo orchestrating Luban's Python services, operator portal, shared contracts, GitOps overlays, specs, and samples under a single Makefile-driven build, verify, and deploy pipeline.

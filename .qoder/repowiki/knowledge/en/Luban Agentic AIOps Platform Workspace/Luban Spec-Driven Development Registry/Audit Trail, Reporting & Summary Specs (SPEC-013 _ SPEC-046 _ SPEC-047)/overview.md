@@ -1,0 +1,1 @@
+Specification documents defining the durable audit trail contract and store (SPEC-013), plus the aggregate reporting/CSV export surface (SPEC-046) and its drill-down UX (SPEC-047).

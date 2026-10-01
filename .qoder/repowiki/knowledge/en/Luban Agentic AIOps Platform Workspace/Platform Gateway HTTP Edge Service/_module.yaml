@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: platform_gateway
-title: Platform Gateway HTTP Edge Service
-scope:
-    - products/platform-gateway/
-source_files: []
-depends_on: []
-related_to: []

@@ -1,0 +1,1 @@
+JSON Schema for contract definition; pydantic models bound to schemas in both `agent_platform` and `tool_gateway`; jsonschema library used in tests for response validation; httpx client on the consumer side.

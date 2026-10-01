@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: specs/bounded_mutating_actions
+title: R4 Approval-Gated Bounded Actions Spec Suite
+scope:
+    - docs/specs/SPEC-021-bounded-mutating-actions/
+    - docs/specs/SPEC-037-signed-execution-requests/
+    - docs/specs/SPEC-038-isolated-execution-worker/
+source_files: []
+depends_on: []
+related_to: []

@@ -1,1 +1,0 @@
-Wraps AgentScope to orchestrate per-session agents, toolkits, streaming prose redaction, evidence/audit persistence, and dispatches model calls through pluggable LLM provider adapters.

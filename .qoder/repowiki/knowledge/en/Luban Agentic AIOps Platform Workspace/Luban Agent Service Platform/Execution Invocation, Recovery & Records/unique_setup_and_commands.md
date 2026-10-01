@@ -1,1 +1,0 @@
-The record store backend is selected at import time by env vars `AGENT_STATE_STORE_BACKEND` (default `memory`, supports `postgres`) and `AGENT_STATE_DB_URL`; when Postgres is unavailable the constructor logs a warning and silently falls back to the in-memory store.

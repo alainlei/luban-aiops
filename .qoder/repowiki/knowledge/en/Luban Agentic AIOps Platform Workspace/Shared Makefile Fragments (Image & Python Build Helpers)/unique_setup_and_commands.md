@@ -1,1 +1,0 @@
-Standalone product builds work via `make -C products/<name>` because fragments resolve `defaults.mk` relative to their own path; set `REGISTRY` to enable re-tagging and pushing, `AUTO_LOAD_KIND=true` plus `KIND_CLUSTER_NAME` to auto-load images into a local kind cluster after `make build`, and override any default via `make VAR=value` since all defaults use `?=`.

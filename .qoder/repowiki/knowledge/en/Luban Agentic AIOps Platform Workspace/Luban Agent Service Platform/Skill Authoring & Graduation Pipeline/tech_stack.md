@@ -1,1 +1,0 @@
-Pydantic v2 models for the fenced-contract validation; psycopg for the Postgres backend; AgentScope `Msg`/`TextBlock` for the bounded LLM call; Python stdlib `re`, `json`, `zlib`, `urllib.parse` for pattern matching, serialization, advisory-lock key hashing, and URL-origin normalization.

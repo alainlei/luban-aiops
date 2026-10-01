@@ -1,0 +1,1 @@
+Specs target Python-based products using PyJWT with the cryptography backend for RSA/JWKS verification, Kustomize overlays for dev/prod configuration, and GitHub Actions for CI test runs and overlay rendering.

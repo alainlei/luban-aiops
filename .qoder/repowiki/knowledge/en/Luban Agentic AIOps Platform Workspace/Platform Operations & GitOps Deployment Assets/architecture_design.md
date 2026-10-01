@@ -1,9 +1,0 @@
-Organized by concern under `shared/platform-ops/`:
-- `gitops/dev-k8s/` — a Kustomize overlay that deploys all platform services (agent-platform, audit-service, execution-runtime, identity-broker, incident-service, infra/postgres+redis, operator-portal, platform-gateway, skills-hub, tool-gateway) into the `dev-luban-aiops` namespace; `base/kustomization.yaml` composes per-service subdirectories each containing deployment/service manifests plus `runtime-config.env` / `runtime-secrets.env`.
-- `gitops/runtime-profiles/` — pluggable profile overlays layered on top of the base: `default` (generic LLM provider via ConfigMap), `mutating-dev` (pod-delete RBAC + mutating tools posture), `browser-dev` (headless browser sidecar + NetworkPolicy), `secrets-dev`; selected via `select-runtime-profile.sh` so only one active profile is reviewable at a time.
-- `gitops/*.sh` — operator scripts for secret synchronization (`sync-*-secrets.sh`), execution epoch rotation, cutover guards, OIDC reconciliation, and runtime profile verification.
-- `dashboards/` — OpenObserve v5 dashboard JSON files consumed as config-as-code, validated offline by `validate_dashboards.py` against `products/*/src/*/core/metrics.py` AST-parsed `OTEL_MIRROR_FAMILIES`, applied live by `apply-dashboards.sh`.
-- `e2e/` — shell-based demo/test scripts exercising documents, HTTP checks, incidents, mutation, observability, secrets delivery, and skills.
-- `skills/` — reusable skill packages (`platform-runbooks/guides`, `sre-alerting/alerts`) shipped as consumable content.
-
-Dependency direction is one-way: this module depends on product services' metrics contracts and shared SDK conventions but owns no application business logic. The boundary between dev Kustomize base and runtime profiles is enforced by the selection script rather than directory nesting.

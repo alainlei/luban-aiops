@@ -1,1 +1,0 @@
-FastAPI `APIRouter` with Pydantic models (`DocumentCreateRequest`); policy decisions go through the internal policy engine rather than per-route authorization logic.

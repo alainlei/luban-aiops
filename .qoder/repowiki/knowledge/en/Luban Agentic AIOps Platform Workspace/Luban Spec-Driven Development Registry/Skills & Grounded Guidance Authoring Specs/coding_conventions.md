@@ -1,0 +1,5 @@
+- Each spec directory ships a three-file triad of `plan.md`, `spec.md`, and `tasks.md` with a Status header tracking draft/approved/delivered lifecycle and a Changelog section recording every revision.
+- Requirements are enumerated as R-N blocks each carrying testable acceptance criteria, and Non-Goals sections explicitly enumerate out-of-scope concerns to constrain scope creep.
+- Cross-product contracts (Skill Format schema, policy actions, audit events, session record fields) live in `shared/shared-contracts` and are mirrored lockstep across Python Pydantic models, gateway mirrors, Postgres DDL, and the portal's TS interfaces behind a drift guard.
+- New surfaces are gated deny-by-default via the existing policy engine: new actions like `session:skill_draft` or route-level dual-gates on existing actions (e.g. `session:create` + `session:skill_graduate`) rather than introducing new trust boundaries.
+- Ephemeral generation outputs degrade deterministically (facts-only skeleton fallback) instead of surfacing 500 errors, with validation enforced server-side before any artifact reaches the operator.

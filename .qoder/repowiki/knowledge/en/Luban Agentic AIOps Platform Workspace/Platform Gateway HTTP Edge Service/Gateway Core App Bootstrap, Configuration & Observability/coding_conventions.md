@@ -1,6 +1,0 @@
-- Configuration is modeled as `frozen=True` dataclasses with a `from_env()` classmethod that reads each field from `os.getenv(key, DEFAULT_...)`, and the resulting factory is wrapped in `@lru_cache(maxsize=1)` to produce a singleton.
-- Boolean env vars are normalized via a helper that accepts the case-insensitive set `{"1", "true", "yes", "on"}` before casting to bool.
-- Pydantic request/response models mirror shared-contract schemas and declare `model_config = ConfigDict(extra="forbid")` to reject unknown fields at the gateway boundary.
-- Every prometheus metric recorded in `metrics.py` is mirrored to OpenTelemetry through `MetricsMirror.count`/`.observe`/`.set_gauge` using the same exposed name and label tuple, keeping scrape and push surfaces byte-identical.
-- Optional heavy dependencies (OpenTelemetry SDK, exporters, instrumentors) are imported lazily inside functions rather than at module top-level, so the gateway runs without them when `OTEL_ENABLED` is off.
-- Fail-open error handling: OTel setup and per-instrument operations wrap their work in try/except blocks that log via `LOGGER.exception` and swallow the exception so observability failures never propagate into the request path.

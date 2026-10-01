@@ -1,6 +1,0 @@
-- Each store defines a `@runtime_checkable Protocol` as its public interface and provides parallel `InMemory*` and `Postgres*` implementations sharing the same method signatures.
-- Backend selection is centralized in a `build_*` factory that reads `AGENT_STATE_STORE_BACKEND` / `AGENT_STATE_DB_URL` and falls back to the in-memory implementation on any Postgres initialization failure.
-- Module-level singletons (`EVIDENCE_STORE`, `OPERATION_DOCUMENT_STORE`) are constructed at import time via the factory so callers can simply `from agent_service.services.<module> import ...`.
-- Postgres backends open connections per operation using a context-managed `_default_connect` and accept an injectable `SyncConnectFactory` parameter so tests can substitute a fake driver.
-- Size limits are enforced opportunistically on write paths via bounded `DELETE ... LIMIT <sweep_limit>` sweeps rather than background jobs, keeping the in-memory and Postgres behaviors identical.
-- LLM-facing inputs are restricted to assembled digest JSON via explicit prompt templates, with a hard `asyncio.wait_for` timeout and catch-all exception handler that returns a `failed` status instead of raising.

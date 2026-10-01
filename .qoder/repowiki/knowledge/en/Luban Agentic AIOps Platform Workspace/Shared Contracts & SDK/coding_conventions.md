@@ -1,5 +1,0 @@
-- Wire payloads are declared as standalone JSON Schema files under `schemas/` with `$schema` set to Draft 2020-12 and `additionalProperties: false`, so unknown fields fail closed rather than being silently dropped.
-- Cross-service contracts are versioned by prefixing schema families (v1 `chat-*`/`session-*` vs. v2 `agent-*`) and documenting header/body evolution rules in the README rather than embedding version numbers in field names.
-- Identity travels exclusively in HTTP headers (`X-User-ID`, `x-request-id`) and never in request/response bodies, keeping authentication concerns separate from payload schemas.
-- Policy rules follow the `<resource>:<verb>` action naming convention and use the fixed precedence `deny > require_approval > allow` with higher `priority` breaking ties within an outcome class.
-- Validation scripts under `scripts/` resolve paths relative to their own location via `Path(__file__).resolve().parent.parent` and exit non-zero on any schema or semantic violation, making them suitable for CI gates.

@@ -1,6 +1,0 @@
-- Action identifiers use a `<resource>:<verb>` naming convention (e.g. `session:create`, `tools:mutate`, `documents:read`) and are declared as module-level `ACTION_*` constants aggregated into the `PROTECTED_ACTIONS` frozenset.
-- Policy rule models are represented as `@dataclass(frozen=True)` objects (`PolicyRule`, `ApprovalSpec`, `PolicyDecision`) with `to_dict()` serializers that mirror the wire schema.
-- Validation failures during bundle loading raise the domain-specific `PolicyLoadError` with messages that include the offending rule id and source path rather than propagating raw `KeyError`/`ValueError`.
-- The three outcomes follow a fixed precedence hierarchy enforced in code: explicit `deny` wins over `require_approval` and `allow`; among matches of the same outcome, the rule with the highest `priority` wins.
-- Bundle provenance is tracked at load time by computing `hashlib.sha256(text.encode('utf-8')).hexdigest()` and exposing it through `bundle_metadata()` alongside `version` and `source` (`configured` vs `packaged-default`).
-- Approval rules are restricted to a bridged-action whitelist (`APPROVAL_BRIDGED_ACTIONS = {tools:mutate}`); any `require_approval` rule targeting another action raises `PolicyLoadError`.

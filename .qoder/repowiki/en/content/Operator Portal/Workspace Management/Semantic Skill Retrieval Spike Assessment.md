@@ -5,6 +5,7 @@
 - [semantic-skill-retrieval-spike.md](file://docs/workspace/semantic-skill-retrieval-spike.md)
 - [semantic-skill-retrieval-eval-set.md](file://docs/workspace/semantic-skill-retrieval-eval-set.md)
 - [delivery-roadmap.md](file://docs/agentic-aiops-platform/delivery-roadmap.md)
+- [SPEC-066 skill retrieval ranking fidelity spec](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md)
 - [scoring.py](file://products/skills-hub/src/skills_hub/services/scoring.py)
 - [skill_store.py](file://products/skills-hub/src/skills_hub/services/skill_store.py)
 - [skills_connector.py](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py)
@@ -12,19 +13,20 @@
 
 ## Update Summary
 **Changes Made**
-- Updated evaluation results with best lexical candidate performance metrics (P@5 0.711, MRR 0.868, nDCG 0.904, grade-2 R@5 0.977)
-- Added delivery-roadmap closure decision for semantic skill retrieval
-- Documented abstention behavior as an open product question requiring separate backlog row
+- Updated to reflect SPEC-066 promotion with corrected claims about schema changes and performance metrics
+- Clarified that 0.500 → 0.711 improvement is a memory-path upper bound rather than shipped performance metric
+- Corrected claims about schema changes - `skill_id` indexing requires backend modifications despite being "no schema change" for `score()`
 - Enhanced section sources with specific file references for all technical claims
+- Added cross-backend parity requirements and migration considerations
 
 ## Executive Summary
 
-The semantic skill retrieval spike has been completed with a definitive null result for vector embeddings. The measurement-first approach revealed that the cheaper lexical improvements close the measured gap, while the recall defect that would justify a vector store does not exist. The delivery roadmap's exploration backlog row for "Semantic (vector) skill retrieval" is now closed as of 2026-10-01.
+The semantic skill retrieval spike has been completed with a definitive null result for vector embeddings and promoted to **SPEC-066 skill retrieval ranking fidelity**. The measurement-first approach revealed that cheaper lexical improvements close the measured gap, while the recall defect that would justify a vector store does not exist. The delivery roadmap's exploration backlog row for "Semantic (vector) skill retrieval" is closed as of 2026-10-01.
 
 ### Key Findings
 
 **Best Lexical Candidate Performance Metrics:**
-- Precision@5: **0.711** (up from 0.500 baseline)
+- Precision@5: **0.711** (up from 0.500 baseline) - *memory-path upper bound*
 - Mean Reciprocal Rank (MRR): **0.868** 
 - Normalized Discounted Cumulative Gain (nDCG@10): **0.904**
 - Grade-2 Recall@5: **0.977**
@@ -51,6 +53,8 @@ The current skills-hub retrieval system uses purely lexical scoring with title/t
 | MRR | 0.774 | **0.868** | +0.094 |
 | nDCG@10 | 0.813 | **0.904** | +0.091 |
 | Grade-2 R@5 | 0.914 | **0.977** | +0.063 |
+
+**Updated** The 0.500 → 0.711 improvement represents a memory-path upper bound rather than shipped performance metric, as the evaluation ran `rank()` over a corpus export without Postgres prefiltering.
 
 ### Measured Defects in Lexical System
 
@@ -112,7 +116,7 @@ The semantic skill retrieval row in the delivery roadmap's exploration backlog i
 
 **Reopening Conditions:** Only on catalog growth past recorded scale trigger (>2,000 skills or search p95 >300 ms), never on library upgrades or ranking complaints already addressed by lexical fixes.
 
-**Authorization Scope:** Closure authorizes no implementation - the four lexical fixes remain measured but require separate specification.
+**Authorization Scope:** Closure authorizes no implementation - the four lexical fixes remain measured but require separate specification via SPEC-066.
 
 ### Separate Abstention Row Required
 
@@ -165,14 +169,23 @@ Key design principles:
 - Model provenance tracking via `model_id`, `dim`, `content_hash`
 - Reversible between `real[]` and `vector(n)` without data migration
 
+### Cross-Backend Parity Requirements
+
+**Updated** The four lexical fixes require careful implementation to maintain cross-backend parity:
+
+1. **Index `skill_id` field** - While technically "no schema change" for `score()`, the deployed Postgres backend requires `_SEARCH_VECTOR` and `idx_skills_search` modifications to include `skill_id` in the prefilter expression
+2. **CamelCase splitting** - Must be applied consistently to both query-side tokenization and document-side PostgreSQL `to_tsvector('simple', ...)` expressions to avoid regression
+3. **IDF weighting** - Requires backend-independent corpus statistics computation to ensure identical scoring across memory and Postgres backends
+4. **Sublinear length normalization** - Backend-neutral by construction as it operates on individual document properties
+
 ## Recommendations and Next Steps
 
 ### Immediate Actions
 
-1. **Implement the four lexical fixes** in order of cost:
-   - Index `skill_id` field (cheapest, fixes defect 5)
+1. **Implement the four lexical fixes** in order of cost, ensuring cross-backend parity:
+   - Index `skill_id` field (cheapest, fixes defect 5) - requires Postgres prefilter modification
    - Add IDF weighting and sublinear length normalization
-   - Implement CamelCase token splitting
+   - Implement CamelCase token splitting with consistent application across backends
    
 2. **Create separate backlog row for abstention behavior** as product/contract decision
 
@@ -201,12 +214,13 @@ The semantic skill retrieval spike demonstrates the value of measurement-first a
 3. **Vector embeddings are not needed** under current conditions
 4. **A separate abstention problem** requires product-level decisions beyond algorithmic fixes
 
-The closure of the exploration backlog row represents a successful null result - the system works well enough that no vector store is justified. Future work should focus on implementing the measured lexical improvements and addressing the abstention behavior through product decisions rather than algorithmic changes.
+The closure of the exploration backlog row represents a successful null result - the system works well enough that no vector store is justified. Future work should focus on implementing the measured lexical improvements through SPEC-066, addressing the abstention behavior through product decisions rather than algorithmic changes, and ensuring cross-backend parity for all scoring modifications.
 
 **Section sources**
 - [semantic-skill-retrieval-spike.md:1-800](file://docs/workspace/semantic-skill-retrieval-spike.md#L1-L800)
 - [semantic-skill-retrieval-eval-set.md:754-957](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L754-L957)
 - [delivery-roadmap.md:347-424](file://docs/agentic-aiops-platform/delivery-roadmap.md#L347-L424)
+- [SPEC-066 skill retrieval ranking fidelity spec:1-586](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L1-L586)
 - [scoring.py:20-96](file://products/skills-hub/src/skills_hub/services/scoring.py#L20-L96)
 - [skill_store.py:144-482](file://products/skills-hub/src/skills_hub/services/skill_store.py#L144-L482)
 - [skills_connector.py:31-196](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py#L31-L196)

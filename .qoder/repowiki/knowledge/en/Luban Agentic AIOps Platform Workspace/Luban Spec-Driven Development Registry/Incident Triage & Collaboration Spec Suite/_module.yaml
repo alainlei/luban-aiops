@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: specs/incident_triage_documents
+title: Incident Triage & Collaboration Spec Suite
+scope:
+    - docs/specs/SPEC-015-incident-triage-and-collaboration/
+    - docs/specs/SPEC-043-incident-report-document-type/
+    - docs/specs/SPEC-045-incident-skill-draft-and-preview/
+source_files: []
+depends_on: []
+related_to: []

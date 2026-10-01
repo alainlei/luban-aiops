@@ -1,1 +1,0 @@
-FastAPI identity-broker service that authenticates platform services, verifies subject tokens, and mints audience-bound delegated JWTs for cross-service authorization.

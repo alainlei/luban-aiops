@@ -1,0 +1,4 @@
+- Each SPEC follows a fixed section order — Status, Summary, Motivation, Requirements (numbered R-N with Acceptance Criteria), Non-Goals, Impact, Open Questions, Changelog — so reviewers can scan consistently across documents.
+- Requirements are written as testable acceptance criteria rather than prose descriptions, tying spec language directly to unit/contract tests and CI gates.
+- Policy data lives in shared JSON Schemas and a versioned YAML bundle under `shared/shared-contracts`, keeping the rule model product-neutral and forward-compatible (additive v1→v2 revisions).
+- Security-sensitive configuration (service client secrets, audience config, policy path) is loaded from environment variables or Kubernetes Secrets and never committed to the repository.

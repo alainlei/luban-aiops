@@ -1,1 +1,0 @@
-Persistent stores for per-session tool-call evidence frames and immutable typed operation documents (shift summaries, incident reports), plus the optional LLM prose layer that paraphrases their digests.

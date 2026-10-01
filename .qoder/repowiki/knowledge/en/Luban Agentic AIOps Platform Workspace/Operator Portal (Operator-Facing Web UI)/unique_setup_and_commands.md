@@ -1,1 +1,0 @@
-Build context is the repo root so the multi-stage Dockerfile can read `VERSION` for `PLATFORM_VERSION` injection; run via `make -C products/operator-portal test` (Vitest suite) and `make web-build` (tsc --noEmit && vite build). Local dev runs `npm ci && npm run dev` inside `web-ui/app/` which proxies `/api` to `localhost:8080`.

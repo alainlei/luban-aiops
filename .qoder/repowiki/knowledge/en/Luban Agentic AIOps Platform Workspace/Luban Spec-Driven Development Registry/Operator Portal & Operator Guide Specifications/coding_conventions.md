@@ -1,0 +1,4 @@
+- Each spec directory follows the triad of `spec.md` (requirements + acceptance criteria + non-goals + impact), `plan.md`, and `tasks.md`, with a YAML-style Status block at the top recording status, owner, created date, release slice, and related ADRs/specs.
+- Requirements are numbered R-1..R-N and paired with explicit Acceptance Criteria bullet lists that enumerate observable behavior rather than implementation details.
+- Non-Goals sections explicitly enumerate out-of-scope items (e.g., no write surfaces, no STT backend, no production hardening) to constrain delivery scope.
+- Impact blocks enumerate products touched, contracts touched, identity/policy/audit safety impact, and living state docs to update, making cross-product change awareness part of every spec.

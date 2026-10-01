@@ -1,0 +1,1 @@
+FastAPI-based `products/audit-service` with PostgreSQL (WAL-durable, JSONB envelope column) as the deployed backend and an in-memory store for tests/dev; shared schema contracts in `shared/shared-contracts/schemas/`; operator portal built on antd (`Collapse`, `Statistic`, `Progress`) with vitest drift guards pinning frontend vocabulary against `audit-event.schema.json`.
