@@ -11,9 +11,19 @@
 - [scoring.py](file://products/skills-hub/src/skills_hub/services/scoring.py)
 - [sync.py](file://products/skills-hub/src/skills_hub/services/sync.py)
 - [skill_store.py](file://products/skills-hub/src/skills_hub/services/skill_store.py)
-- [skill.py](file://products/skills-hub/src/skills_hub/schemas/skill.py)
-- [validate.py](file://products/skills-hub/src/skills_hub/validate.py)
+- [skill.py](file://products/skills_hub/src/skills_hub/schemas/skill.py)
+- [validate.py](file://products/skills_hub/src/skills_hub/validate.py)
+- [kustomization.yaml](file://shared/platform-ops/gitops/dev-k8s/base/kustomization.yaml)
+- [runtime-config.env](file://shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env)
+- [semantic-skill-retrieval-eval-set.md](file://docs/workspace/semantic-skill-retrieval-eval-set.md)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated Source Management section to reflect the removal of duplicate local ConfigMap mounts for platform-runbooks and sre-alerting skills
+- Added new Deduplication Prevention section documenting the fix and its impact on query results
+- Updated Troubleshooting Guide with information about the deduplication issue resolution
+- Enhanced Configuration section with guidance on preventing source overlap
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -28,7 +38,7 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-Skills Hub ingests team-owned Markdown skills from federated sources (local directories and Git repositories), validates them against a shared skill format contract, ranks and indexes them for deterministic search, and exposes retrieval APIs to the platform’s agent tooling. It keeps skills synchronized with source repositories on a configurable interval, versioned by source reference, and provides per-source status and usage audit trails.
+Skills Hub ingests team-owned Markdown skills from federated sources (local directories and Git repositories), validates them against a shared skill format contract, ranks and indexes them for deterministic search, and exposes retrieval APIs to the platform's agent tooling. It keeps skills synchronized with source repositories on a configurable interval, versioned by source reference, and provides per-source status and usage audit trails.
 
 Key responsibilities:
 - Federated ingestion from local paths and Git repositories
@@ -96,8 +106,8 @@ ST --> SK
 - [ingestion.py:476-559](file://products/skills-hub/src/skills_hub/services/ingestion.py#L476-L559)
 - [scoring.py:33-97](file://products/skills-hub/src/skills_hub/services/scoring.py#L33-L97)
 - [skill_store.py:30-67](file://products/skills-hub/src/skills_hub/services/skill_store.py#L30-L67)
-- [skill.py:15-66](file://products/skills-hub/src/skills_hub/schemas/skill.py#L15-L66)
-- [config.py:161-209](file://products/skills-hub/src/skills_hub/core/config.py#L161-L209)
+- [skill.py:15-66](file://products/skills_hub/src/skills_hub/schemas/skill.py#L15-L66)
+- [config.py:161-209](file://products/skills_hub/src/skills_hub/core/config.py#L161-L209)
 
 **Section sources**
 - [app.py:20-86](file://products/skills-hub/src/skills_hub/app.py#L20-L86)
@@ -120,7 +130,7 @@ ST --> SK
 - [skill_store.py:1-7](file://products/skills-hub/src/skills_hub/services/skill_store.py#L1-L7)
 - [skills.py:1-13](file://products/skills-hub/src/skills_hub/api/routes/skills.py#L1-L13)
 - [config.py:1-5](file://products/skills-hub/src/skills_hub/core/config.py#L1-L5)
-- [skill.py:1-6](file://products/skills-hub/src/skills_hub/schemas/skill.py#L1-L6)
+- [skill.py:1-6](file://products/skills_hub/src/skills_hub/schemas/skill.py#L1-L6)
 
 ## Architecture Overview
 The system runs as a FastAPI app that initializes a skill store and a sync manager during lifespan. Each configured source gets an independent asyncio task that periodically materializes and ingests its content, then atomically swaps the new snapshot into the store. API routes authenticate callers, delegate to the store, and emit usage audit events.
@@ -266,10 +276,37 @@ Conflict handling:
 - Git checkout failures are treated as transient; the next cycle retries from scratch if needed.
 - Local paths are used directly; Kubernetes projected volumes are handled transparently.
 
+**Updated** The dev Kubernetes overlay has been corrected to prevent source duplication. Previously, both `platform-runbooks` and `sre-alerting` skills were mounted twice - once through the `platform-skills` git source and again as separate local ConfigMap sources. This caused every document to be stored twice under different `skill_id`s, consuming result slots in search queries.
+
 **Section sources**
 - [sync.py:78-149](file://products/skills-hub/src/skills_hub/services/sync.py#L78-L149)
 - [sync.py:168-281](file://products/skills-hub/src/skills_hub/services/sync.py#L168-L281)
 - [app.py:20-56](file://products/skills-hub/src/skills_hub/app.py#L20-L56)
+
+### Deduplication Prevention
+**New Section** 
+
+A critical configuration issue was identified and resolved in the dev Kubernetes overlay where duplicate source registration caused significant query degradation. The problem occurred when the same skill files were registered through multiple sources:
+
+**Problem**: The `platform-skills` git source and two local ConfigMap sources (`sre-alerting`, `platform-runbooks`) both ingested the same files from `shared/platform-ops/skills/`. Since `skill_id` is source-prefixed, this created duplicate entries with different IDs but identical content.
+
+**Impact**: 
+- 50.8% of audit queries (32 of 63) returned fewer distinct documents than result slots
+- Duplicate crowding in top-5 results displaced relevant documents
+- The worst case was Q03 `KubePodNotReady` returning 4 hits containing only 2 distinct documents
+
+**Resolution**: Removed the duplicate local ConfigMap mounts on 2026-10-01, leaving only the `platform-skills` git source as the single route to `shared/platform-ops/skills`. The `samples` local source remains for tutorial skills.
+
+**Prevention Guidelines**:
+- Never register the same files through multiple sources
+- Use git sources for production-parity patterns
+- Ensure local source paths don't overlap with git source paths
+- Monitor corpus statistics for unexpected duplicate counts
+
+**Section sources**
+- [runtime-config.env:10-31](file://shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env#L10-L31)
+- [kustomization.yaml:22-27](file://shared/platform-ops/gitops/dev-k8s/base/kustomization.yaml#L22-L27)
+- [semantic-skill-retrieval-eval-set.md:72-96](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L72-L96)
 
 ### Caching and Performance Characteristics
 - Search performance relies on a GIN full-text index over title and body in Postgres; tag matching is filtered separately to preserve index immutability requirements.
@@ -335,6 +372,7 @@ Config --> Sync
 - Keep skill bodies and step lists within size caps to avoid excessive memory and serialization overhead.
 - Limit search results with appropriate limit parameters to reduce payload sizes.
 - Prefer tag filtering where possible to narrow candidate sets before scoring.
+- **Critical**: Avoid registering the same files through multiple sources to prevent result slot crowding and degraded query performance.
 
 [No sources needed since this section provides general guidance]
 
@@ -345,19 +383,25 @@ Common issues and diagnostics:
 - Git sync errors: Check per-source status endpoint for last_error; credentials may be masked in logs but visible in status details.
 - Missing source path: Ensure configured local paths exist and Git subpaths are valid relative directories.
 - Query authentication failures: Verify SKILLS_QUERY_CLIENTS or workload token mappings match caller identity.
+- **Source duplication issues**: If search results contain duplicate documents or return fewer distinct documents than expected, check for overlapping source registrations. The dev overlay previously had this issue where `platform-runbooks` and `sre-alerting` were mounted both as git and local sources.
 
 Diagnostics:
 - Use the status endpoint to inspect per-source sync outcomes and recent rejections.
 - Run the validation CLI locally to catch issues before publishing.
 - Inspect metrics and audit events for sync successes/errors and search/retrieval usage.
+- **Corpus verification**: Check that `source_count` and `skill_count` match expectations, and verify no byte-identical duplicates exist in the database.
+
+**Updated** Added troubleshooting guidance for source duplication issues and corpus verification methods.
 
 **Section sources**
 - [sync.py:300-324](file://products/skills-hub/src/skills_hub/services/sync.py#L300-L324)
-- [validate.py:23-43](file://products/skills-hub/src/skills_hub/validate.py#L23-L43)
+- [validate.py:23-43](file://products/skills_hub/src/skills_hub/validate.py#L23-L43)
 - [skills.py:68-96](file://products/skills-hub/src/skills_hub/api/routes/skills.py#L68-L96)
 
 ## Conclusion
 Skills Hub provides a robust, auditable pipeline for ingesting, validating, and serving operational guidance from federated sources. Its design emphasizes deterministic ranking, atomic per-source updates, clear separation of concerns, and strong security boundaries around credentials and execution. Operators can author knowledge and executable-flow skills, configure sources and scoring behavior, and monitor ingestion and usage through status and audit trails.
+
+The recent fix to the dev Kubernetes overlay demonstrates the importance of careful source configuration - duplicate source registration can significantly degrade query performance by crowding result slots with identical documents. The resolution involved removing redundant local ConfigMap mounts while maintaining the git-based source pattern for production parity.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -380,6 +424,9 @@ Reference:
 - For private Git sources, provide SKILLS_GIT_TOKENS mapping source_id to token.
 - Set SKILLS_STORE_BACKEND to memory or postgres; for Postgres, provide SKILLS_DB_URL.
 - Configure SKILLS_QUERY_CLIENTS for Basic auth or workload token settings for production.
+- **Critical**: Ensure no file paths overlap between sources to prevent duplicate ingestion.
+
+**Updated** Added guidance about preventing source overlap to avoid the deduplication issues experienced in the dev overlay.
 
 Reference:
 - [config.py:50-131](file://products/skills-hub/src/skills_hub/core/config.py#L50-L131)
@@ -416,3 +463,35 @@ Reference:
 - [skills.py:47-65](file://products/skills-hub/src/skills_hub/api/routes/skills.py#L47-L65)
 - [skills.py:120-133](file://products/skills-hub/src/skills_hub/api/routes/skills.py#L120-L133)
 - [sync.py:218-234](file://products/skills-hub/src/skills_hub/services/sync.py#L218-L234)
+
+### Source Deduplication Case Study
+**New Section**
+
+The dev Kubernetes overlay incident serves as a valuable case study in source management best practices:
+
+**Timeline**:
+- **2026-09-30**: Issue identified through semantic skill retrieval evaluation
+- **2026-10-01**: Fix deployed - removed duplicate local ConfigMap mounts
+- **Post-fix**: 50.8% reduction in query degradation (from 32/63 to 0/63 queries affected)
+
+**Root Cause Analysis**:
+- Both `platform-skills` git source and local ConfigMap sources pointed to `shared/platform-ops/skills/`
+- Same files ingested twice under different `skill_id`s (e.g., `platform-runbooks/guides/CrashLoopsAndOOM.md` vs `platform-skills/platform-runbooks/guides/CrashLoopsAndOOM.md`)
+- Scoring algorithm has no content-level deduplication, so duplicates consumed result slots
+
+**Resolution Impact**:
+- Corpus reduced from 30 rows to 18 rows (12 duplicate rows removed)
+- Distinct documents remained constant at 18
+- All top-1 search results preserved unchanged
+- Query pool widened by 88 additional candidates
+
+**Lessons Learned**:
+- Always verify source path uniqueness across all registered sources
+- Monitor corpus statistics for unexpected row counts
+- Use git sources for production-parity patterns
+- Implement validation to detect overlapping source configurations
+
+**Section sources**
+- [semantic-skill-retrieval-eval-set.md:72-96](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L72-L96)
+- [semantic-skill-retrieval-eval-set.md:230-304](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L230-L304)
+- [runtime-config.env:10-31](file://shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env#L10-L31)
