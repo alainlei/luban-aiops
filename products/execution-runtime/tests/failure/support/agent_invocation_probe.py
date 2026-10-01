@@ -46,6 +46,14 @@ from agent_service.tools.gateway_tools import (
     DELEGATED_TOKEN, EXECUTION_AUDIT_CONTEXT, EXECUTION_REQUESTS, _make_tool_fn,
 )
 
+# Launched as a script, so its own directory is already sys.path[0]; the explicit
+# insert also keeps this import working under ``python -m``. host_clock is
+# stdlib-only at import time, so sharing it costs the agent venv nothing.
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import host_clock
+
 
 def _settings(data):
     return SimpleNamespace(
@@ -66,11 +74,16 @@ def _sign(data, recovery, run_id, session_id, owner, decider, call_id):
         [ToolCallBlock(id=call_id, name=tool_name, input=json.dumps(parameters))], 600)
     envelope = build_requests(pending, decider, data["key"], run_id=run_id,
                               admission_epoch=data["epoch"], lifetime_seconds=900)[0]
-    # The disposable Postgres clock trails the host (OrbStack) and admission
-    # compares requested_at against the DATABASE clock, so a host-stamped
-    # requested_at reads as request_not_yet_valid on a live cross-product run.
-    # Backdate like the worker-side helper; lifetime stays under the 900s max.
-    backdated = datetime.now(timezone.utc) - timedelta(seconds=data.get("backdate_seconds", 30))
+    # Admission compares requested_at against the DATABASE clock, so a
+    # host-stamped requested_at reads as request_not_yet_valid on a live
+    # cross-product run. Measure that offset instead of budgeting for it. This
+    # probe runs in its own interpreter under the agent venv, so it cannot
+    # inherit the harness-wide clock and measures against its own dsn, which is
+    # the live store; the outage legs pass an unreachable recovery_dsn instead.
+    # Lifetime stays under the 900s max.
+    offset = host_clock.measure(host_clock.dsn_query(data["dsn"]))
+    database_now = datetime.now(timezone.utc) + timedelta(seconds=offset)
+    backdated = database_now - timedelta(seconds=data.get("backdate_seconds", 30))
     envelope["requested_at"] = iso(backdated)
     envelope["expires_at"] = iso(backdated + timedelta(seconds=600))
     envelope["signature"] = sign_envelope(envelope, data["key"])

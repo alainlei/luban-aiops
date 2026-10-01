@@ -1,6 +1,6 @@
 """S0 proves the measuring apparatus, not the future execution protocol."""
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -14,9 +14,11 @@ from psycopg import sql
 import pytest
 
 from execution_runtime.services.execution_signing import canonical_digest, sign_envelope
+from support import host_clock
 from support.barriers import CONTEXT, NAMES
 from support.http_services import FAULTS, counts
 from support.infrastructure import ROOT, DisposablePostgres, PrerequisiteError, prerequisites
+from support.ledger import signed_request
 from support.negative_controls import (
     assert_honest_no_effect, assert_no_replay_release, assert_single_dispatch, bypass_claim,
 )
@@ -110,6 +112,51 @@ def test_missing_scenarios_parameters_and_schedules_fail(evidence):
     del selected[("F-15", "receipt_signature")]
     assert any("receipt_signature" in error for error in coverage_errors(selected, stage="campaign"))
     evidence(asserted="zero tests, missing parameter, and fewer than twenty schedules fail")
+
+
+@pytest.mark.scenario("F-36", "clock_reconciliation")
+def test_envelope_timestamps_follow_the_database_clock(ledger_database, services, monkeypatch, evidence):
+    """Admission reads the database clock, so envelopes must be stamped from it.
+
+    A host sleep leaves the container clock behind the host's by more than any
+    static margin, which once read as a spurious ``request_not_yet_valid`` in
+    legs that assert nothing about time. This is the apparatus invariant that
+    keeps such a failure from being attributed to the protocol.
+    """
+    db = ledger_database
+    with db.connect() as conn:
+        database_now = conn.execute("SELECT clock_timestamp()").fetchone()[0]
+    envelope = signed_request(services.token, db.epoch)
+
+    def stamped(field):
+        return datetime.fromisoformat(envelope[field].replace("Z", "+00:00"))
+
+    # The inequality admission enforces, and the lifetime bound the protocol does.
+    assert stamped("requested_at") <= database_now < stamped("expires_at")
+    assert stamped("expires_at") - stamped("requested_at") <= timedelta(seconds=900)
+
+    assert host_clock.installed() is not None, "no database clock registered for stamping"
+    # The inequality above would also survive a lucky static backdate, so prove the
+    # mechanism: a database clock skewed far outside any margin must carry
+    # requested_at with it. monkeypatch restores the session-wide clock after.
+    skewed = host_clock.DatabaseClock(lambda: time.time() + 600.0)
+    monkeypatch.setattr(host_clock, "_installed", [skewed])
+    moved = signed_request(services.token, db.epoch)
+    offset = datetime.fromisoformat(moved["requested_at"].replace("Z", "+00:00")) - database_now
+    assert abs(offset.total_seconds() - 570) < 5, "requested_at ignored the database clock"
+
+    # A suspension is a wall/monotonic divergence. A threshold below zero fires the
+    # detector on every read, proving it re-measures rather than reusing a stale
+    # offset, without waiting for an actual host sleep.
+    probe = host_clock.DatabaseClock(lambda: time.time(), threshold=-1.0)
+    before = probe.facts()
+    probe.now()
+    probe.now()
+    after = probe.facts()
+    assert after["suspensions"] >= 1
+    assert after["measurements"] > before["measurements"]
+    evidence(mode="clock_reconciliation",
+             asserted="window straddles the DB clock, follows a skewed one, and re-measures on divergence")
 
 
 @pytest.mark.scenario("F-36", "barriers")

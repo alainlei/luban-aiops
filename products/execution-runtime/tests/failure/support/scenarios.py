@@ -44,7 +44,8 @@ CASES = {
     "F-35": ("normal", "denied_expired", "interrupted", "owner_reload", "held_secret"),
     "F-36": ("prerequisites", "barriers", "process_death", "independent_counters",
              "commit_wrapper", "commit_wire", "http_faults", "coverage_gate",
-             "negative_duplicate", "negative_takeover", "negative_no_effect", "negative_release"),
+             "negative_duplicate", "negative_takeover", "negative_no_effect", "negative_release",
+             "clock_reconciliation"),
 }
 REPEATED = {"F-03", "F-07", "F-08", "F-09", "F-12", "F-14", "F-20", "F-22", "F-32"}
 

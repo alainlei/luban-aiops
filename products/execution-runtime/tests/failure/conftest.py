@@ -4,9 +4,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import secrets
+import time
 
 import pytest
 
+from support import host_clock
 from support.barriers import Barriers
 from support.http_services import counts, launch_http
 from support.infrastructure import DisposablePostgres
@@ -25,6 +27,12 @@ def pytest_configure(config):
     config.proof_records = {}
     config.proof_metadata = {}
     config.proof_nodes = {}
+    # Session-level suspension detector. The wall clock follows the RTC across a
+    # host sleep while the monotonic clock does not advance, so their divergence
+    # measures time the host spent asleep and the tests did not run. Recorded
+    # independently of the database clock so a run that never stamps an envelope
+    # still reports whether it was suspended.
+    config.proof_started = (time.time(), time.monotonic())
 
 
 def pytest_collection_modifyitems(config, items):
@@ -88,6 +96,14 @@ def pytest_sessionfinish(session, exitstatus):
         if record.get("call") == "passed" and "facts" not in record:
             record["missing_evidence"] = True
             session.exitstatus = 1
+    started_wall, started_monotonic = getattr(config, "proof_started", (None, None))
+    if started_wall is not None:
+        wall = time.time() - started_wall
+        monotonic = time.monotonic() - started_monotonic
+        config.proof_metadata["host_suspension"] = {
+            "wall_seconds": round(wall, 3), "monotonic_seconds": round(monotonic, 3),
+            "divergence_seconds": round(wall - monotonic, 3),
+            "suspended": (wall - monotonic) > host_clock.SUSPENSION_THRESHOLD}
     manifest = {"stage": config.getoption("--proof-stage"),
                 "delivery_complete": False, "exit_code": int(session.exitstatus),
                 "metadata": config.proof_metadata,
@@ -98,10 +114,18 @@ def pytest_sessionfinish(session, exitstatus):
 @pytest.fixture(scope="session")
 def postgres(request):
     database = DisposablePostgres().start()
+    # Envelope timestamps are stamped from this clock, not the host's: admission
+    # evaluates requested_at against the database, so host/containers skew is a
+    # harness variable that has to be measured away rather than given margin.
+    clock = host_clock.use_database_clock(database)
     request.config.proof_metadata["database"] = database.metadata
+    request.config.proof_metadata["database_clock"] = clock.facts()
     try:
         yield database
     finally:
+        # Re-read after the run so the manifest carries the final measurement and
+        # suspension counts, which is what makes a skew failure diagnosable.
+        request.config.proof_metadata["database_clock"] = clock.facts()
         database.close()
 
 

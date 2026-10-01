@@ -1,5 +1,5 @@
 """Test-only preparation of immutable intents, independent of worker authority."""
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from uuid import uuid4
 
 from psycopg.types.json import Jsonb
@@ -7,19 +7,26 @@ from psycopg.types.json import Jsonb
 from execution_runtime.services.execution_protocol import iso
 from execution_runtime.services.execution_signing import canonical_digest, sign_envelope
 
+from . import host_clock
+
 
 def signed_request(key, epoch, **overrides):
-    now = datetime.now(timezone.utc)
+    now = host_clock.now()
     value = {"protocol_version": 3, "execution_id": str(uuid4()), "confirm_id": str(uuid4()),
              "call_id": str(uuid4()), "run_id": str(uuid4()), "admission_epoch": epoch,
              "session_id": str(uuid4()), "owner_user_id": "test-owner", "decider_user_id": "test-decider",
              "approval_kind": "action", "tool_name": "test.increment", "args_digest": canonical_digest({}),
-             # requested_at is stamped from the host clock but admission compares it
-             # against the disposable Postgres clock (requested_at <= database_now).
-             # The container clock trails the host by ~0.75s at rest and drifts
-             # further under a long loaded run, so a thin margin lets a late-running
-             # fixture read as request_not_yet_valid. Backdate by 30s for skew
-             # headroom; lifetime stays 630s, well under the 900s protocol max.
+             # Admission compares requested_at against the disposable Postgres
+             # clock (requested_at <= database_now), so `now` is host time
+             # corrected by an offset measured against that same clock rather
+             # than a bare host read: the skew is not budgetable. At rest it is
+             # small and unstable — measured +3ms and +7ms with the container
+             # ahead, where an earlier revision assumed a ~0.75s lag — and a 973s
+             # host sleep drove it far past any static margin, which read as a
+             # spurious request_not_yet_valid (see support/host_clock.py). The 30s
+             # backdate is now drift-only headroom for the gap between signing
+             # here and evaluating there; lifetime stays 630s, well under the
+             # 900s protocol max.
              "requested_at": iso(now - timedelta(seconds=30)), "expires_at": iso(now + timedelta(seconds=600)),
              **overrides}
     value["signature"] = sign_envelope(value, key)
