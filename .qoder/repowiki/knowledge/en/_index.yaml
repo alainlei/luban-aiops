@@ -3,35 +3,14 @@ schema_version: 1
 locale: en-US
 branch: main
 nodes_managed: true
-exported_at: "2026-10-01T00:47:01Z"
+exported_at: "2026-10-01T06:54:59Z"
 modules:
     "":
-        dir_name: Luban Agentic AIOps Platform Workspace
+        dir_name: Luban Agentic AIOps Platform Workspace_2
         title: Luban Agentic AIOps Platform Workspace
-        scope:
-            - README.md
-            - CONTRIBUTING.md
-            - SECURITY.md
-            - .gitignore
-            - .gitattributes
-            - .dockerignore
-            - Makefile
+        scope: []
         source_files: []
-        children:
-            - agent_platform
-            - audit_service
-            - build_helpers
-            - documentation
-            - execution_runtime
-            - identity_broker
-            - incident_service
-            - operator_portal
-            - platform_gateway
-            - platform_ops
-            - samples
-            - shared_contracts_and_sdk
-            - skills_hub
-            - tool_gateway
+        children: []
         depends_on: []
         related_to: []
     agent_platform:

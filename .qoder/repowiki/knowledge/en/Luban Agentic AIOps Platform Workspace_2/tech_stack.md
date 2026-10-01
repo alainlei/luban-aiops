@@ -1,0 +1,1 @@
+Python services managed with `uv` (pinned interpreter via `.python-version`, uv.lock per product); container images built with Dockerfiles and a shared `shared/base-images/base-uv` base image; Kubernetes deployment through Kustomize overlays under `shared/platform-ops/gitops`; OpenObserve dashboards validated offline; Node.js SPA for operator-portal built with Vite/Vitest/TSC.

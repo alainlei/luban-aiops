@@ -13,6 +13,8 @@
 - [execution_io.py](file://products/execution-runtime/src/execution_runtime/services/execution_io.py)
 - [execution_protocol.py](file://products/execution-runtime/src/execution_runtime/services/execution_protocol.py)
 - [audit_emitter.py](file://products/execution-runtime/src/execution_runtime/services/audit_emitter.py)
+- [host_clock.py](file://products/execution-runtime/tests/failure/support/host_clock.py)
+- [test_harness_contract.py](file://products/execution-runtime/tests/failure/test_harness_contract.py)
 - [execution-ledger-v1.sql](file://shared/shared-contracts/sql/execution-ledger-v1.sql)
 - [execution-ledger-v1.sql](file://products/execution-runtime/src/execution_runtime/contracts/execution-ledger-v1.sql)
 - [execution-request.schema.json](file://shared/shared-contracts/schemas/execution-request.schema.json)
@@ -31,6 +33,7 @@
 - Updated configuration options for admission control and epoch management
 - Added new database schema documentation for execution-ledger-v1 tables
 - Revised handoff endpoint to integrate with durable claim system
+- **NEW**: Added comprehensive documentation for SPEC-063 test harness time synchronization with DatabaseClock class for measuring and reconciling clock offsets, suspension detection, and automatic re-measurement capabilities
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -68,6 +71,7 @@ The execution runtime product is organized as a FastAPI application with clear s
 - API routes exposing the v3 handoff endpoint with durable claim integration
 - Services for execution, signing, single-flight idempotency, execution ledger persistence, and audit emission
 - Database schema management for execution-ledger-v1 tables
+- Test harness infrastructure for clock synchronization and failure scenario validation
 
 ```mermaid
 graph TB
@@ -84,6 +88,7 @@ C --> F
 C --> G
 C --> H
 F --> I["execution-ledger-v1.sql<br/>Postgres Schema"]
+J["tests/failure/support/host_clock.py<br/>DatabaseClock & Clock Reconciliation"] --> K["tests/failure/test_harness_contract.py<br/>Time Synchronization Tests"]
 ```
 
 **Diagram sources**
@@ -95,6 +100,7 @@ F --> I["execution-ledger-v1.sql<br/>Postgres Schema"]
 - [execution_ledger.py:77-491](file://products/execution-runtime/src/execution_runtime/services/execution_ledger.py#L77-L491)
 - [execution-signing.py:40-93](file://products/execution-runtime/src/execution_runtime/services/execution_signing.py#L40-L93)
 - [audit_emitter.py:30-99](file://products/execution-runtime/src/execution_runtime/services/audit_emitter.py#L30-L99)
+- [host_clock.py:1-165](file://products/execution-runtime/tests/failure/support/host_clock.py#L1-L165)
 
 **Section sources**
 - [main.py:1-9](file://products/execution-runtime/src/execution_runtime/main.py#L1-L9)
@@ -107,8 +113,9 @@ F --> I["execution-ledger-v1.sql<br/>Postgres Schema"]
 - **Single-flight registry**: ensures each execution_id runs at most once within process lifetime; joins concurrent duplicates and replays return cached outcomes with bounded retention.
 - **Execution ledger**: Postgres-backed durable state machine with atomic claim mechanisms, observation tracking, and recovery projections.
 - **Audit emitter**: fire-and-forget delivery to the audit service; never degrades the execution path.
+- **Test harness clock reconciliation**: DatabaseClock class for measuring and reconciling host vs database clock drift, with automatic suspension detection and re-measurement capabilities.
 
-**Updated** The execution ledger replaces simple record storage with a comprehensive state machine that tracks execution intent, dispatch claims, observations, and run lifecycle with immutable evidence preservation.
+**Updated** The execution ledger replaces simple record storage with a comprehensive state machine that tracks execution intent, dispatch claims, observations, and run lifecycle with immutable evidence preservation. The test harness now includes robust clock synchronization to ensure envelope timestamps follow the database clock rather than the host clock.
 
 **Section sources**
 - [handoff.py:144-235](file://products/execution-runtime/src/execution_runtime/api/routes/handoff.py#L144-L235)
@@ -117,6 +124,7 @@ F --> I["execution-ledger-v1.sql<br/>Postgres Schema"]
 - [single_flight.py:34-107](file://products/execution-runtime/src/execution_runtime/services/single_flight.py#L34-L107)
 - [execution_ledger.py:77-491](file://products/execution-runtime/src/execution_runtime/services/execution_ledger.py#L77-L491)
 - [audit_emitter.py:30-99](file://products/execution-runtime/src/execution_runtime/services/audit_emitter.py#L30-L99)
+- [host_clock.py:88-165](file://products/execution-runtime/tests/failure/support/host_clock.py#L88-L165)
 
 ## Architecture Overview
 The runtime isolates execution from the agent platform by receiving only pre-verified, signed requests through a v3 admission flow. The agent platform constructs the envelope, signs it with protocol version 3, and forwards it along with parked arguments and delegated token to the worker. The worker re-verifies everything, atomically claims dispatch authority, executes the tool once, and returns a signed receipt with uncertainty handling.
@@ -129,6 +137,7 @@ participant Ledger as "Execution Ledger"
 participant Gateway as "Tool Gateway"
 participant Store as "Postgres"
 participant Audit as "Audit Service"
+participant TestHarness as "Test Harness Clock"
 Agent->>Worker : POST /api/v1/executions/handoff<br/>Bearer handoff token + v3 envelope + args + delegated_token
 Worker->>Worker : Verify handoff token (constant-time)
 Worker->>Worker : Validate v3 envelope fields
@@ -152,6 +161,7 @@ else Claim failed
 Ledger-->>Worker : ClaimDecision(reason)
 Worker-->>Agent : refusal response
 end
+Note over TestHarness : Envelope timestamps use DatabaseClock<br/>to follow database clock, not host clock
 ```
 
 **Diagram sources**
@@ -161,6 +171,7 @@ end
 - [execution_signing.py:40-93](file://products/execution-runtime/src/execution_runtime/services/execution_signing.py#L40-L93)
 - [single_flight.py:42-84](file://products/execution-runtime/src/execution_runtime/services/single_flight.py#L42-L84)
 - [audit_emitter.py:68-99](file://products/execution-runtime/src/execution_runtime/services/audit_emitter.py#L68-L99)
+- [host_clock.py:156-165](file://products/execution-runtime/tests/failure/support/host_clock.py#L156-L165)
 
 ## Detailed Component Analysis
 
@@ -273,8 +284,9 @@ G --> |No| I["False"]
 - **Observation tracking**: `execution_observations` table records all execution events with immutable evidence preservation.
 - **Run lifecycle**: `execution_runs` table tracks root-run identity binding with monotonic updates.
 - **Retention policy**: 30-day minimum retention after request expiry with independent cleanup.
+- **Database clock validation**: enforces `requested_at <= clock_timestamp() < expires_at` using the database clock for authoritative time comparisons.
 
-**Updated** The execution ledger replaces simple record storage with comprehensive state management that prevents duplicate mutations and provides recovery capabilities.
+**Updated** The execution ledger replaces simple record storage with comprehensive state management that prevents duplicate mutations and provides recovery capabilities. Time validation now strictly uses the database clock to avoid host-vs-database clock drift issues.
 
 ```mermaid
 flowchart TD
@@ -298,6 +310,48 @@ Late --> Done
 - [execution_ledger.py:77-491](file://products/execution-runtime/src/execution_runtime/services/execution_ledger.py#L77-L491)
 - [execution-ledger-v1.sql:16-30](file://shared/shared-contracts/sql/execution-ledger-v1.sql#L16-L30)
 
+### Test Harness Clock Synchronization
+- **DatabaseClock class**: measures and reconciles clock offsets between host and database systems.
+- **Suspension detection**: detects wall/monotonic divergence indicating host sleep, triggering automatic re-measurement.
+- **Automatic re-measurement**: recalibrates offset when divergence exceeds threshold (default 5.0 seconds).
+- **Thread-safe operations**: uses locks to ensure consistent offset measurements across threads.
+- **Fact collection**: provides bounded metrics about offset, measurement count, and suspension count for proof manifests.
+- **Graceful fallback**: falls back to uncorrected host clock when no database clock is registered.
+
+**New** The test harness now includes robust clock synchronization to ensure envelope timestamps follow the database clock rather than the host clock, addressing critical issues with host vs database clock drift that could cause spurious `request_not_yet_valid` errors.
+
+```mermaid
+classDiagram
+class DatabaseClock {
++query : function
++threshold : float
++lock : Lock
++offset : float
++wall : datetime
++monotonic : float
++measurements : int
++suspensions : int
++resync() float
++now() datetime
++_check_suspension() void
++facts() dict
+}
+class Measurement {
++before : float
++database_now : float
++after : float
++offset : float
+}
+DatabaseClock --> Measurement : "measures"
+```
+
+**Diagram sources**
+- [host_clock.py:88-142](file://products/execution-runtime/tests/failure/support/host_clock.py#L88-L142)
+
+**Section sources**
+- [host_clock.py:1-165](file://products/execution-runtime/tests/failure/support/host_clock.py#L1-L165)
+- [test_harness_contract.py:117-159](file://products/execution-runtime/tests/failure/test_harness_contract.py#L117-L159)
+
 ### Audit Emission
 - Fire-and-forget delivery on a daemon thread with short timeout.
 - Unconfigured audit service URL results in no-op; failures are logged and counted but never propagate to the caller.
@@ -314,8 +368,9 @@ The runtime depends on:
 - Postgres database for execution ledger with SPEC-063 schema migration.
 - Audit service for durable audit events (optional).
 - Internal handoff secret and execution signing key for authentication and integrity.
+- Test harness infrastructure for clock synchronization and failure scenario validation.
 
-**Updated** The execution ledger requires Postgres availability for mutation admission, replacing the previous memory fallback option.
+**Updated** The execution ledger requires Postgres availability for mutation admission, replacing the previous memory fallback option. The test harness now includes sophisticated clock reconciliation to handle host vs database time drift.
 
 ```mermaid
 graph LR
@@ -323,12 +378,15 @@ HR["Execution Runtime"] --> TG["Tool Gateway"]
 HR --> DB["Postgres (execution ledger)"]
 HR --> AS["Audit Service"]
 HR -.->|Optional| MEM["In-memory store (read-only)"]
+TH["Test Harness"] --> HC["Host Clock Reconciliation"]
+HC --> DB
 ```
 
 **Diagram sources**
 - [executor.py:27-59](file://products/execution-runtime/src/execution_runtime/services/executor.py#L27-L59)
 - [execution_ledger.py:77-101](file://products/execution-runtime/src/execution_runtime/services/execution_ledger.py#L77-L101)
 - [audit_emitter.py:68-99](file://products/execution-runtime/src/execution_runtime/services/audit_emitter.py#L68-L99)
+- [host_clock.py:145-165](file://products/execution-runtime/tests/failure/support/host_clock.py#L145-L165)
 
 **Section sources**
 - [executor.py:27-59](file://products/execution-runtime/src/execution_runtime/services/executor.py#L27-L59)
@@ -341,8 +399,9 @@ HR -.->|Optional| MEM["In-memory store (read-only)"]
 - **Database budgeting**: execution_io provides bounded database operations with deadline enforcement.
 - **Non-blocking audit emission**: audit events are delivered asynchronously with short timeouts.
 - **Ledger retention**: efficient cleanup of old execution evidence after 30-day retention horizon.
+- **Clock reconciliation overhead**: DatabaseClock measures offset periodically with minimal query cost, only re-measuring when suspension is detected.
 
-**Updated** Performance considerations now include execution ledger operations, database connection management, and observation overflow handling.
+**Updated** Performance considerations now include execution ledger operations, database connection management, observation overflow handling, and the minimal overhead of clock reconciliation which only triggers re-measurement when host suspension is detected.
 
 ## Troubleshooting Guide
 Common rejection reasons and their meanings:
@@ -360,8 +419,9 @@ Common rejection reasons and their meanings:
 - **NEW**: identity_conflict: conflicting execution identity or ownership.
 - **NEW**: request_expired: v3 request outside validity window.
 - **NEW**: admission_disabled: execution admission control disabled.
+- **NEW**: request_not_yet_valid: envelope timestamp is ahead of database clock (may indicate clock drift).
 
-**Updated** New error codes reflect the execution ledger's state management and admission control requirements.
+**Updated** New error codes reflect the execution ledger's state management and admission control requirements. The `request_not_yet_valid` error may indicate clock synchronization issues between host and database systems.
 
 Operational checks:
 - Ensure EXECUTION_HANDOFF_TOKEN and EXECUTION_SIGNING_KEY are provisioned; missing secrets fail closed.
@@ -369,6 +429,7 @@ Operational checks:
 - Verify Postgres connectivity when using execution ledger backend; service requires database for mutation admission.
 - Inspect audit events for execution_rejected and execution_completed to correlate failures.
 - Monitor execution ledger health and unresolved claim counts.
+- **NEW**: Check for clock drift issues if experiencing frequent `request_not_yet_valid` errors; verify host and database clocks are synchronized.
 
 **Section sources**
 - [handoff.py:144-235](file://products/execution-runtime/src/execution_runtime/api/routes/handoff.py#L144-L235)
@@ -378,7 +439,7 @@ Operational checks:
 ## Conclusion
 The execution runtime provides a secure, bounded, and auditable execution boundary for mutating tool actions with crash-safe guarantees. It enforces strict authentication, cryptographic verification of requests and outcomes, durable single-use dispatch claims, and immutable recording of results. By isolating execution in its own process, limiting resource exposure through timeouts and bounded registries, and implementing SPEC-063 durability guarantees, it prevents privilege escalation and runaway operations while preserving operator visibility and audit integrity.
 
-**Updated** The runtime now provides at-most-one dispatch guarantees even after process loss, database failure, or network interruptions, making it suitable for critical mutation operations where duplicate execution could cause data corruption or inconsistent state.
+**Updated** The runtime now provides at-most-one dispatch guarantees even after process loss, database failure, or network interruptions, making it suitable for critical mutation operations where duplicate execution could cause data corruption or inconsistent state. The test harness includes robust clock synchronization to ensure reliable testing across different host and database time environments.
 
 ## Appendices
 
@@ -405,8 +466,9 @@ The execution runtime provides a secure, bounded, and auditable execution bounda
 - Authority delegation unchanged: the worker forwards the confirmer's delegated token to the tool gateway; policy and admission control remain enforced by the gateway.
 - Provenance handles: optional session_id and approval_kind are forwarded as correlation/provenance metadata and do not grant additional authority.
 - **Enhanced**: Durable single-use claims prevent duplicate execution even with compromised state or process restarts.
+- **Enhanced**: Database clock validation prevents time-based attacks and ensures temporal consistency.
 
-**Updated** Security model now includes execution ledger protection against replay attacks and duplicate dispatch attempts.
+**Updated** Security model now includes execution ledger protection against replay attacks and duplicate dispatch attempts, plus database clock validation for temporal integrity.
 
 **Section sources**
 - [SPEC-038-isolated-execution-worker/spec.md:79-118](file://docs/specs/SPEC-038-isolated-execution-worker/spec.md#L79-L118)
@@ -433,8 +495,9 @@ The execution runtime provides a secure, bounded, and auditable execution bounda
 - If the tool gateway times out or is unreachable, the worker returns a structured error result with TIMEOUT or TRANSPORT_ERROR and maps it to a failed/timeout receipt with uncertainty indication.
 - Late completions after a prior timeout close are recorded as late completions and do not overwrite existing receipts.
 - **New**: Execution ledger failures return store_unavailable or claim_commit_unconfirmed with appropriate HTTP status codes.
+- **New**: Clock-related failures like request_not_yet_valid may indicate host vs database clock drift issues.
 
-**Updated** Failure handling now includes execution ledger uncertainty states and improved error categorization.
+**Updated** Failure handling now includes execution ledger uncertainty states and improved error categorization, including clock synchronization issues.
 
 **Section sources**
 - [handoff.py:144-235](file://products/execution-runtime/src/execution_runtime/api/routes/handoff.py#L144-L235)
@@ -451,8 +514,23 @@ The execution ledger consists of several interconnected tables providing crash-s
 - **execution_observation_state**: Aggregate counters and conflict detection for execution observations.
 - **execution_observations**: Immutable, attributed execution events with reserved slots and content verification.
 
-**Updated** Schema provides comprehensive state management for SPEC-063 crash-safe execution requirements.
+**Updated** Schema provides comprehensive state management for SPEC-063 crash-safe execution requirements, including database clock validation for temporal consistency.
 
 **Section sources**
 - [execution-ledger-v1.sql:8-200](file://shared/shared-contracts/sql/execution-ledger-v1.sql#L8-L200)
 - [execution-ledger-v1.sql:8-200](file://products/execution-runtime/src/execution_runtime/contracts/execution-ledger-v1.sql#L8-L200)
+
+### Test Harness Clock Synchronization Details
+The SPEC-063 test harness includes sophisticated clock reconciliation to handle host vs database time drift:
+
+- **Measurement methodology**: Brackets database clock queries between host time reads to calculate precise offset.
+- **Suspension detection**: Compares wall clock vs monotonic clock divergence to detect host sleep events.
+- **Automatic correction**: Re-measures offset when suspension threshold (5.0 seconds default) is exceeded.
+- **Thread safety**: Uses locks to ensure consistent measurements across concurrent test operations.
+- **Proof generation**: Provides bounded facts about offset, measurements, and suspensions for test evidence.
+
+**New** This clock synchronization ensures that envelope timestamps always follow the database clock rather than the host clock, preventing false `request_not_yet_valid` errors during test execution.
+
+**Section sources**
+- [host_clock.py:1-165](file://products/execution-runtime/tests/failure/support/host_clock.py#L1-L165)
+- [test_harness_contract.py:117-159](file://products/execution-runtime/tests/failure/test_harness_contract.py#L117-L159)

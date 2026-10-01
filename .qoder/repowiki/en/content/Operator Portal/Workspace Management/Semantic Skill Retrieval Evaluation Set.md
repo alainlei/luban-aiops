@@ -5,6 +5,7 @@
 - [README.md](file://README.md)
 - [semantic-skill-retrieval-spike.md](file://docs/workspace/semantic-skill-retrieval-spike.md)
 - [semantic-skill-retrieval-eval-set.md](file://docs/workspace/semantic-skill-retrieval-eval-set.md)
+- [semantic-skill-retrieval-labels.json](file://docs/workspace/semantic-skill-retrieval-labels.json)
 - [scoring.py](file://products/skills-hub/src/skills_hub/services/scoring.py)
 - [test_scoring.py](file://products/skills-hub/tests/test_scoring.py)
 - [skill_store.py](file://products/skills-hub/src/skills_hub/services/skill_store.py)
@@ -15,11 +16,11 @@
 
 ## Update Summary
 **Changes Made**   
-- Enhanced test coverage section with detailed analysis of scoring test improvements
-- Updated evaluation methodology to reflect refined labeling protocols and strata definitions
-- Added comprehensive defect documentation with concrete measurements and examples
-- Improved architectural diagrams to reflect current implementation state
-- Updated troubleshooting guide with new issues identified through enhanced testing
+- Updated Gate 1 completion status with comprehensive evaluation results
+- Added detailed findings from 684-judgment labeled dataset analysis
+- Documented document-length bias and skill_id indexing defects discovered during labeling
+- Updated decision rule outcome showing lexical improvements closing the gap without embedding work
+- Enhanced conclusion section reflecting the closure of semantic retrieval backlog
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -29,13 +30,14 @@
 5. [Detailed Component Analysis](#detailed-component-analysis)
 6. [Enhanced Test Coverage](#enhanced-test-coverage)
 7. [Evaluation Methodology Improvements](#evaluation-methodology-improvements)
-8. [Dependency Analysis](#dependency-analysis)
-9. [Performance Considerations](#performance-considerations)
-10. [Troubleshooting Guide](#troubleshooting-guide)
-11. [Conclusion](#conclusion)
+8. [Gate 1 Completion Results](#gate-1-completion-results)
+9. [Dependency Analysis](#dependency-analysis)
+10. [Performance Considerations](#performance-considerations)
+11. [Troubleshooting Guide](#troubleshooting-guide)
+12. [Conclusion](#conclusion)
 
 ## Introduction
-This document describes the **Semantic Skill Retrieval Evaluation Set**, a measurement artifact that pins the current lexical skill-retrieval baseline for the platform's skills catalog and prepares it for operations-led relevance labeling. It is not an implementation, ADR, or spec; it is the input to a gate: measure before building semantic retrieval.
+This document describes the **Semantic Skill Retrieval Evaluation Set**, which has now completed Gate 1 with comprehensive evaluation results. The evaluation set pins the current lexical skill-retrieval baseline for the platform's skills catalog and was used to determine whether semantic retrieval is worth building.
 
 The workspace is organized as a modular platform with product-oriented projects (`products/`), shared contracts and operations assets (`shared/`), and design/specification documentation (`docs/`). The evaluation set lives under `docs/workspace/`, while the code it measures lives under `products/skills-hub/` and integrates with `products/tool-gateway/`.
 
@@ -49,12 +51,14 @@ At a high level, the evaluation set connects three layers:
 graph TB
 Docs["Evaluation Set<br/>docs/workspace/semantic-skill-retrieval-eval-set.md"]
 Spike["Spike Memo<br/>docs/workspace/semantic-skill-retrieval-spike.md"]
+Labels["Labeled Dataset<br/>docs/workspace/semantic-skill-retrieval-labels.json"]
 Scorer["Lexical Scorer<br/>products/skills-hub/services/scoring.py"]
 TestSuite["Test Suite<br/>products/skills-hub/tests/test_scoring.py"]
 Store["Skill Store<br/>products/skills-hub/services/skill_store.py"]
 Tool["Tool Gateway Connector<br/>products/tool-gateway/tools/skills_connector.py"]
 Sources["Dev Source Registration<br/>shared/platform-ops/gitops/dev-k8s/base/*"]
 Docs --> Spike
+Docs --> Labels
 Docs --> Scorer
 Docs --> TestSuite
 Docs --> Store
@@ -65,6 +69,7 @@ Docs --> Sources
 **Diagram sources**
 - [semantic-skill-retrieval-eval-set.md:1-27](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L1-L27)
 - [semantic-skill-retrieval-spike.md:1-8](file://docs/workspace/semantic-skill-retrieval-spike.md#L1-L8)
+- [semantic-skill-retrieval-labels.json:1-20](file://docs/workspace/semantic-skill-retrieval-labels.json#L1-L20)
 - [scoring.py:1-10](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L10)
 - [test_scoring.py:1-6](file://products/skills-hub/tests/test_scoring.py#L1-L6)
 - [skill_store.py:437-463](file://products/skills-hub/src/skills_hub/services/skill_store.py#L437-L463)
@@ -72,7 +77,7 @@ Docs --> Sources
 - [runtime-config.env:19](file://shared/platform-ops/gitops/dev-k8s/base/skills-hub/runtime-config.env#L19)
 - [kustomization.yaml:25-40](file://shared/platform-ops/gitops/dev-k8s/base/kustomization.yaml#L25-L40)
 
-The evaluation set is pinned to repository state v0.45.0 and was built from read-only exports of the live `skills` and `audit` databases on the development cluster. Its purpose is to freeze the corpus, reproduce the real scorer's candidate pools, define labeling rules, and pre-register the decision rule that will determine whether semantic retrieval is worth building.
+The evaluation set is pinned to repository state v0.45.0 and was built from read-only exports of the live `skills` and `audit` databases on the development cluster. Its purpose was to freeze the corpus, reproduce the real scorer's candidate pools, define labeling rules, and pre-register the decision rule that would determine whether semantic retrieval is worth building.
 
 **Section sources**
 - [semantic-skill-retrieval-eval-set.md:1-7](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L1-L7)
@@ -86,13 +91,14 @@ The evaluation set centers on four concrete components:
 | Corpus snapshot | Deduplicated 18-document catalogue used as the ground truth surface | 30 stored rows collapse to 18 distinct documents by body hash |
 | Query pool | 63 distinct queries extracted from audit events | Pooled at depth 10 so nDCG@10 and deeper ranking can be measured |
 | Lexical scorer | Deterministic keyword scoring shared by both store backends | Title 3.0, tag 2.0, body occurrence 1.0 capped at 5 |
-| Labeling protocol | Operations-led relevance judgment over (query, document) pairs | Grades 0/1/2, two labelers, agreement reported |
+| Labeled dataset | Operations-led relevance judgment over (query, document) pairs | 684 judgments (38 queries × 18 documents), grades 0/1/2 |
 
-The evaluation set explicitly states what it is **not**: it contains no labels, no embedding run, no vector index, and no change to the deployed scorer. Every number in its baseline section is a property of the scorer and the pinned corpus, not of answer quality.
+The evaluation set explicitly states what it is **not**: it contains no embedding run, no vector index, and no change to the deployed scorer. Every number in its baseline section is a property of the scorer and the pinned corpus, not of answer quality.
 
 **Section sources**
 - [semantic-skill-retrieval-eval-set.md:9-27](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L9-L27)
 - [semantic-skill-retrieval-eval-set.md:207-239](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L207-L239)
+- [semantic-skill-retrieval-labels.json:684-688](file://docs/workspace/semantic-skill-retrieval-labels.json#L684-L688)
 - [scoring.py:20-52](file://products/skills-hub/src/skills_hub/services/scoring.py#L20-L52)
 
 ## Architecture Overview
@@ -325,6 +331,49 @@ The evaluation methodology now includes several new metrics:
 - [semantic-skill-retrieval-eval-set.md:455-530](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L455-L530)
 - [semantic-skill-retrieval-eval-set.md:549-583](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L549-L583)
 
+## Gate 1 Completion Results
+
+Gate 1 has been completed with comprehensive evaluation results based on a labeled dataset containing 684 judgments (38 queries × 18 documents). The evaluation revealed several critical findings that fundamentally changed the assessment of semantic retrieval needs.
+
+### Comprehensive Labeled Dataset
+The labeled dataset contains:
+- **38 queries** (20 stratum B + 18 stratum C)
+- **684 total judgments** (38 × 18 documents per query)
+- **173 non-zero judgments** (52 grade 2, 121 grade 1)
+- **511 explicit zero judgments**
+
+The dataset was drafted by the spike author and submitted for operator ratification, passing as "author-proposed, operator-ratified" rather than blind operations labeling.
+
+### Document-Length Bias Discovery
+During labeling, a fourth defect was discovered that changes *which* document wins rather than how many slots are filled:
+
+- **Sample documents average 9,718 chars** vs **runbook documents average 1,424 chars** (6.8× longer)
+- At the cap of 5 occurrences, sample documents earn up to `5 × 1.0` per matched token where runbooks earn fewer simply by being shorter
+- Body matches supply **70–100% of the winning score** in cases where the lexical top-1 is graded 0
+- Sample documents take top-1 on **10 of 18** paraphrase queries, although only 4 concern them at all
+
+### skill_id Indexing Issues
+The evaluation revealed that `skill_id` is not an indexed field:
+
+- `score()` reads exactly three fields: `title`, `tags`, and `body` — never `skill.skill_id`
+- An operator who types a skill's exact name gets zero signal from it
+- Cross-reference rows are worse than invisible ones: where a skill name appears in *other* documents' bodies as a cross-reference, those documents earn the credit that the owner cannot
+- Of the 14 stratum-A queries, only 3 name an identifier that exists in the corpus, and the shipped scorer ranks the owning document first for **0 of those 3**
+
+### Decision Rule Outcome
+Applying the pre-registered decision rule resulted in the closure of semantic retrieval work:
+
+1. **Step 1 — De-duplicate**: Configuration half done (dev overlay cleaned), product half remains open as guardrail
+2. **Step 2 — Tokenizer fixes**: Substantially closes the measured gap with combined top-1 correctness improving from 0.500 to 0.711
+3. **Step 3 — Hybrid/vector retrieval**: **NOT AUTHORIZED** — the defect it would address does not exist
+
+The key finding is that **there is no recall gap to recover**: zero grade-2 documents are missing from the top 10 on any of the 38 queries, and `R@5(=2)` on real traffic is already 1.000. Therefore, embedding work is not authorized and the backlog row closes.
+
+**Section sources**
+- [semantic-skill-retrieval-eval-set.md:672-734](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L672-L734)
+- [semantic-skill-retrieval-eval-set.md:790-965](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L790-L965)
+- [semantic-skill-retrieval-labels.json:684-688](file://docs/workspace/semantic-skill-retrieval-labels.json#L684-L688)
+
 ## Dependency Analysis
 The evaluation set depends on several concrete paths:
 
@@ -332,6 +381,7 @@ The evaluation set depends on several concrete paths:
 graph LR
 EvalSet["semantic-skill-retrieval-eval-set.md"]
 SpikeMemo["semantic-skill-retrieval-spike.md"]
+LabelsFixture["semantic-skill-retrieval-labels.json"]
 ScorerModule["scoring.py"]
 TestSuite["test_scoring.py"]
 StoreImpl["skill_store.py"]
@@ -339,6 +389,7 @@ Connector["skills_connector.py"]
 DevConfig["runtime-config.env"]
 Kustomization["kustomization.yaml"]
 EvalSet --> SpikeMemo
+EvalSet --> LabelsFixture
 EvalSet --> ScorerModule
 EvalSet --> TestSuite
 EvalSet --> StoreImpl
@@ -350,6 +401,7 @@ EvalSet --> Kustomization
 **Diagram sources**
 - [semantic-skill-retrieval-eval-set.md:1-7](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L1-L7)
 - [semantic-skill-retrieval-spike.md:1-8](file://docs/workspace/semantic-skill-retrieval-spike.md#L1-L8)
+- [semantic-skill-retrieval-labels.json:1-20](file://docs/workspace/semantic-skill-retrieval-labels.json#L1-L20)
 - [scoring.py:1-10](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L10)
 - [test_scoring.py:1-6](file://products/skills-hub/tests/test_scoring.py#L1-L6)
 - [skill_store.py:437-463](file://products/skills-hub/src/skills_hub/services/skill_store.py#L437-L463)
@@ -390,6 +442,8 @@ When working with the evaluation set, the most common issues fall into several c
 | Excerpt generation errors | Snippets don't start at expected positions | Verify tokenization and body match finding logic |
 | Test failures | Inconsistent ranking or scoring behavior | Check input order independence and tie-breaking logic |
 | Labeling inconsistency | Low inter-rater reliability | Provide clearer grading guidelines and increase overlap |
+| Document-length bias | Long sample documents dominate rankings | Apply IDF weighting and length normalization |
+| skill_id invisibility | Exact skill names get no signal | Index `skill_id` field in scoring |
 
 The reproduction procedure is read-only: export the corpus, extract distinct queries and their audit statistics, import the real scorer, and call `rank()` offline. Validation compares reproduced `skill_ids` against historical audit records for cross-checked queries whose catalogs have not drifted.
 
@@ -398,8 +452,20 @@ The reproduction procedure is read-only: export the corpus, extract distinct que
 - [semantic-skill-retrieval-eval-set.md:377-400](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L377-L400)
 
 ## Conclusion
-The Semantic Skill Retrieval Evaluation Set is a deliberately conservative artifact. It freezes the current 18-document corpus, reproduces the real lexical scorer's candidate pools, defines a labeled evaluation protocol, and pre-registers a cost-ordered decision rule. Its most important finding is that the immediate defects — duplicate-source crowding, CamelCase opacity, and confident-but-irrelevant top hits — are measurable and potentially fixable without introducing a vector store.
+The Semantic Skill Retrieval Evaluation Set has successfully completed Gate 1 with comprehensive evaluation results. The evaluation was deliberately conservative, freezing the current 18-document corpus, reproducing the real lexical scorer's candidate pools, defining a labeled evaluation protocol, and pre-registering a cost-ordered decision rule.
 
-The enhanced test coverage and improved evaluation methodology provide a solid foundation for measuring retrieval quality. The next gate is human labeling. Until operations reviewers attach relevance grades to the labeled set, the question "does semantic retrieval beat lexical?" remains unanswerable. If lexical improvements close the gap, the exercise ends with a null result. If they do not, the spike memo's substrate options provide a reversible path from sidecar vectors to pgvector, always gated by precision, rank stability, latency, and fail-open behavior.
+**Key Findings:**
+- **684 judgments** were analyzed across 38 queries and 18 documents
+- **Document-length bias** was discovered, with sample documents being 6.8× longer than runbooks
+- **skill_id indexing issues** were identified, making exact skill names invisible to the scorer
+- **Lexical improvements substantially closed the measured gap** without requiring embedding work
+- **No recall gap exists** — zero grade-2 documents are missing from the top 10 on any query
+- **Semantic retrieval backlog has been closed** — no embedding work is authorized
 
-The comprehensive test suite ensures that the scoring system behaves deterministically and predictably, providing confidence that any improvements measured are genuine rather than artifacts of implementation inconsistencies.
+The enhanced test coverage and improved evaluation methodology provided a solid foundation for measuring retrieval quality. The comprehensive labeled dataset revealed that the immediate defects — duplicate-source crowding (now resolved), CamelCase opacity, confident-but-irrelevant top hits, document-length bias, and skill_id indexing issues — are measurable and potentially fixable without introducing a vector store.
+
+The decision to close semantic retrieval work is significant: it demonstrates that careful measurement before implementation can prevent unnecessary infrastructure complexity. The lexical improvements (IDF weighting, length normalization, CamelCase splitting, and skill_id indexing) achieved substantial gains in top-1 correctness (0.500 → 0.711) and statistical significance (p = 0.0117), proving that simpler solutions can often address complex problems effectively.
+
+While the semantic retrieval backlog is closed, the evaluation identified remaining work items: implementing the product-side de-duplication guardrail, addressing the abstention problem (where the system returns confident but irrelevant answers), and potentially creating a separate backlog row for abstention behavior. These represent product decisions rather than retrieval algorithm questions, maintaining the principle that measurement should drive implementation choices.
+
+The comprehensive test suite ensures that the scoring system behaves deterministically and predictably, providing confidence that any improvements measured are genuine rather than artifacts of implementation inconsistencies. The evaluation process established a robust framework for future retrieval assessments, demonstrating the value of measurement-driven development in avoiding unnecessary complexity.
