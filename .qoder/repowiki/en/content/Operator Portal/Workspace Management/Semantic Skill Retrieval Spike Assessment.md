@@ -6,6 +6,8 @@
 - [semantic-skill-retrieval-eval-set.md](file://docs/workspace/semantic-skill-retrieval-eval-set.md)
 - [delivery-roadmap.md](file://docs/agentic-aiops-platform/delivery-roadmap.md)
 - [SPEC-066 skill retrieval ranking fidelity spec](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md)
+- [SPEC-066 plan](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md)
+- [SPEC-066 tasks](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md)
 - [scoring.py](file://products/skills-hub/src/skills_hub/services/scoring.py)
 - [skill_store.py](file://products/skills-hub/src/skills_hub/services/skill_store.py)
 - [skills_connector.py](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py)
@@ -13,15 +15,16 @@
 
 ## Update Summary
 **Changes Made**
-- Updated to reflect SPEC-066 promotion with corrected claims about schema changes and performance metrics
+- Updated to reflect SPEC-066 `approved` status (2026-10-02) with all six Open Questions resolved
+- Corrected false claims about existing body hashing functionality — no hashing exists anywhere in `skills-hub`; the fixture's `body_md5` was computed by the offline evaluation harness, not by product code
 - Clarified that 0.500 → 0.711 improvement is a memory-path upper bound rather than shipped performance metric
-- Corrected claims about schema changes - `skill_id` indexing requires backend modifications despite being "no schema change" for `score()`
+- Corrected claims about schema changes — `skill_id` indexing requires backend modifications despite being "no schema change" for `score()`
 - Enhanced section sources with specific file references for all technical claims
-- Added cross-backend parity requirements and migration considerations
+- Added cross-backend parity requirements and migration considerations based on approved spec resolutions
 
 ## Executive Summary
 
-The semantic skill retrieval spike has been completed with a definitive null result for vector embeddings and promoted to **SPEC-066 skill retrieval ranking fidelity**. The measurement-first approach revealed that cheaper lexical improvements close the measured gap, while the recall defect that would justify a vector store does not exist. The delivery roadmap's exploration backlog row for "Semantic (vector) skill retrieval" is closed as of 2026-10-01.
+The semantic skill retrieval spike has been completed with a definitive null result for vector embeddings and promoted to **SPEC-066 skill retrieval ranking fidelity**, which reached `approved` status on 2026-10-02 after resolving all six Open Questions. The measurement-first approach revealed that cheaper lexical improvements close the measured gap, while the recall defect that would justify a vector store does not exist. The delivery roadmap's exploration backlog row for "Semantic (vector) skill retrieval" is closed as of 2026-10-01.
 
 ### Key Findings
 
@@ -220,7 +223,9 @@ The closure of the exploration backlog row represents a successful null result -
 - [semantic-skill-retrieval-spike.md:1-800](file://docs/workspace/semantic-skill-retrieval-spike.md#L1-L800)
 - [semantic-skill-retrieval-eval-set.md:754-957](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L754-L957)
 - [delivery-roadmap.md:347-424](file://docs/agentic-aiops-platform/delivery-roadmap.md#L347-L424)
-- [SPEC-066 skill retrieval ranking fidelity spec:1-586](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L1-L586)
-- [scoring.py:20-96](file://products/skills-hub/src/skills_hub/services/scoring.py#L20-L96)
-- [skill_store.py:144-482](file://products/skills-hub/src/skills_hub/services/skill_store.py#L144-L482)
+- [SPEC-066 skill retrieval ranking fidelity spec:1-800](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L1-L800)
+- [SPEC-066 plan:1-729](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L1-L729)
+- [SPEC-066 tasks:1-555](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L1-L555)
+- [scoring.py:1-97](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L97)
+- [skill_store.py:1-518](file://products/skills-hub/src/skills_hub/services/skill_store.py#L1-L518)
 - [skills_connector.py:31-196](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py#L31-L196)

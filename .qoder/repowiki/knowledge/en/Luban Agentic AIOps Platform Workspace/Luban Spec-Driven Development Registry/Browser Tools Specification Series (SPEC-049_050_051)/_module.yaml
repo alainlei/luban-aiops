@@ -7,4 +7,5 @@ scope:
     - docs/specs/SPEC-051-browser-flow-hitl-gate-enforcement/
 source_files: []
 depends_on: []
-related_to: []
+related_to:
+    - path: specs/bounded_mutating_actions

@@ -3,14 +3,15 @@ schema_version: 1
 locale: en-US
 branch: main
 nodes_managed: true
-exported_at: "2026-10-01T14:57:12Z"
+exported_at: "2026-10-02T00:42:28Z"
 modules:
     "":
-        dir_name: Luban Agentic AIOps Platform Workspace_2
+        dir_name: Luban Agentic AIOps Platform Workspace
         title: Luban Agentic AIOps Platform Workspace
         scope: []
         source_files: []
-        children: []
+        children:
+            - specs
         depends_on: []
         related_to: []
     specs:
@@ -67,7 +68,8 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: specs/sessions_workflows
     specs/agent_service_kernel_runtime/tool_execution_framework:
         dir_name: SPEC-007 Read-Only Tool Execution Framework
         title: SPEC-007 Read-Only Tool Execution Framework
@@ -76,7 +78,8 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: specs/bounded_mutating_actions
     specs/audit_reporting_evidence:
         dir_name: Audit Trail, Reporting & Summary Specs (SPEC-013 _ SPEC-046 _ SPEC-047)
         title: Audit Trail, Reporting & Summary Specs (SPEC-013 / SPEC-046 / SPEC-047)
@@ -87,7 +90,8 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: specs/hitl_approval_workflow
     specs/bounded_mutating_actions:
         dir_name: R4 Approval-Gated Bounded Actions Spec Suite
         title: R4 Approval-Gated Bounded Actions Spec Suite
@@ -98,7 +102,10 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: specs/agent_service_kernel_runtime/tool_execution_framework
+            - path: specs/browser_tools
+            - path: specs/hitl_approval_workflow
     specs/browser_tools:
         dir_name: Browser Tools Specification Series (SPEC-049_050_051)
         title: Browser Tools Specification Series (SPEC-049/050/051)
@@ -109,7 +116,8 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: specs/bounded_mutating_actions
     specs/hitl_approval_workflow:
         dir_name: HITL Approval & Confirmation Workflow Specs (SPEC-020_031_032)
         title: HITL Approval & Confirmation Workflow Specs (SPEC-020/031/032)
@@ -120,7 +128,10 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: specs/audit_reporting_evidence
+            - path: specs/bounded_mutating_actions
+            - path: specs/portal_ui_navigation
     specs/identity_trust_policy:
         dir_name: Identity, Policy & Approval Governance Specs
         title: Identity, Policy & Approval Governance Specs
@@ -186,7 +197,8 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: specs/hitl_approval_workflow
     specs/runtime_model_switching:
         dir_name: Runtime LLM Model Switching & Discovery Specifications
         title: Runtime LLM Model Switching & Discovery Specifications
@@ -208,7 +220,8 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: specs/agent_service_kernel_runtime/kernel_utilization_durability
     specs/skills_tooling_authoring:
         dir_name: Skills & Grounded Guidance Authoring Specs
         title: Skills & Grounded Guidance Authoring Specs

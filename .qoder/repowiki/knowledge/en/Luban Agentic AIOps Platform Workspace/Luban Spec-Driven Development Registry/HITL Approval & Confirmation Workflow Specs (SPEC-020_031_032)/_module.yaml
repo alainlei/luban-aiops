@@ -7,4 +7,7 @@ scope:
     - docs/specs/SPEC-032-owner-side-live-decision-sync/
 source_files: []
 depends_on: []
-related_to: []
+related_to:
+    - path: specs/audit_reporting_evidence
+    - path: specs/bounded_mutating_actions
+    - path: specs/portal_ui_navigation

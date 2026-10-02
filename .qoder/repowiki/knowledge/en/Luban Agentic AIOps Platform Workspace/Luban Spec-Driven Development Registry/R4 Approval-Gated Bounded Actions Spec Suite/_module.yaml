@@ -7,4 +7,7 @@ scope:
     - docs/specs/SPEC-038-isolated-execution-worker/
 source_files: []
 depends_on: []
-related_to: []
+related_to:
+    - path: specs/agent_service_kernel_runtime/tool_execution_framework
+    - path: specs/browser_tools
+    - path: specs/hitl_approval_workflow

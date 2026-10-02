@@ -7,4 +7,5 @@ scope:
     - docs/specs/SPEC-022-multi-session-operator-workspace/
 source_files: []
 depends_on: []
-related_to: []
+related_to:
+    - path: specs/agent_service_kernel_runtime/kernel_utilization_durability

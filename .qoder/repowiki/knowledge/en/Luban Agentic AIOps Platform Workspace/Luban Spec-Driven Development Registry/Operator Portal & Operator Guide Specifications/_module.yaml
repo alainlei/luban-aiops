@@ -7,4 +7,5 @@ scope:
     - docs/specs/SPEC-012-operator-guide/
 source_files: []
 depends_on: []
-related_to: []
+related_to:
+    - path: specs/hitl_approval_workflow

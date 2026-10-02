@@ -12,6 +12,14 @@
 - [semantic-skill-retrieval-eval-set.md](file://docs/workspace/semantic-skill-retrieval-eval-set.md)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Updated status from draft to approved with all six Open Questions resolved
+- Removed provisional banners from plan.md and tasks.md
+- Added resolution details for all Open Questions (OQ-1 through OQ-6)
+- Updated implementation guidance based on refined plan with detailed stages
+- Enhanced troubleshooting section with resolved issues
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -24,9 +32,11 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-SPEC-066 proposes four measured lexical improvements to the skills-hub keyword retriever, plus cross-backend parity enforcement and a product-side de-duplication guardrail. The spec is authored as `draft` with six open questions that must be resolved before approval. Its evidence base is the semantic skill retrieval spike's evaluation set, which established that combining inverse document frequency weighting, sublinear body-length normalization, CamelCase-splitting tokenization, and scoring the `skill_id` slug moves top-1 correctness from 0.500 to 0.711 on the labeled corpus — but only when all four are applied together.
+SPEC-066 proposes four measured lexical improvements to the skills-hub keyword retriever, plus cross-backend parity enforcement and a product-side de-duplication guardrail. **The spec is now `approved` as of 2026-10-02**, with all six Open Questions resolved against the shipped code and operator ratification. Its evidence base is the semantic skill retrieval spike's evaluation set, which established that combining inverse document frequency weighting, sublinear body-length normalization, CamelCase-splitting tokenization, and scoring the `skill_id` slug moves top-1 correctness from 0.500 to 0.711 on the labeled corpus — but only when all four are applied together.
 
-The central risk is that the measurement was taken over an in-memory corpus export, not through the deployed Postgres backend. Three of the four fixes are therefore not backend-neutral as measured, and two would silently under-deliver or regress recall without a co-change to the Postgres prefilter and its GIN index. The spec's primary requirement is thus **parity**: both backends must produce the same ordering (and, where IDF is backend-independent, the same scores), and the change must be re-measured on the shipped path before promotion.
+The central risk remains that the measurement was taken over an in-memory corpus export, not through the deployed Postgres backend. Three of the four fixes are therefore not backend-neutral as measured, and two would silently under-deliver or regress recall without a co-change to the Postgres prefilter and its GIN index. The spec's primary requirement is thus **parity**: both backends must produce the same ordering (and, where IDF is backend-independent, the same scores), and the change must be re-measured on the shipped path before promotion.
+
+**Updated** Status changed from draft to approved; all six Open Questions resolved including score semantics, IDF statistics computation, cross-backend invariants, Postgres path reporting, versioned index creation, and sync-time overlap handling.
 
 ## Project Structure
 SPEC-066 lives under `docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/` alongside its specification, plan, and task scaffold. The implementation scope is concentrated in the `skills-hub` product:
@@ -43,9 +53,9 @@ Spec --> EvalSet["semantic-skill-retrieval-eval-set.md"]
 ```
 
 **Diagram sources**
-- [spec.md:1-586](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L1-L586)
-- [plan.md:1-373](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L1-L373)
-- [tasks.md:1-305](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L1-L305)
+- [spec.md:1-1002](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L1-L1002)
+- [plan.md:1-729](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L1-L729)
+- [tasks.md:1-555](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L1-L555)
 - [scoring.py:1-97](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L97)
 - [skill_store.py:1-518](file://products/skills-hub/src/skills_hub/services/skill_store.py#L1-L518)
 - [test_scoring.py:1-141](file://products/skills-hub/tests/test_scoring.py#L1-L141)
@@ -53,9 +63,9 @@ Spec --> EvalSet["semantic-skill-retrieval-eval-set.md"]
 - [semantic-skill-retrieval-eval-set.md:1-200](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L1-L200)
 
 **Section sources**
-- [spec.md:1-586](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L1-L586)
-- [plan.md:1-373](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L1-L373)
-- [tasks.md:1-305](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L1-L305)
+- [spec.md:1-1002](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L1-L1002)
+- [plan.md:1-729](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L1-L729)
+- [tasks.md:1-555](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L1-L555)
 
 ## Core Components
 The current retriever has three layers:
@@ -106,7 +116,7 @@ Scorer-->>Client : list[SearchHit]
 The spec requires R-7's de-duplication to happen **before** sorting and truncation so that byte-identical bodies do not consume distinct result slots. The spec also requires R-6's parity harness to drive both backends over the same corpus and query set and assert identical `skill_id` ordering (and, for backend-independent IDF, identical scores).
 
 **Section sources**
-- [spec.md:258-357](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L258-L357)
+- [spec.md:321-357](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L321-L357)
 - [plan.md:227-252](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L227-L252)
 
 ## Detailed Component Analysis
@@ -130,9 +140,9 @@ TitleTagBody --> ReturnScore["Return total"]
 - [plan.md:62-75](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L62-L75)
 
 **Section sources**
-- [spec.md:153-177](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L153-L177)
-- [plan.md:62-75](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L62-L75)
-- [tasks.md:88-98](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L88-L98)
+- [spec.md:174-199](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L174-L199)
+- [plan.md:108-123](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L108-L123)
+- [tasks.md:129-139](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L129-L139)
 
 ### Requirement R-2: Corpus-derived IDF weighting
 R-2 replaces fixed per-field weights with inverse document frequency weighting using the formula `ln((1+N)/(1+df))+1`, where `N` is the document count and `df` is the number of documents containing the token. No hand-maintained stopword list is introduced. Field-weight ordering remains title > tags > body, preserving SPEC-014 R-3's guarantee.
@@ -150,13 +160,13 @@ ApplyIDF --> WeightFields["Multiply by unchanged field weights"]
 ```
 
 **Diagram sources**
-- [spec.md:178-205](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L178-L205)
-- [plan.md:77-108](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L77-L108)
+- [spec.md:201-260](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L201-L260)
+- [plan.md:124-191](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L124-L191)
 
 **Section sources**
-- [spec.md:178-205](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L178-L205)
-- [plan.md:77-108](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L77-L108)
-- [tasks.md:113-128](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L113-L128)
+- [spec.md:201-260](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L201-L260)
+- [plan.md:124-191](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L124-L191)
+- [tasks.md:190-227](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L190-L227)
 
 ### Requirement R-3: Sublinear body-length normalization
 R-3 dampens the body contribution by multiplying it by `1/log2(2 + len(body)/1000)` after the existing `BODY_OCCURRENCE_CAP = 5` cap. The factor is always in `(0, 1.0]`, including for empty bodies, so no division-by-zero or logarithm-of-zero branch is reachable. This fix is per-document and therefore backend-neutral by construction.
@@ -171,13 +181,13 @@ BoundsCheck --> |No| FailAssertion["Fail assertion — should never reach here"]
 ```
 
 **Diagram sources**
-- [spec.md:206-228](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L206-L228)
-- [plan.md:109-123](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L109-L123)
+- [spec.md:261-283](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L261-L283)
+- [plan.md:192-206](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L192-L206)
 
 **Section sources**
-- [spec.md:206-228](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L206-L228)
-- [plan.md:109-123](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L109-L123)
-- [tasks.md:83-87](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L83-L87)
+- [spec.md:261-283](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L261-L283)
+- [plan.md:192-206](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L192-L206)
+- [tasks.md:124-129](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L124-L129)
 
 ### Requirement R-4: CamelCase-splitting tokenization
 R-4 changes `tokenize()` so CamelCase runs split into component words. The spec uses `KubePodCrashLooping` → `kube`, `pod`, `crash`, `looping` as the canonical example. The exact rule for digits, acronyms, and mixed runs is fixed in `plan.md` and covered by a committed case table.
@@ -198,13 +208,13 @@ EmitParts --> ReturnTokens
 
 **Diagram sources**
 - [scoring.py:28-30](file://products/skills-hub/src/skills_hub/services/scoring.py#L28-L30)
-- [spec.md:229-257](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L229-L257)
-- [plan.md:124-151](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L124-L151)
+- [spec.md:284-354](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L284-L354)
+- [plan.md:207-327](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L207-L327)
 
 **Section sources**
-- [spec.md:229-257](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L229-L257)
-- [plan.md:124-151](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L124-L151)
-- [tasks.md:99-112](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L99-L112)
+- [spec.md:284-354](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L284-L354)
+- [plan.md:207-327](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L207-L327)
+- [tasks.md:140-189](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L140-L189)
 
 ### Requirement R-5: Cross-backend parity for the new scorer
 R-5 makes the Postgres prefilter admit every record the new scorer can rank above zero. Without it, R-1 does not ship (slug-only matches return zero rows on Postgres) and R-4 regresses recall (query-side splitting breaks the mirror between Python `tokenize()` and PostgreSQL `to_tsvector('simple', …)`).
@@ -214,7 +224,7 @@ Two strategies are considered:
 | Strategy | Approach | Trade-off |
 |---|---|---|
 | Mirror tokenizer in SQL | Add `skill_id` to the `to_tsvector` expression and express R-4's split as an IMMUTABLE SQL function | Cleanest and keeps the index selective, but requires proving the function IMMUTABLE and pinning it against the Python case table. |
-| Widen the prefilter (recommended) | Keep `to_tsvector('simple', …)` as-is, add `skill_id`, and additionally admit rows via a case-insensitive substring/LIKE path for CamelCase-split tokens | Cannot drift from Python; failure mode is a slow sequential scan rather than a silent missing row. |
+| Widen the prefilter (recommended) | Keep `to_tsvector('simple', …)` as-is, add `skill_id`, and additionally admit rows via a case-insensitive substring/LIKE arm for CamelCase-split tokens | Cannot drift from Python; failure mode is a slow sequential scan rather than a silent missing row. |
 
 The migration must rebuild `idx_skills_search` because `_DDL` uses `CREATE INDEX IF NOT EXISTS`, which will not rebuild an existing index when its expression changes. `CREATE INDEX CONCURRENTLY` cannot run inside a transaction block, so the concurrency window must be explicit.
 
@@ -232,14 +242,14 @@ Migrate --> Verify["Assert expressions remain identical"]
 ```
 
 **Diagram sources**
-- [spec.md:258-294](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L258-L294)
-- [plan.md:153-196](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L153-L196)
+- [spec.md:355-426](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L355-L426)
+- [plan.md:328-393](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L328-L393)
 - [skill_store.py:243-256](file://products/skills-hub/src/skills_hub/services/skill_store.py#L243-L256)
 
 **Section sources**
-- [spec.md:258-294](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L258-L294)
-- [plan.md:153-196](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L153-L196)
-- [tasks.md:130-164](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L130-L164)
+- [spec.md:355-426](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L355-L426)
+- [plan.md:328-393](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L328-L393)
+- [tasks.md:233-290](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L233-L290)
 
 ### Requirement R-6: Enforced cross-backend parity harness
 R-6 replaces the documented-but-untested byte-identical invariant with a test that actually enforces it. It drives both `InMemorySkillStore` and `PostgresSkillStore` over the same corpus and the same committed query set — the union of the 63-query audit pool and the 18 authored stratum-C paraphrases — and asserts identical `skill_id` ordering. With backend-independent IDF, it asserts identical scores, not merely equal ordering.
@@ -260,14 +270,14 @@ CompareScores --> |Yes| PassBaseline["Pass — baseline established"]
 ```
 
 **Diagram sources**
-- [spec.md:295-320](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L295-L320)
-- [plan.md:198-226](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L198-L226)
-- [tasks.md:47-74](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L47-L74)
+- [spec.md:427-458](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L427-L458)
+- [plan.md:394-434](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L394-L434)
+- [tasks.md:87-108](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L87-L108)
 
 **Section sources**
-- [spec.md:295-320](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L295-L320)
-- [plan.md:198-226](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L198-L226)
-- [tasks.md:47-74](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L47-L74)
+- [spec.md:427-458](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L427-L458)
+- [plan.md:394-434](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L394-L434)
+- [tasks.md:87-108](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L87-L108)
 
 ### Requirement R-7: Product-side de-duplication guardrail
 R-7 collapses byte-identical bodies in `rank()` before sorting and truncation, retaining the lowest `skill_id` as the deterministic survivor. The identity key is `md5(body)`, consistent with the label fixture's `body_md5` pin. The spec explicitly states that MD5 here is a content-identity key, not a security digest.
@@ -286,14 +296,14 @@ Truncate --> Return["Return hits"]
 ```
 
 **Diagram sources**
-- [spec.md:321-357](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L321-L357)
-- [plan.md:227-252](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L227-L252)
-- [tasks.md:165-192](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L165-L192)
+- [spec.md:459-525](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L459-L525)
+- [plan.md:435-495](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L435-L495)
+- [tasks.md:315-339](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L315-L339)
 
 **Section sources**
-- [spec.md:321-357](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L321-L357)
-- [plan.md:227-252](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L227-L252)
-- [tasks.md:165-192](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L165-L192)
+- [spec.md:459-525](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L459-L525)
+- [plan.md:435-495](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L435-L495)
+- [tasks.md:315-339](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L315-L339)
 
 ### Requirement R-8: Re-measurement on the shipped path
 R-8 extends the offline evaluation harness to drive `PostgresSkillStore.search()` rather than calling `rank()` directly, so the prefilter is inside the measured path. It asserts the fixture's `body_md5` per document before computing metrics, reports results per backend, and discloses the known Q63 re-ordering regression and unchanged abstention rate.
@@ -301,17 +311,17 @@ R-8 extends the offline evaluation harness to drive `PostgresSkillStore.search()
 If the Postgres-path gain is not outside the noise band, the spec defines a null-result path: publish the result, do not merge R-1..R-5, and record the outcome on the backlog row.
 
 **Section sources**
-- [spec.md:358-389](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L358-L389)
-- [plan.md:254-273](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L254-L273)
-- [tasks.md:193-222](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L193-L222)
+- [spec.md:526-579](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L526-L579)
+- [plan.md:496-544](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L496-L544)
+- [tasks.md:344-389](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L344-L389)
 
 ### Requirement R-9: Contract and living-doc updates
 R-9 updates the skills-hub README endpoint summary, the `scoring.py` module docstring, SPEC-014 R-3's wording, relevant guides, the CHANGELOG, version files, and the spec index. It explicitly notes that no JSON schema changes are made: `score` is published on the HTTP response but appears in no `shared/shared-contracts` schema, and changing its value distribution is not a contract-schema change.
 
 **Section sources**
-- [spec.md:390-422](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L390-L422)
-- [plan.md:275-287](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L275-L287)
-- [tasks.md:223-251](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L223-L251)
+- [spec.md:580-642](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L580-L642)
+- [plan.md:545-589](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L545-L589)
+- [tasks.md:392-460](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L392-L460)
 
 ## Dependency Analysis
 The spec's requirements form a staged dependency graph. Only R-6 has no Open Question dependency; the others depend on OQ-1(b), OQ-2, OQ-4, OQ-5, or OQ-6.
@@ -335,9 +345,9 @@ R8 --> R9["R-9: docs + delivery"]
 ```
 
 **Diagram sources**
-- [plan.md:289-309](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L289-L309)
-- [tasks.md:14-45](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L14-L45)
-- [tasks.md:289-305](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L289-L305)
+- [plan.md:590-626](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L590-L626)
+- [tasks.md:18-79](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L18-L79)
+- [tasks.md:551-555](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L551-L555)
 
 The current codebase dependencies are narrower:
 
@@ -361,8 +371,8 @@ Tasks --> TestStore
 - [skill_store.py:1-518](file://products/skills-hub/src/skills_hub/services/skill_store.py#L1-L518)
 
 **Section sources**
-- [plan.md:289-309](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L289-L309)
-- [tasks.md:14-45](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L14-L45)
+- [plan.md:590-626](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L590-L626)
+- [tasks.md:18-79](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L18-L79)
 
 ## Performance Considerations
 SPEC-066 distinguishes several latency measurements:
@@ -377,10 +387,10 @@ SPEC-066 distinguishes several latency measurements:
 The widened-prefilter strategy in R-5 is preferred because its failure mode is a slow query (loud and measurable) rather than a missing row (silent). At the current 18-row catalog this is acceptable; the plan notes that the >2,000-skill trigger is the point to revisit.
 
 **Section sources**
-- [spec.md:288-294](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L288-L294)
-- [spec.md:423-430](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L423-L430)
-- [plan.md:191-196](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L191-L196)
-- [plan.md:342-360](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L342-L360)
+- [spec.md:420-426](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L420-L426)
+- [spec.md:643-685](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L643-L685)
+- [plan.md:390-393](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L390-L393)
+- [plan.md:675-709](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L675-L709)
 
 ## Troubleshooting Guide
 
@@ -390,9 +400,9 @@ The widened-prefilter strategy in R-5 is preferred because its failure mode is a
 **Resolution:** Deliver R-5 so `_SEARCH_VECTOR` includes `skill_id`, and verify that a slug-only query returns rows on Postgres as well as in memory.
 
 **Section sources**
-- [spec.md:97-103](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L97-L103)
-- [spec.md:267-268](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L267-L268)
-- [tasks.md:135-136](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L135-L136)
+- [spec.md:114-120](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L114-L120)
+- [spec.md:364-365](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L364-L365)
+- [tasks.md:233-239](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L233-L239)
 
 ### Symptom: CamelCase-aware queries lose recall on Postgres
 **Cause:** Query-side `tokenize()` splits CamelCase, but PostgreSQL `to_tsvector('simple', …)` lowercases and splits on non-alphanumerics without splitting CamelCase. The mirror is broken.
@@ -400,9 +410,9 @@ The widened-prefilter strategy in R-5 is preferred because its failure mode is a
 **Resolution:** Either mirror the tokenizer in an IMMUTABLE SQL function or widen the prefilter with a LIKE arm for CamelCase-split tokens. The spec recommends widening because the failure mode is loud (slow query) rather than silent (missing row).
 
 **Section sources**
-- [spec.md:104-112](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L104-L112)
-- [plan.md:162-181](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L162-L181)
-- [tasks.md:137-142](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L137-L142)
+- [spec.md:121-129](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L121-L129)
+- [plan.md:337-355](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L337-L355)
+- [tasks.md:240-252](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L240-L252)
 
 ### Symptom: Index is not rebuilt after deployment
 **Cause:** `_DDL` uses `CREATE INDEX IF NOT EXISTS`, which preserves the old index when its expression changes.
@@ -410,8 +420,8 @@ The widened-prefilter strategy in R-5 is preferred because its failure mode is a
 **Resolution:** Write a migration that drops and recreates the index. Test that the migration actually rebuilds the index on an existing database and that the rollback path runs.
 
 **Section sources**
-- [plan.md:182-190](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L182-L190)
-- [tasks.md:151-156](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L151-L156)
+- [plan.md:358-372](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L358-L372)
+- [tasks.md:259-270](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L259-L270)
 
 ### Symptom: Duplicate bodies consume multiple result slots
 **Cause:** `rank()` has no content-level de-duplication. Two sources covering the same files produce distinct `skill_id` values with identical bodies, and both occupy slots up to `limit`.
@@ -420,8 +430,8 @@ The widened-prefilter strategy in R-5 is preferred because its failure mode is a
 
 **Section sources**
 - [semantic-skill-retrieval-eval-set.md:55-127](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L55-L127)
-- [spec.md:321-357](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L321-L357)
-- [tasks.md:165-182](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L165-L182)
+- [spec.md:459-525](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L459-L525)
+- [tasks.md:315-333](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L315-L333)
 
 ### Symptom: Existing exact-score assertions fail after R-4
 **Cause:** The eight exact-score assertions in `test_scoring.py` encode the old tokenization, including `score("KubePodNotReady", skill) == 7.0`, which encodes the defect R-4 removes.
@@ -429,11 +439,11 @@ The widened-prefilter strategy in R-5 is preferred because its failure mode is a
 **Resolution:** Update the assertions deliberately with old and new expected values visible in review. Do not weaken them to vague comparisons.
 
 **Section sources**
-- [spec.md:245-249](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L245-L249)
-- [plan.md:149-151](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L149-L151)
-- [tasks.md:108-112](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L108-L112)
+- [spec.md:334-346](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L334-L346)
+- [plan.md:299-327](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L299-L327)
+- [tasks.md:172-180](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md#L172-L180)
 
 ## Conclusion
 SPEC-066 is a narrowly scoped, measurement-driven improvement to the skills-hub lexical retriever. Its four fixes — indexing `skill_id`, corpus-derived IDF weighting, sublinear body-length normalization, and CamelCase-splitting tokenization — were shown sufficient to close the measured gap, but only as an indivisible package. The spec's most consequential addition is the cross-backend parity requirement: without R-5, R-1 does not ship and R-4 regresses recall; without R-6, the byte-identical invariant remains documented but unenforced.
 
-At draft status, the work is blocked by six open questions covering the `skill_id` weight, the source of IDF statistics, the byte-identical invariant's scope, acceptance of a known mild regression, the GIN migration strategy, and whether sync-time overlap rejection is wanted. The spec's delivery gate is clear: every requirement must map to at least one asserting test, R-8 must re-measure on the shipped Postgres path, and the null-result path is a real possible ending rather than a failure.
+**Updated** SPEC-066 is now `approved` as of 2026-10-02, with all six Open Questions resolved: OQ-1 established `TAG_WEIGHT` (2.0) for `skill_id` scoring; OQ-2 mandated sync-time Python-computed IDF statistics; OQ-3 preserved the byte-identical cross-backend invariant; OQ-4 accepted the Q63 re-ordering regression conditionally; OQ-5 selected prefix lexemes with versioned index names; and OQ-6 deferred sync-time overlap rejection. The work is blocked by Stage 0 verification tasks checking PostgreSQL prefix-lexeme behavior and the actual CamelCase variant that produced 0.711, but approval authorizes implementation to begin. The spec's delivery gate remains clear: every requirement must map to at least one asserting test, R-8 must re-measure on the shipped Postgres path, and the null-result path is a real possible ending rather than a failure.

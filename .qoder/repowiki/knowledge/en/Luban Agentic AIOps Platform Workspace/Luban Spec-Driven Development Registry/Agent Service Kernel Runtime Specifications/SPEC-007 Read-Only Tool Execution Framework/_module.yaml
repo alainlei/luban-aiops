@@ -5,4 +5,5 @@ scope:
     - docs/specs/SPEC-007-tool-execution-framework/
 source_files: []
 depends_on: []
-related_to: []
+related_to:
+    - path: specs/bounded_mutating_actions

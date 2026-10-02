@@ -17,10 +17,10 @@
 
 ## Update Summary
 **Changes Made**   
-- Updated to reflect SPEC-066 promotion as successor while maintaining evidence base role
-- Added clarifications about measurement license implications (memory path vs deployed environment)
-- Enhanced parse_sources validation limitation documentation
-- Updated conclusion section with SPEC-066 relationship and closure status
+- Corrected provenance information about body_md5 values being computed by offline harness rather than existing product capability
+- Clarified that evaluation harness is not committed to repository and must be reconstructed for SPEC-066 R-8
+- Updated SPEC-066 relationship section with corrected measurement license implications
+- Enhanced parse_sources validation limitation documentation with accurate product capability boundaries
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -402,6 +402,16 @@ The evaluation set's measurement licenses specific claims while explicitly not l
 - Byte-identical ordering parity across backends (no parity test existed)
 - IDF corpus statistics computation method (backend-dependent)
 
+### Provenance Corrections: Offline Harness vs Product Capability
+
+**Updated** The evaluation set has undergone critical provenance corrections regarding `body_md5` computation and harness commitment:
+
+1. **body_md5 Computation**: The `body_md5` values in the label fixture were computed by the **offline evaluation harness** described in §3, not by any existing product capability. There are no hashing functions (`md5`, `sha256`, `hashlib`, `blake2`) anywhere in `products/skills-hub` outside dependency hashes. Sync holds body *text* (`Skill.body`), making hash computation trivially possible there, but the error was in claiming this was a shipped capability rather than harness-side work.
+
+2. **Evaluation Harness Not Committed**: The original evaluation harness referenced in §3 is **not committed to the repository**. `git ls-files` shows only this artifact, the spike memo, and the label fixture — no harness code. This means SPEC-066 R-8 cannot "reuse" the harness as originally stated; it must reconstruct and commit a new instrument with its own fidelity gate.
+
+3. **SPEC-066 R-8 Requirements**: The rebuilt harness must reproduce the shipped scorer's published §8.1 baseline of **19/38** combined top-1 before any candidate number from it is believed. This also means the CamelCase-splitting variant behind §8's 0.711 cannot be confirmed from the repository alone.
+
 ### Parse Sources Validation Limitations
 
 The evaluation set clarified important limitations in configuration validation:
@@ -423,9 +433,11 @@ The evaluation set directly informed SPEC-066's requirements:
 | R-4: CamelCase splitting | Single-token opacity for alert titles | Split CamelCase runs |
 | R-5: Cross-backend parity | No parity test existed despite documented invariant | Enforce byte-identical ordering |
 | R-7: De-duplication guardrail | Configuration overlap exposed missing product capability | Content-level de-duplication |
+| R-8: Rebuilt harness | Original harness not committed | Must reconstruct and commit new evaluation instrument |
 
 **Section sources**
 - [semantic-skill-retrieval-eval-set.md:7](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L7)
+- [semantic-skill-retrieval-eval-set.md:1004](file://docs/workspace/semantic-skill-retrieval-eval-set.md#L1004)
 - [SPEC-066 spec.md:1-25](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L1-L25)
 - [SPEC-066 spec.md:66-135](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L66-L135)
 - [SPEC-066 spec.md:153-357](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L153-L357)
@@ -505,6 +517,8 @@ When working with the evaluation set, the most common issues fall into several c
 | skill_id invisibility | Exact skill names get no signal | Index `skill_id` field in scoring |
 | Backend parity issues | Different results between memory and Postgres | Implement R-5 cross-backend parity harness |
 | SPEC-066 measurement mismatch | Offline gains not reproduced on Postgres | Re-measure through Postgres backend per R-8 |
+| Harness reconstruction | Original harness not available | Rebuild evaluation harness per SPEC-066 R-8 requirements |
+| body_md5 provenance confusion | Incorrect assumptions about product capabilities | Recognize body_md5 was computed by offline harness, not product |
 
 The reproduction procedure is read-only: export the corpus, extract distinct queries and their audit statistics, import the real scorer, and call `rank()` offline. Validation compares reproduced `skill_ids` against historical audit records for cross-checked queries whose catalogs have not drifted.
 
@@ -524,12 +538,17 @@ The Semantic Skill Retrieval Evaluation Set has successfully completed Gate 1 wi
 - **Semantic retrieval backlog has been closed** — no embedding work is authorized
 - **SPEC-066 established** as the successor specification for implementing the four measured lexical fixes
 
+**Critical Provenance Corrections:**
+- **body_md5 values** were computed by the offline evaluation harness, not by any existing product capability
+- **Evaluation harness is not committed** to the repository and must be reconstructed for SPEC-066 R-8
+- **Measurement license implications** clarify that the 0.500 → 0.711 improvement is a memory-path upper bound, not a shipped figure
+
 The enhanced test coverage and improved evaluation methodology provided a solid foundation for measuring retrieval quality. The comprehensive labeled dataset revealed that the immediate defects — duplicate-source crowding (now resolved), CamelCase opacity, confident-but-irrelevant top hits, document-length bias, and skill_id indexing issues — are measurable and potentially fixable without introducing a vector store.
 
 The decision to close semantic retrieval work is significant: it demonstrates that careful measurement before implementation can prevent unnecessary infrastructure complexity. The lexical improvements (IDF weighting, length normalization, CamelCase splitting, and skill_id indexing) achieved substantial gains in top-1 correctness (0.500 → 0.711) and statistical significance (p = 0.0117), proving that simpler solutions can often address complex problems effectively.
 
 While the semantic retrieval backlog is closed, the evaluation identified remaining work items: implementing the product-side de-duplication guardrail, addressing the abstention problem (where the system returns confident but irrelevant answers), and potentially creating a separate backlog row for abstention behavior. These represent product decisions rather than retrieval algorithm questions, maintaining the principle that measurement should drive implementation choices.
 
-The relationship with SPEC-066 establishes clear boundaries: the evaluation set remains the committed evidence base and label fixture, while SPEC-066 specifies the implementation requirements derived from that evidence. The measurement license implications clarify that the 0.500 → 0.711 improvement is a memory-path upper bound, and the full deployment requires re-measurement through the Postgres backend per R-8.
+The relationship with SPEC-066 establishes clear boundaries: the evaluation set remains the committed evidence base and label fixture, while SPEC-066 specifies the implementation requirements derived from that evidence. The measurement license implications clarify that the 0.500 → 0.711 improvement is a memory-path upper bound, and the full deployment requires re-measurement through the Postgres backend per R-8. The requirement to rebuild and commit the evaluation harness ensures that future measurements are reproducible and verifiable.
 
 The comprehensive test suite ensures that the scoring system behaves deterministically and predictably, providing confidence that any improvements measured are genuine rather than artifacts of implementation inconsistencies. The evaluation process established a robust framework for future retrieval assessments, demonstrating the value of measurement-driven development in avoiding unnecessary complexity.

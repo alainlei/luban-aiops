@@ -1,4 +1,0 @@
-- Each product in `products/` is self-contained with its own `pyproject.toml`, `uv.lock`, `.python-version`, `Dockerfile`, `Makefile`, `src/<package>/`, and `tests/` directory, invoked via `make -C products/<name>` rather than from the root.
-- Cross-product integration points are expressed as JSON/YAML contracts under `shared/shared-contracts/schemas` and `policies`, copied into consumers by `make sync-policy` rather than imported as packages.
-- Product source trees follow a uniform layout of `api/`, `core/`, `schemas/`, `services/`, and `app.py`/`main.py` entry points, enabling the root Makefile to treat all Python products uniformly.
-- Spec-driven development is enforced by triads of `plan.md`/`spec.md`/`tasks.md` per feature under `docs/specs/SPEC-NNN-<slug>/`, with release notes mirroring spec delivery dates under `docs/agentic-aiops-platform/release-notes/`.
