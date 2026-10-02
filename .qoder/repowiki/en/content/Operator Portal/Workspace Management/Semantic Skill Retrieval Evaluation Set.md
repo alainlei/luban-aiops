@@ -17,10 +17,11 @@
 
 ## Update Summary
 **Changes Made**   
-- Corrected provenance information about body_md5 values being computed by offline harness rather than existing product capability
+- Updated provenance information about `body_md5` values being computed by offline harness rather than existing product capability
 - Clarified that evaluation harness is not committed to repository and must be reconstructed for SPEC-066 R-8
 - Updated SPEC-066 relationship section with corrected measurement license implications
 - Enhanced parse_sources validation limitation documentation with accurate product capability boundaries
+- Added Stage 0 verification findings regarding CamelCase splitting variant provenance
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -412,6 +413,16 @@ The evaluation set's measurement licenses specific claims while explicitly not l
 
 3. **SPEC-066 R-8 Requirements**: The rebuilt harness must reproduce the shipped scorer's published §8.1 baseline of **19/38** combined top-1 before any candidate number from it is believed. This also means the CamelCase-splitting variant behind §8's 0.711 cannot be confirmed from the repository alone.
 
+### Stage 0 Verification Findings
+
+**Updated** Stage 0 verification resolved the CamelCase splitting variant provenance question:
+
+- The harness survived in the gitignored scratch directory (still not committed, so R-8's obligation to rebuild and commit it remains unchanged)
+- Re-ran unmodified: §5's pinned pool **63/63 byte-identical including scores**, the shipped scorer **38/38**, every §8.2 number reproduced
+- **The measured variant was parts-only**: `" ".join(CAMEL.split(text))` followed by `findall`, dropping the whole token
+- Re-measured under R-4's position-aware whole-token retention: every aggregate metric is **identical** and **no top-10 list reorders on any of the 38 queries**
+- **0.711 transfers to the retention rule**, but §8's metrics cannot distinguish a correct tokenizer shape from a wrong one
+
 ### Parse Sources Validation Limitations
 
 The evaluation set clarified important limitations in configuration validation:
@@ -519,6 +530,7 @@ When working with the evaluation set, the most common issues fall into several c
 | SPEC-066 measurement mismatch | Offline gains not reproduced on Postgres | Re-measure through Postgres backend per R-8 |
 | Harness reconstruction | Original harness not available | Rebuild evaluation harness per SPEC-066 R-8 requirements |
 | body_md5 provenance confusion | Incorrect assumptions about product capabilities | Recognize body_md5 was computed by offline harness, not product |
+| CamelCase variant ambiguity | Uncertainty about measured tokenizer implementation | Refer to Stage 0 findings: parts-only variant measured |
 
 The reproduction procedure is read-only: export the corpus, extract distinct queries and their audit statistics, import the real scorer, and call `rank()` offline. Validation compares reproduced `skill_ids` against historical audit records for cross-checked queries whose catalogs have not drifted.
 
@@ -542,6 +554,7 @@ The Semantic Skill Retrieval Evaluation Set has successfully completed Gate 1 wi
 - **body_md5 values** were computed by the offline evaluation harness, not by any existing product capability
 - **Evaluation harness is not committed** to the repository and must be reconstructed for SPEC-066 R-8
 - **Measurement license implications** clarify that the 0.500 → 0.711 improvement is a memory-path upper bound, not a shipped figure
+- **Stage 0 verified** that the measured CamelCase splitting variant was parts-only, but the 0.711 result transfers to the retention rule
 
 The enhanced test coverage and improved evaluation methodology provided a solid foundation for measuring retrieval quality. The comprehensive labeled dataset revealed that the immediate defects — duplicate-source crowding (now resolved), CamelCase opacity, confident-but-irrelevant top hits, document-length bias, and skill_id indexing issues — are measurable and potentially fixable without introducing a vector store.
 
