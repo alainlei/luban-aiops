@@ -12,15 +12,24 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 > `services/sync.py` task — R-2's statistics refresh still does).
 > **Approval authorizes implementation as a separate step; it does not authorize
 > commit/push, the R-5 index migration, deployment, or a version bump** — each is
-> its own authorization boundary. Stage 0 is read-only and is the first thing to
-> execute.
+> its own authorization boundary. ~~Stage 0 is read-only and is the first thing to
+> execute.~~ **Stage 0 was executed read-only on 2026-10-02 and both of its tasks
+> are closed** — prefix lexemes hold on live `postgres-0`, and 0.711 was measured
+> under a parts-only tokenizer that R-4's retention shape reproduces exactly. The
+> same pass falsified the plain-concatenation GIN expression, so Stage 3's first
+> task carries a corrected one. **Stage 1 (R-6) is now the first thing to
+> implement.**
 
-## Stage 0: verification (read-only; blocks Stages 2–3)
+## Stage 0: verification (read-only; blocks Stages 2–3) — **COMPLETE 2026-10-02**
 
 The six Open Questions are **resolved** — recorded here as done, with the answer
-each settled on, so the task list stays the audit trail. What remains open are two
+each settled on, so the task list stays the audit trail. ~~What remains open are two
 *verification* tasks: checkable facts about a running cluster and an uncommitted
-harness rather than decisions, which is why they were not left as Open Questions.
+harness rather than decisions, which is why they were not left as Open Questions.~~
+**Those two verification tasks were also checkable facts about a running cluster and
+an uncommitted harness rather than decisions — which is why they were not left as
+Open Questions — and both are now closed below, with their answers recorded against
+the original wording.**
 
 - [x] **OQ-1(a)** — `score`'s changed semantics need **no contract version bump**:
       it is in no `shared-contracts` schema, is not portal-rendered, and is dropped
@@ -62,13 +71,34 @@ harness rather than decisions, which is why they were not left as Open Questions
       precondition only if the row is ever reopened for embedding work
 - [x] Resolutions recorded in `spec.md`, `plan.md` / `tasks.md` provisional banners
       lifted, status set `draft` → `approved`
-- [ ] **Verify (a): PostgreSQL prefix-lexeme behaviour on the live cluster.** R-5's
+- [x] **Verify (a): PostgreSQL prefix-lexeme behaviour on the live cluster.** R-5's
       CamelCase reach assumes `to_tsquery('simple', 'reset:*')` matches an indexed
-      document lexeme `resetpasswordadhoc`. **This has not been exercised against
-      `postgres-0`.** Read-only check against the deployed instance; record the
+      document lexeme `resetpasswordadhoc`. ~~**This has not been exercised against
+      `postgres-0`.**~~ Read-only check against the deployed instance; record the
       actual behaviour. **Fallback if it does not hold:** drop the tsvector prefilter
       for CamelCase-derived tokens entirely — correct, merely slower. Blocks Stage 3
-- [ ] **Verify (b): which CamelCase-splitting variant produced 0.711.** The offline
+      → **Done 2026-10-02, and it holds.** Live `postgres-0`, PostgreSQL **16.14**,
+      database `skills`, **18 rows / 2 sources**; read-only throughout
+      (`SELECT`/`SHOW`/`EXPLAIN` plus one session-local `SET enable_seqscan = off`).
+      `to_tsvector('simple','KubePodNotReady')` → `'kubepodnotready':1`; `kubepod:*`
+      matches (**t**), mid-token `pod:*` and bare `pod` do not (**f**) — prefix is
+      anchored at lexeme start only. The reach is real, not theoretical: `kubepod`
+      returns **0 rows** today, `kubepod:*` returns **3**. The GIN expression index
+      *can* serve a prefix tsquery (**Bitmap Index Scan on `idx_skills_search`**
+      under `enable_seqscan = off`; `pg_opclass` confirms `gin | tsvector_ops`), but
+      at 18 rows the planner always chooses **Seq Scan**, so `idx_skills_search_v2`
+      buys reach rather than latency. Every query shape tested only **widens** the
+      prefilter (2/18/18/18 rows; Q63 16 → 18), so R-4 causes no Postgres recall
+      regression on this corpus. **The fallback is not needed and is not taken.**
+      **The same check falsified a claim this spec was approved with:** R-5 and
+      OQ-5 both said adding `skill_id` needs "only text concatenation", but the
+      default parser types a slash-containing `skill_id` as **`file` ("File or path
+      name", tokid 19)** and emits **one opaque lexeme**, so the approved expression
+      matches **0 rows** for `resetpasswordadhoc` where
+      `replace(replace(skill_id,'/',' '),'-',' ')` matches **1** (`replace` is
+      IMMUTABLE, so the index stays an expression index; hyphens alone do split —
+      the slash is the trigger). Both amended. **Stage 3 unblocked.**
+- [x] **Verify (b): which CamelCase-splitting variant produced 0.711.** The offline
       harness that measured it is **not committed** (`git ls-files` shows only the
       label fixture and the two prose artifacts) and the eval-set records the change
       only as "tokenizer regex" (§8.2's candidate row 2c), so the repository cannot
@@ -76,6 +106,29 @@ harness rather than decisions, which is why they were not left as Open Questions
       token was retained. Re-derive it; if it was dropped, Stage 5 re-measures the
       retention variant rather than assuming 0.711 carries over. Blocks Stage 2's
       R-4 final rule
+      → **Done 2026-10-02: parts-only — the whole token was dropped — and 0.711
+      nevertheless transfers to retention.** The harness survived in the gitignored
+      scratch directory and re-ran **unmodified**: §5's pinned pool **63/63**
+      byte-identical *including scores*, the shipped scorer **38/38**, and every
+      published §8.2 number reproduced. Fidelity gate 0 passed first — a read-only
+      `COPY … TO STDOUT` export matches the committed fixture's pins exactly
+      (**18/18** `body_md5` and `body_bytes`, 18 distinct hashes, **75,680** bytes),
+      and the harness's own stored corpus is md5-identical to that export. Its
+      tokenizer is `" ".join(CAMEL.split(text))` then `findall`, i.e. the variant
+      R-4 rejects. Under R-4's **position-aware retention** shape every aggregate
+      metric is **identical** (27/38 top-1 grade 2, B MRR 0.950, C MRR 0.778,
+      C MRR(2) 0.708, C nDCG@10 0.864, B nDCG@10 0.936, zero-relevant 1/20 + 3/18)
+      and **no top-10 list reorders on any of the 38 queries**, while **8 of 684**
+      (query, document) scores change — all on the **3** queries containing a
+      CamelCase run (Q03, Q04, Q46), largest `KubePodNotReady` → `D12` at
+      **+15.727**. Stage 5 **may** therefore carry 0.711 over. **New finding:** the
+      eval set cannot detect a wrong R-4 shape — naive flat-list retention reorders
+      **26 of 38** pools, changes **464 of 684** scores and doubles the score scale
+      (mean 10.170 → **21.827**), yet B MRR, C MRR and the 27/38 count are
+      **identical**, so R-4's hard criterion is enforced by `test_scoring.py` and
+      never by §8's metrics. Scope limit recorded: none of the 38 queries is a whole
+      *lowercase* identifier, the one case where retention changes a document's
+      token set without the query being CamelCase. **Stage 2's R-4 rule is final.**
 
 ## Stage 1: R-6 — parity harness first
 
@@ -157,7 +210,10 @@ harness rather than decisions, which is why they were not left as Open Questions
       `tokenize("KubePodNotReady")` yields `kubepodnotready` **and** `kube`, `pod`,
       `not`, `ready`. Apply the rule **identically** in `tokenize()`, in R-2's `df`
       computation, and in R-5's prefilter — a mixed application is silently wrong.
-      Subject to Stage 0 verify (b)
+      ~~Subject to Stage 0 verify (b)~~ **Stage 0 verify (b) settled this: the
+      measured 0.711 came from the parts-only variant, and retention reproduces
+      every aggregate metric with no re-ordering on any of the 38 queries — the
+      retention rule stands as written.**
 - [ ] **R-4 is not a `tokenize()`-only change.** Make `score()`'s aggregation
       position-aware: one token **set** per surface alphanumerics run, the whole
       token admitted only when it differs from its parts, body occurrences counted
@@ -168,7 +224,12 @@ harness rather than decisions, which is why they were not left as Open Questions
 - [ ] Split CamelCase on the **original-cased** text and lowercase afterwards —
       lowercasing first destroys the boundary and splits nothing
 - [ ] Test R-4's no-inflation criterion directly: for a corpus and query with **no**
-      CamelCase anywhere, every score is **identical** to the pre-R-4 value
+      CamelCase anywhere, every score is **identical** to the pre-R-4 value.
+      **This unit assertion is the only instrument that can catch a wrong shape** —
+      Stage 0 measured that a naive flat-list retention reorders **26 of 38** top-10
+      pools, changes **464 of 684** scores and doubles the score scale (mean 10.170
+      → 21.827) while leaving B MRR (0.950), C MRR (0.778) and the combined top-1
+      count (**27/38**) identical, so the §8 evaluation harness would have passed it
 - [ ] Update the exact-score assertions in `tests/test_scoring.py` deliberately.
       There are **8**; with the position-aware shape **exactly 1** changes value
       (`score("KubePodNotReady", skill) == 7.0` → 27.0, encoding the defect R-4
@@ -228,14 +289,25 @@ harness rather than decisions, which is why they were not left as Open Questions
 ## Stage 3: R-5 — prefilter, index and migration
 
 > Depends on R-4's tokenizer rule being final **and on Stage 0 verify (a)**.
+> **Both satisfied 2026-10-02** — verify (a) confirmed prefix lexemes on live
+> `postgres-0` and falsified the plain-concatenation index expression, which the
+> first task below now carries corrected.
 > **Highest-risk stage**: the prefilter's failure mode is a silently missing row.
 
 - [ ] Add `skill_id` to `_SEARCH_VECTOR` so a slug-only match is returned by the
-      prefilter: `to_tsvector('simple', skill_id || ' ' || title || ' ' || body)`.
-      **No new function and no new column** — text concatenation plus the two-argument
-      `to_tsvector` with a constant `regconfig` are both IMMUTABLE, and `skill_id` is
-      already the table's `TEXT PRIMARY KEY`. `tags` stay out for the reason the DDL
-      already records (`array_to_string`/`array_out` are STABLE)
+      prefilter, **normalizing its separators first** — Stage 0 falsified the
+      plain-concatenation form: the default parser types a slash-containing
+      `skill_id` as **`file` ("File or path name", tokid 19)** and emits one opaque
+      lexeme, so `to_tsvector('simple', skill_id || ' ' || title || ' ' || body)`
+      matches **0 rows** on the live table for `resetpasswordadhoc`. Use
+      `to_tsvector('simple', replace(replace(skill_id, '/', ' '), '-', ' ') || ' ' || title || ' ' || body)`,
+      which matches **1**. **No new function and no new column** — `replace`
+      (`provolatile = i`) plus the two-argument `to_tsvector` with a constant
+      `regconfig` are all IMMUTABLE, so this stays a legal expression index, and
+      `skill_id` is already the table's `TEXT PRIMARY KEY`. `tags` stay out for the
+      reason the DDL already records (`array_to_string`/`array_out` are STABLE —
+      re-confirmed by the same volatility check). Hyphens alone do split; the
+      **slash** is the trigger
       (`services/skill_store.py`)
 - [ ] Implement the resolved prefilter strategy: **widen it with prefix lexemes** —
       for each CamelCase-derived split part, OR a `part:*` term alongside the exact
@@ -246,7 +318,11 @@ harness rather than decisions, which is why they were not left as Open Questions
       must stay in exact sync with Python's regex — the drift hazard R-6 exists to
       detect
 - [ ] Do **not** add a `LIKE`/substring arm. Prefix lexemes are GIN-served, so they
-      do not introduce a sequential scan; the draft's `LIKE` option is superseded
+      do not introduce a sequential scan; the draft's `LIKE` option is superseded.
+      *(Stage 0 note: at 18 rows the planner chooses **Seq Scan** for every shape
+      anyway — `Bitmap Index Scan on idx_skills_search` appears only under
+      `enable_seqscan = off`. The distinction is about what the index **can** serve
+      once the catalog grows, not about today's plan.)*
 - [ ] Keep the **OR-join** of query lexemes; do **not** introduce `plainto_tsquery`
       (it ANDs and would silently drop partial matches — already documented by
       `test_search_joins_multi_word_queries_with_or`)
@@ -352,10 +428,15 @@ harness rather than decisions, which is why they were not left as Open Questions
       baseline (**19/38** combined top-1), the same way §8's harness gated every
       candidate on 38/38 identity with its flags off. A rebuilt instrument that
       cannot reproduce the known baseline measures nothing
-- [ ] Re-derive the **CamelCase variant** that produced 0.711 (Stage 0 verify (b)).
-      If the rebuilt harness with whole-token retention does not reproduce the
-      offline candidate numbers, **publish the discrepancy** and ship the
-      configuration that was actually measured — not the one the memo described
+- [ ] ~~Re-derive the **CamelCase variant** that produced 0.711 (Stage 0 verify (b)).~~
+      **Answered by Stage 0: the measured variant was parts-only — the whole token
+      was dropped — and R-4's position-aware retention shape reproduces every
+      published aggregate metric with no re-ordering on any of the 38 queries, so
+      0.711 may be carried over rather than re-derived from zero.** What survives
+      here is the obligation that answer creates: the rebuilt harness must itself
+      reproduce it. If the rebuilt harness with whole-token retention does not
+      reproduce the offline candidate numbers, **publish the discrepancy** and ship
+      the configuration that was actually measured — not the one the memo described
 - [ ] Assert the fixture's `body_md5` per document **first**, failing loudly on
       mismatch rather than silently invalidating the comparison
       (`semantic-skill-retrieval-labels.json`, 38 × 18 = 684 judgments, 173 non-zero)
@@ -466,10 +547,15 @@ harness rather than decisions, which is why they were not left as Open Questions
 
 - [ ] **Stage 0(a)** prefix lexemes reach an unsplit indexed lexeme on the live
       cluster → verified read-only **and** promoted into the R-5 prefilter test, so
-      the assumption stays verified rather than being checked once
+      the assumption stays verified rather than being checked once. *The read-only
+      half is done (2026-10-02, live `postgres-0`: `kubepod:*` reaches the single
+      lexeme `kubepodnotready`, mid-token `pod:*` does not); what this gate still
+      waits on is the promotion into the suite.*
 - [ ] **Stage 0(b)** the CamelCase variant behind 0.711 is re-derived → the rebuilt
       harness reproduces the shipped 19/38 baseline, and any discrepancy against the
-      offline candidate numbers is published
+      offline candidate numbers is published. *The re-derivation is done (2026-10-02:
+      parts-only measured, retention reproduces it exactly); what this gate still
+      waits on is the rebuilt, committed harness reproducing 19/38 in the suite.*
 - [ ] **R-1** slug scored at **`TAG_WEIGHT` (2.0)** (OQ-1(b)) → weight test + the
       fixture-based stratum-A owner-recovery test (0/3 → 3/3)
 - [ ] **R-1** slug-only match non-empty on **both** backends → R-5 cross-backend test
@@ -506,13 +592,19 @@ harness rather than decisions, which is why they were not left as Open Questions
 - [ ] **R-4/R-5** no query returns fewer rows on Postgres than today → recall guard
       over the committed fixture
 - [ ] **R-5** `_SEARCH_VECTOR` covers `skill_id`; GIN expression identical to it →
-      expression-equality test
+      expression-equality test **plus a reachability test**. Equality alone is not
+      sufficient and Stage 0 shows why: the falsified plain-concatenation expression
+      is identical in both places, so it would have passed this gate while indexing
+      the slug as one opaque `file` lexeme that matches **0 rows**. Assert that a
+      query whose only overlap is `skill_id` returns the row **from Postgres**
 - [ ] **R-5** OR-join retained, no `plainto_tsquery` → existing
       `test_search_joins_multi_word_queries_with_or` still green
 - [ ] **R-5** **no user-defined SQL function introduced** (OQ-5) → no `CREATE
       FUNCTION` in `_DDL`; Python stays the single tokenizer
-- [ ] **R-5** IMMUTABLE constraint respected — `to_tsvector('simple', skill_id || …)`
-      uses only concatenation and a constant `regconfig` → index-creation test on a
+- [ ] **R-5** IMMUTABLE constraint respected — `to_tsvector('simple',
+      replace(replace(skill_id, '/', ' '), '-', ' ') || …)` is built only from
+      IMMUTABLE pieces (`replace` measured `provolatile = i` on live `postgres-0`)
+      and a constant `regconfig` → index-creation test on a
       real Postgres
 - [ ] **R-5** migration creates `idx_skills_search_v2` on an existing database,
       **retains** `idx_skills_search`, is idempotent, and uses **no** `CONCURRENTLY`

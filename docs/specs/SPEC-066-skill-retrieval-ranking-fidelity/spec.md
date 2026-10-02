@@ -316,21 +316,41 @@ Acceptance criteria:
   admitted only when it differs from its parts, body occurrences counted per run,
   and query tokens de-duplicated before the scoring loop — with which **7 of the 8**
   existing exact-score assertions keep their current value. Numbers and the
-  implementation shape are in `plan.md`.
+  implementation shape are in `plan.md`. **This criterion is enforced by those
+  assertions and never by the evaluation metrics.** Stage 0 measured why: a naive
+  flat-list retention reorders **26 of 38** top-10 pools, changes **464 of 684**
+  (query, document) scores and doubles the score scale (mean positive score, V6
+  configuration, 10.170 → **21.827**; max 63.786 → 129.898), while leaving B MRR
+  (0.950), C MRR
+  (0.778) and the combined top-1 count (**27/38**) **identical** — §8's harness
+  would have passed a wrong implementation.
 - **This requirement must not ship without R-2.** Retention makes sub-tokens
   score-bearing — `KubePodNotReady` contributes `not` and `ready`, which the
   shipped tokenizer never produced — and R-2 forbids a stoplist by design, so the
   only thing keeping `not` from carrying full title weight is its IDF. An R-4-alone
   measurement is measuring the inflated column, so the R-4 fidelity gate runs with
   R-2's flag on.
-- **Caveat carried into Stage 0, not hidden:** the offline harness that produced
-  0.711 is **not committed** (`git ls-files` shows only the label fixture and the
-  two prose artifacts), and the eval-set records the tokenizer change only as
-  "tokenizer regex" (§8.2's candidate row 2c). So *which* variant was measured
-  cannot be confirmed from the
-  repository. Retention is the recommended default on its merits; if Stage 0
-  establishes that the measurement dropped the whole token, R-8 must re-measure
-  this variant rather than assume 0.711 carries over to it.
+- **Caveat resolved by Stage 0, and the answer is favourable.** The offline
+  harness that produced 0.711 is **not committed** (`git ls-files` shows only the
+  label fixture and the two prose artifacts) and the eval-set records the
+  tokenizer change only as "tokenizer regex" (§8.2's candidate row 2c), so *which*
+  variant was measured could not be confirmed from the repository. Stage 0
+  recovered the harness from the gitignored scratch directory and re-ran it
+  unmodified: it still reproduces §5's pinned pool **63/63** byte-identically
+  *including scores*, the shipped scorer **38/38**, and every published §8.2
+  number, against a corpus whose 18 `body` hashes are identical to today's live
+  export. Its tokenizer is `" ".join(CAMEL.split(text))` followed by `findall` —
+  **parts-only; the whole token is dropped.** 0.711 was therefore measured under
+  the variant this requirement rejects. Re-measured under the position-aware
+  retention shape above, **every aggregate metric is identical** (27/38 top-1
+  grade 2, B MRR 0.950, C MRR 0.778, C MRR(2) 0.708, C nDCG@10 0.864, B nDCG@10
+  0.936, P@5 0.760/0.500, zero-relevant 1/20 + 3/18, R@5(=2) 1.000/0.950) and
+  **no top-10 list reorders on any of the 38 queries**. Retention is measurably
+  active rather than vacuous: **8 of 684** (query, document) scores change, all of
+  them on the **3** queries containing a CamelCase run (Q03, Q04, Q46), the
+  largest being `KubePodNotReady` → `D12` at **+15.727**. R-8 **may** therefore
+  carry 0.711 over to the retention rule instead of re-measuring from zero, and
+  this caveat no longer blocks Stage 2.
 - Of the **8** exact-score assertions in
   `products/skills-hub/tests/test_scoring.py`, exactly **one** changes value under
   this requirement: `score("KubePodNotReady", skill) == 7.0` encodes the defect and
@@ -384,17 +404,35 @@ Acceptance criteria:
   exact token, so `reset:*` reaches the indexed single lexeme
   `resetpasswordadhoc`. Over-admission is safe here by construction — Python
   still decides — and the failure mode of getting it wrong is a slower query
-  (loud) rather than a missing row (silent). **This rests on PostgreSQL
-  prefix-search semantics that have not been exercised against the live cluster**;
-  Stage 0 verifies it before implementation relies on it, and if it does not hold
-  the fallback is to drop the tsvector prefilter for CamelCase-derived tokens
-  entirely, which is correct and merely slower.
+  (loud) rather than a missing row (silent). **Stage 0 verified this against live
+  `postgres-0` (PostgreSQL 16.14) and it holds**: `to_tsvector('simple',
+  'KubePodNotReady')` is the single lexeme `'kubepodnotready':1`; `kubepod:*`
+  matches it, while mid-token prefixes do not (`pod:*` and bare `pod` both fail),
+  so the prefix is anchored at lexeme start only. The reach is real rather than
+  theoretical — a partial identifier `kubepod` returns **0 rows** on the live
+  table today and **3 rows** with `kubepod:*`. The recorded fallback (drop the
+  tsvector prefilter for CamelCase-derived tokens entirely, which is correct and
+  merely slower) is therefore **not needed** and is not taken.
 - Adding `skill_id` to the indexed expression needs **no new function and no new
-  column**: `to_tsvector('simple', skill_id || ' ' || title || ' ' || body)` uses
-  only text concatenation and the two-argument `to_tsvector` with a constant
-  `regconfig`, both IMMUTABLE. `skill_id` is already the table's `TEXT PRIMARY
-  KEY`. `tags` stay out of the expression for the reason the DDL already records
-  (`array_to_string` / `array_out` are STABLE).
+  column**, but it does need **separator normalization** — Stage 0 falsified the
+  plain-concatenation form this spec was approved with. Measured on live
+  `postgres-0`: PostgreSQL's default parser classifies a slash-containing string
+  as token type **`file` ("File or path name", tokid 19)** and emits it as **one
+  lexeme with its separators intact**, so
+  `to_tsvector('simple', skill_id || ' ' || title || ' ' || body)` indexes
+  `samples/adhoc-password-reset-resetpasswordadhoc` as a single opaque lexeme and
+  matches **0 rows** for the query token `resetpasswordadhoc`. Normalizing the
+  separators first matches **1 row**:
+  `to_tsvector('simple', replace(replace(skill_id, '/', ' '), '-', ' ') || ' ' || title || ' ' || body)`.
+  `replace` is `provolatile = i` (IMMUTABLE), so the expression stays index-legal
+  and `idx_skills_search_v2` remains an expression index — still no new function
+  and no new column. `skill_id` is already the table's `TEXT PRIMARY KEY`. `tags`
+  stay out of the expression for the reason the DDL already records
+  (`array_to_string` / `array_out` are STABLE — independently re-confirmed by the
+  same volatility check, which returns `s` for `array_to_string`). Hyphens alone
+  *do* split (`to_tsvector('simple','adhoc-password-reset')` → `'adhoc':2
+  'adhoc-password-reset':1 'password':3 'reset':4`); it is specifically the
+  **slash** that triggers the `file` token.
 - The **GIN index expression and the `_SEARCH_VECTOR` expression stay identical**,
   asserted by a test that compares them, so the index cannot silently stop being
   used.
@@ -546,10 +584,13 @@ Acceptance criteria:
   `body_md5` mismatch fails the run loudly rather than silently invalidating the
   comparison.
 - Because the harness is rebuilt, the **CamelCase variant that produced 0.711 is
-  re-derived, not assumed** (see R-4's caveat). If the rebuilt harness with
-  whole-token retention does not reproduce the offline candidate numbers, the
-  discrepancy is published and the shipped configuration is the one that was
-  actually measured — not the one the memo described.
+  re-derived, not assumed** (see R-4's caveat). **Stage 0 already re-derived it** —
+  the measured variant was parts-only, and R-4's retention shape reproduces every
+  published aggregate metric with no re-ordering on any of the 38 queries — so the
+  obligation here is narrower than it was: the rebuilt harness must reproduce that
+  result itself. If it does not reproduce the offline candidate numbers with
+  whole-token retention, the discrepancy is published and the shipped configuration
+  is the one that was actually measured — not the one the memo described.
 - The reported metric set is the one the roadmap row requires: **zero-relevant
   rate** and distinct-document variants, **not zero-hit rate alone**.
 - Results are reported **per backend**. A gain that appears in memory and not on
@@ -827,14 +868,21 @@ checkable facts rather than decisions; they are listed at the end.
   unusable here: `_DDL` runs as one multi-statement string on a connection opened
   `autocommit=False` and committed afterwards, and at 18 rows a plain
   `CREATE INDEX` is milliseconds. Adding `skill_id` needs **no function and no
-  column** — text concatenation plus two-argument `to_tsvector` with a constant
-  `regconfig` are both IMMUTABLE, and `skill_id` is already the `TEXT PRIMARY KEY`
-  (`tags` stay out for the STABLE-`array_to_string` reason the DDL records). An
+  column** — ~~text concatenation plus two-argument `to_tsvector` with a constant
+  `regconfig` are both IMMUTABLE~~ *(2026-10-02: Stage 0 falsified the
+  concatenation form, because the default parser emits a slash-containing
+  `skill_id` as one opaque `file` lexeme — see R-5 for the measurement.
+  `replace`-normalized separators plus two-argument `to_tsvector` with a constant
+  `regconfig` are IMMUTABLE, so the conclusion "no function and no column" stands
+  unchanged; only the expression changed)* — and `skill_id` is already the `TEXT
+  PRIMARY KEY` (`tags` stay out for the STABLE-`array_to_string` reason the DDL
+  records). An
   IMMUTABLE PL/pgSQL CamelCase splitter is **rejected**: there is no
   `CREATE FUNCTION` anywhere in the repository, so it would be the platform's
   first, and it would create a second tokenizer implementation that must stay in
   exact sync with Python's regex — the drift hazard R-6 exists to detect.
-  CamelCase reach comes from **prefix lexemes** in the prefilter instead. Blast
+  CamelCase reach comes from **prefix lexemes** in the prefilter instead, which
+  Stage 0 confirmed against live `postgres-0`. Blast
   radius is recorded rather than assumed: the 1 Gi PVC is shared with `audit`,
   `incidents` and `sessions` and is a StatefulSet `volumeClaimTemplates` entry,
   which is **immutable on a live StatefulSet**, so GitOps cannot grow it without
@@ -859,20 +907,31 @@ checkable facts rather than decisions; they are listed at the end.
   needs to be **told** about a misconfiguration rather than silently protected
   from it. "Doing neither is not an option" still holds — R-7 is the one done.
 
-**Two Stage 0 verification tasks, not decisions.** Both are checkable facts that
-resolving the questions above exposed, and neither may be assumed:
+**Two Stage 0 verification tasks, not decisions — both executed read-only and
+closed 2026-10-02.** Both were checkable facts that resolving the questions above
+exposed, and neither was assumed:
 
 1. **PostgreSQL prefix-lexeme behaviour on the live cluster.** R-5's prefilter
    widening relies on `to_tsquery('simple', 'reset:*')` reaching the indexed
-   lexeme `resetpasswordadhoc`, and on GIN serving that prefix search. This is
+   lexeme `resetpasswordadhoc`, and on GIN serving that prefix search. ~~This is
    standard PostgreSQL semantics but has **not** been exercised against
-   `postgres-0`. If it does not hold, the fallback is to drop the tsvector
-   prefilter for CamelCase-derived tokens entirely — correct, merely slower.
+   `postgres-0`.~~ **Verified against live `postgres-0` (PostgreSQL 16.14) and it
+   holds**: `kubepod:*` reaches the single lexeme `kubepodnotready`; mid-token
+   `pod:*` and bare `pod` do not, so the prefix is anchored at lexeme start only.
+   GIN can serve it (**Bitmap Index Scan on `idx_skills_search`** under
+   `enable_seqscan = off`; at 18 rows the planner otherwise always chooses **Seq
+   Scan**). The fallback — dropping the tsvector prefilter for CamelCase-derived
+   tokens entirely, correct but merely slower — **is not needed and is not taken.**
+   The same check **falsified** R-5's and OQ-5's plain-concatenation index
+   expression; see R-5.
 2. **Which CamelCase-splitting variant produced 0.711.** The offline harness is
    **not committed** and the eval-set records the change only as "tokenizer
-   regex", so whole-token retention is recommended on its merits rather than
-   confirmed as the measured configuration. R-8 re-derives it and publishes any
-   discrepancy.
+   regex", so whole-token retention was recommended on its merits rather than
+   confirmed as the measured configuration. **Re-derived: the measured variant was
+   parts-only — the whole token was dropped.** Retention nevertheless reproduces
+   every published aggregate metric with no re-ordering on any of the 38 queries,
+   so retention stands and R-8 may carry 0.711 over. R-8 still publishes any
+   discrepancy its own rebuilt harness finds.
 
 Also inherited and **not** resolved here: **label-set ownership is unsettled.**
 The fixture is author-proposed and operator-ratified, not operations-owned, and no
@@ -999,3 +1058,75 @@ reopened for embedding work.
   *Stage* numbers. No requirement's scope, and no OQ resolution, changed in this
   pass; the additions are criteria that make the approved design implementable.
   Product code was read and executed but **not modified**.
+- 2026-10-02 (3): **Stage 0 verification executed — both tasks closed, one of them
+  falsifying a claim this spec was approved with.** Read-only throughout:
+  `SELECT`/`SHOW`/`EXPLAIN`/`COPY … TO STDOUT` against live `postgres-0`
+  (PostgreSQL **16.14**, database `skills`, **18 rows / 2 sources**) plus one
+  session-local `SET enable_seqscan = off`, and the recovered offline harness run
+  against a read-only corpus export. **No product code, schema, index, deployment
+  or version changed.** Fidelity gate 0 passed first, which is what licenses
+  everything below: the exported corpus matches the committed fixture's pins
+  exactly (**18/18** `body_md5` and `body_bytes`, 18 distinct hashes, **75,680**
+  total bytes), the harness's own stored corpus is md5-identical to that export,
+  the harness still reproduces §5's pinned pool **63/63 byte-identically including
+  scores**, and V0 reproduces the shipped scorer **38/38**.
+  1. **The approved GIN index expression is a no-op — the material finding.** R-5
+     and OQ-5 both said adding `skill_id` needs "only text concatenation".
+     Measured: PostgreSQL's default parser classifies a slash-containing string as
+     token type **`file` ("File or path name", tokid 19)** and emits it as **one
+     lexeme with separators intact**, so on the live table
+     `title || ' ' || body || ' ' || skill_id` matches **0 rows** for
+     `resetpasswordadhoc` while
+     `replace(replace(skill_id,'/',' '),'-',' ')` matches **1**. Hyphens alone do
+     split; the **slash** is the trigger. `replace` is `provolatile = i`, so the
+     corrected expression is still index-legal and OQ-5's conclusion ("no function
+     and no column", versioned index, old index retained) **survives unchanged** —
+     only the expression moved. R-1's measured gain would not have shipped on the
+     Postgres path without this. `array_to_string` measured `s` (STABLE),
+     independently confirming why `tags` cannot join the expression.
+  2. **The prefix-lexeme assumption holds**, so R-5's caveat is lifted and its
+     fallback is not taken: `to_tsvector('simple','KubePodNotReady')` →
+     `'kubepodnotready':1`; `kubepod:*` matches, `pod:*` and bare `pod` do not —
+     prefix is anchored at lexeme start only. The reach is not theoretical: a
+     partial identifier `kubepod` returns **0 rows** today and **3 rows** with
+     `kubepod:*`. Across every query shape tested the prefilter only ever
+     **widens** (2/18/18/18 rows; Q63 16 → 18), so R-4 causes no Postgres recall
+     regression *on this corpus* — corpus luck, not a guarantee, and R-5's recall
+     guard stays.
+  3. **`idx_skills_search_v2` buys reach, not latency, at this catalog size.** The
+     default plan for a prefix tsquery is **Seq Scan** (18 rows); **Bitmap Index
+     Scan on `idx_skills_search`** appears only under `enable_seqscan = off`, and
+     `pg_opclass` confirms `gin | tsvector_ops`. Recorded as an observation: the
+     migration's stated properties (idempotent, never a window without an index,
+     plain revert rollback) are unchanged and its risk wording is **not** amended,
+     but no latency claim may be made for the new index at 18 rows.
+  4. **The eval set cannot detect a wrong R-4 shape — new finding.** Naive
+     flat-list retention (whole token + parts emitted as a plain list) versus the
+     required position-aware shape, both at V6's configuration: **26 of 38** top-10
+     lists reorder, **464 of 684** (query, document) scores change, mean positive
+     score **10.170 → 21.827 (2.15×)** and max **63.786 → 129.898** — yet B MRR
+     and C MRR are **identical** (0.950 / 0.778), combined top-1 grade 2 is still
+     **27/38**, and only MRR(2), nDCG@10 and P@5 twitch (B MRR(2) 0.825 → 0.817,
+     B nDCG@10 0.936 → 0.925, B P@5 0.760 → 0.750, C P@5 0.500 → 0.522, C MRR(2)
+     0.708 → 0.713, C nDCG@10 0.864 → 0.868). **A wrong R-4 implementation would
+     have passed §8's harness.** R-4's hard criterion is therefore enforced by the
+     unit assertions in `test_scoring.py` and never by the evaluation metrics; R-4
+     records this explicitly.
+  5. **0.711 was measured under the parts-only variant, and it does transfer to
+     retention.** The recovered harness's tokenizer is
+     `" ".join(CAMEL.split(text))` then `findall` — the whole token is dropped, so
+     §8.2 measured the variant R-4 rejects. Re-measured under the position-aware
+     retention shape, every aggregate metric is identical and **no top-10 list
+     reorders on any of the 38 queries**; retention is still measurably active,
+     changing **8 of 684** scores, all on the **3** queries containing a CamelCase
+     run (Q03, Q04, Q46), largest `KubePodNotReady` → `D12` at **+15.727**. R-8
+     may carry 0.711 over rather than re-deriving from zero. Scope limit recorded:
+     **none** of the 38 queries is a whole *lowercase* identifier
+     (`kubepodnotready`), which is the one case where retention changes a
+     document's token set without the query being CamelCase — the eval set cannot
+     detect it, a unit test can.
+  Both Stage 0 checkboxes in `tasks.md` are flipped with these answers. Stage 3 is
+  unblocked (its dependency was verify (a)) and Stage 2's R-4 rule is final (its
+  dependency was verify (b)). No requirement's scope and no OQ resolution changed;
+  what changed is one index expression, two lifted caveats and one added
+  enforcement rationale.
