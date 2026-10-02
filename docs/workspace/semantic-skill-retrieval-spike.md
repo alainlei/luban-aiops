@@ -1,10 +1,10 @@
 # Spike: Semantic Skill Retrieval — pgvector vs. the Lexical Baseline on an 18-Document Corpus
 
 Status: assessment — **gate 1 executed 2026-10-01 and the cost-ordered measurement closed the row.** The recommendation was *measure before building*; the measurement is now in hand and says the cheap lexical fixes close the ordering gap while the recall gap a vector store would address **does not exist**. **No implementation, embedding run, extension install, image swap, ADR, or spec is authorized by this memo** (eval-set [§8.5](./semantic-skill-retrieval-eval-set.md#85-decision-rule-outcome)).
-Date: 2026-09-30 · Revised: 2026-10-01 (§2.3 measured defects; §2.2 query-shape claim corrected; §4.4, §7, §10 re-ordered by cost) · Revised again 2026-10-01 (§2.3 defect 1 resolved by configuration; corpus figures re-measured at 18 rows / 2 sources) · **Third pass 2026-10-01** (§2.3 gains defects 4–5; §4.4 gains the `skill_id`/IDF/length-norm fixes and strikes the tie-break fix; §10 gate 1 closed, gate 2 measured, gate 3 not reached)
+Date: 2026-09-30 · Revised: 2026-10-01 (§2.3 measured defects; §2.2 query-shape claim corrected; §4.4, §7, §10 re-ordered by cost) · Revised again 2026-10-01 (§2.3 defect 1 resolved by configuration; corpus figures re-measured at 18 rows / 2 sources) · **Third pass 2026-10-01** (§2.3 gains defects 4–5; §4.4 gains the `skill_id`/IDF/length-norm fixes and strikes the tie-break fix; §10 gate 1 closed, gate 2 measured, gate 3 not reached) · **Self-correction 2026-10-02** (§4.4's "where body hashes exist" is false — no hashing exists anywhere in `skills-hub`; marked inline, measurement text untouched)
 Evaluation set: [semantic-skill-retrieval-eval-set.md](./semantic-skill-retrieval-eval-set.md) — built, regenerated against the 18-row corpus, and **labeled**: 38 queries × 18 documents = 684 judgments, committed as [semantic-skill-retrieval-labels.json](./semantic-skill-retrieval-labels.json), with the lexical baseline and the candidate comparison published in its §8
 Roadmap home: [Exploration Backlog](../agentic-aiops-platform/delivery-roadmap.md#exploration-backlog), "Semantic (vector) skill retrieval"
-Promoted to: [SPEC-066 skill retrieval ranking fidelity](../specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md) — **`draft`, 2026-10-01**, covering §4.4's four measured fixes plus the cross-backend parity work this memo could not see and §11's open questions. **Drafting does not weaken this memo's boundary**: the spec is not approved, six Open Questions block `approved`, and nothing below is retroactively authorized. §4.4's claim that indexing `skill_id` needs "no schema change" is true of `score()` and **false of the deployed Postgres backend** — `skill_id` is in neither `_SEARCH_VECTOR` nor `idx_skills_search`, so slug-only matches return zero rows there today; SPEC-066 R-1/R-5 carry the correction. §4.4's "`parse_sources` still accepts two sources covering the same files" is likewise imprecise — `parse_sources` validates `SKILLS_SOURCES` JSON and never sees file content, so it cannot detect content overlap at all; SPEC-066 R-7 puts de-duplication in `rank()` and routes any ingestion-time rejection to sync.
+Promoted to: [SPEC-066 skill retrieval ranking fidelity](../specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md) — **`draft` 2026-10-01, `approved` 2026-10-02**, covering §4.4's four measured fixes plus the cross-backend parity work this memo could not see and §11's open questions. **Approval does not weaken this memo's boundary any more than drafting did**: the six Open Questions were resolved 2026-10-02, and approval authorizes implementation to *begin* — it authorizes no merge, no index migration, no deployment and no version bump, and nothing below is retroactively authorized. §4.4's claim that indexing `skill_id` needs "no schema change" is true of `score()` and **false of the deployed Postgres backend** — `skill_id` is in neither `_SEARCH_VECTOR` nor `idx_skills_search`, so slug-only matches return zero rows there today; SPEC-066 R-1/R-5 carry the correction. §4.4's "`parse_sources` still accepts two sources covering the same files" is likewise imprecise — `parse_sources` validates `SKILLS_SOURCES` JSON and never sees file content, so it cannot detect content overlap at all; SPEC-066 R-7 puts de-duplication in `rank()` and routes any ingestion-time rejection to sync.
 Evidence baseline: repository at v0.45.0 (`3c87723`); static read of the skills-hub retrieval path plus queries against the live dev cluster (`postgres-0` `skills` and `audit` databases, the `llm-hosting/ollama` deployment) and the pinned agentscope 2.0.8 venv. **The 2026-09-30 pass was entirely read-only** — nothing was installed, embedded, deployed, mutated, or committed. The 2026-10-01 revision follows two operator-authorized mutations (dropping the leftover `_idx_probe` table and removing the duplicate skill sources, §2.3 defect 1) and re-measures the corpus afterwards; **no product code was changed in either pass, and no embedding was computed.**
 
 ## 1. Question and recommendation
@@ -815,10 +815,25 @@ Non-negotiables:
 
 ## 11. Open questions for the first spec
 
-- Which fusion rule, and is `score` allowed to change meaning (contract version
-  bump, portal rendering, JSON schema) or must fusion stay rank-only?
-- Is the byte-identical ordering invariant narrowed (semantic Postgres-only,
-  recommended) or preserved (no semantic retrieval at all in the memory backend)?
+- ~~Which fusion rule, and is `score` allowed to change meaning (contract version
+  bump, portal rendering, JSON schema) or must fusion stay rank-only?~~ **Answered
+  2026-10-02 as SPEC-066 OQ-1.** No fusion rule ships — the row closed against
+  vectors — so the question reduces to whether the four lexical fixes may redefine
+  `score`, and they may, **with no contract version bump**: `score` is in no
+  `shared/shared-contracts` schema, is not portal-rendered, and is dropped by the
+  tool-gateway connector's `_MATCH_KEYS`. Its *weighting* is nevertheless published
+  prose in four places, which SPEC-066 R-9 updates. `skill_id` enters at
+  `TAG_WEIGHT` (2.0), and the "do not silently redefine `score`" caution survives as
+  a **decomposability** requirement (`weight × idf(token) × norm(document)`).
+- ~~Is the byte-identical ordering invariant narrowed (semantic Postgres-only,
+  recommended) or preserved (no semantic retrieval at all in the memory backend)?~~
+  **Answered 2026-10-02 as SPEC-066 OQ-3: preserved as written, and this memo's
+  recommendation to narrow it is not taken.** No ADR is raised. Narrowing was
+  contingent on a semantic backend, which the measurement cancelled; what remains is
+  a *lexical* scorer that must order identically on both backends, and SPEC-066 R-6
+  makes that invariant **enforced** rather than documented, because SPEC-014 claims a
+  parity test that does not exist. OQ-3 and OQ-5 are one decision — preserving the
+  invariant forces widening the prefilter and rules out a SQL-side tokenizer.
 - Does the in-cluster Ollama actually enforce `OLLAMA_API_KEY`? A loopback
   port-forward probe was answered with 200/501 rather than 401 (§3.3). Whether that
   is loopback trust or an unenforced key must be settled deliberately before
@@ -961,7 +976,9 @@ Non-negotiables:
   that would not ship; (2) §4.4's "`parse_sources` still accepts two sources covering
   the same files" is imprecise — `parse_sources` validates `SKILLS_SOURCES` JSON and
   never sees file content, so it structurally cannot detect content overlap, which
-  relocates the fix to `rank()` (or to sync, where body hashes exist); (3) the eval's
+  relocates the fix to `rank()` (or to sync, where body hashes exist —
+  **[corrected 2026-10-02] no body hashes exist anywhere in `skills-hub`; see the
+  changelog entry of that date**); (3) the eval's
   **0.500 → 0.711 is a memory-path upper bound**, since it ran `rank()` over a corpus
   export with no prefilter — and because no single fix reaches significance alone, a
   backend-neutral *subset* would be an unmeasured subset, against eval-set §8's own
@@ -975,3 +992,34 @@ Non-negotiables:
   `to_tsvector` row escapes the `||` inside the code span, which rendered as six
   cells in a two-column table. No product code, manifest, configuration, or
   measurement was changed in this pass.
+- 2026-10-02 — **self-correction: this memo asserted machinery that does not
+  exist.** The 2026-10-01 entry above relocates the duplicate-content fix to
+  "`rank()` (or to sync, where body hashes exist)". **There are no body hashes.**
+  `md5`, `sha256`, `hashlib` and `blake2` appear nowhere in `products/skills-hub`
+  outside `uv.lock`'s dependency hashes. The `body_md5` values in
+  [the label fixture](semantic-skill-retrieval-labels.json) were computed by the
+  **offline evaluation harness**, not by the product — so the parenthetical
+  described an existing sync-time capability when it was in fact describing
+  something the harness did off to the side. Sync does hold the body *text*
+  (`Skill.body`), so a hash is trivially computable there; the error is claiming it
+  already was. Found while resolving SPEC-066's OQ-6, which asked whether sync-time
+  overlap rejection was feasible: the answer is that it is *feasible* but rests on
+  machinery that would have to be built, and it is **deferred** on three structural
+  grounds (nondeterministic precedence across independently-jittered sync loops;
+  the eventual-consistency hole `_resolve_compositions` already documents; no store
+  surface returning all bodies) with a named trigger to revisit. The same false
+  claim was made in four other committed places — SPEC-066's `spec.md`, `plan.md`
+  and `tasks.md`, and the evaluation-set artifact — and all five are corrected.
+  Marked inline above rather than silently edited, because this memo is a
+  measurement record and its history is not rewritten. The same pass updates this
+  memo's **status header** for SPEC-066's `draft` → `approved` transition: the
+  "Promoted to" line said "the spec is not approved, six Open Questions block
+  `approved`", which the approval made false, and it now records that approval
+  authorizes implementation to begin and no merge, migration, deployment, or version
+  bump. The header states current status rather than measurement, so updating it is
+  not a rewrite of the record. §11's first two questions — the two SPEC-066
+  inherited as OQ-1 and OQ-3 — are struck and answered in place, following the
+  pattern §11's own label-ownership bullet set on 2026-10-01; its remaining six
+  concern embeddings, hosting manifests, or label ownership and are untouched.
+  No measurement, label, catalogue, pool, metric, or product code is changed by
+  this pass.

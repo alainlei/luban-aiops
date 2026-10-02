@@ -2,52 +2,87 @@
 
 Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement IDs.
 
-> **PROVISIONAL — pending scope approval.** SPEC-066 is `draft` with **six
-> unresolved Open Questions** in `spec.md`. This task list is derived from the
-> provisional `plan.md` and will change when OQ-1(b), OQ-2 and OQ-5 are answered.
-> **No task below may be started until the spec is `approved`.** Approval itself
-> authorizes implementation as a separate step; it does not authorize commit/push,
-> the R-5 index migration, deployment, or a version bump — each is its own
-> authorization boundary. Stage 0 is read-only and is the first thing to execute
-> after approval.
+> **Provisional banner lifted 2026-10-02.** SPEC-066 is `approved`: all six Open
+> Questions are resolved in `spec.md` and the resolutions are recorded against
+> their original tasks in Stage 0 below, so the reasoning that produced this list
+> stays visible rather than being deleted. Three stages changed as a result —
+> Stage 2 (R-2 now carries a sync-time statistics table and a `rank()` signature
+> change), Stage 3 (prefix lexemes and a versioned index name; no SQL tokenizer),
+> and Stage 4 (the sync-time half is deferred, so R-7 contributes no
+> `services/sync.py` task — R-2's statistics refresh still does).
+> **Approval authorizes implementation as a separate step; it does not authorize
+> commit/push, the R-5 index migration, deployment, or a version bump** — each is
+> its own authorization boundary. Stage 0 is read-only and is the first thing to
+> execute.
 
-## Stage 0: Open-Question resolution (read-only; blocks everything else)
+## Stage 0: verification (read-only; blocks Stages 2–3)
 
-- [ ] **OQ-1(a)** — decide whether the published `score` field's changed semantics
-      need documenting as unstable, given it is in no contract schema, is not
-      portal-rendered, and is dropped by the tool-gateway connector (verified at
-      drafting). Record the decision in `spec.md`
-- [ ] **OQ-1(b)** — fix the weight `skill_id` enters at. Default `TAG_WEIGHT` (2.0),
-      which is what the measurement used; **any other value is an unmeasured
-      candidate and requires re-measurement**, not a review decision
-- [ ] **OQ-2** — choose the IDF corpus-statistics source: per-request over the whole
-      catalog (recommended), a sync-time statistics table (defers a second
-      migration), **or** over the `rank()` pool (**rejected** — the two callers pass
-      different pools and it breaks backend parity). Also fix R-4's whole-token rule
-      here, since it changes `df`
-- [ ] **OQ-3** — confirm the byte-identical cross-backend ordering invariant is
-      **preserved as written** (recommended; nothing here is semantic retrieval, so
-      the memo §11 narrowing does not apply). If narrowed, record as **ADR-0015**
-      and update `docs/adr/README.md`
-- [ ] **OQ-4** — accept or reject the known Q63 re-ordering regression (top-1 grade
-      2 → grade 1; the grade-2 document falls to rank 2 of 5, `R@5(=2)` unaffected)
-- [ ] **OQ-5** — fix the GIN migration and rollback plan, the prefilter strategy
-      (mirror the tokenizer in an IMMUTABLE SQL function **vs** widen the prefilter,
-      recommended), and the concurrency window (`CREATE INDEX CONCURRENTLY` cannot
-      run in a transaction)
-- [ ] **OQ-6** — decide whether sync-time overlap rejection is wanted in addition to
-      R-7's `rank()` de-duplication, and if so its failure posture (reject the source
-      vs ingest and warn)
-- [ ] Confirm the **label-set ownership** position: R-8 re-uses the author-proposed,
+The six Open Questions are **resolved** — recorded here as done, with the answer
+each settled on, so the task list stays the audit trail. What remains open are two
+*verification* tasks: checkable facts about a running cluster and an uncommitted
+harness rather than decisions, which is why they were not left as Open Questions.
+
+- [x] **OQ-1(a)** — `score`'s changed semantics need **no contract version bump**:
+      it is in no `shared-contracts` schema, is not portal-rendered, and is dropped
+      by the tool-gateway connector's `_MATCH_KEYS`. Its *weighting* is published
+      prose in four places, so R-9 reaches all four (Stage 6)
+- [x] **OQ-1(b)** — `skill_id` enters at **`TAG_WEIGHT` (2.0)**, the value the
+      measurement used. Any other weight is a fifth, unmeasured candidate under
+      R-8, not a review decision
+- [x] **OQ-2** — IDF statistics are **computed in Python and persisted at sync
+      time**, passed into `rank()` by the caller. The draft's "per-request over the
+      whole catalog" recommendation was **overturned**: it reads the corpus the
+      prefilter exists to avoid reading, and after R-4 a SQL-computed `df` cannot
+      match Python's `tokenize()` at all. Pool-derived statistics remain rejected.
+      R-4's whole-token rule is resolved in the same decision: **retain the whole
+      token alongside its parts**
+- [x] **OQ-3** — the byte-identical cross-backend ordering invariant is **preserved
+      as written**. The memo §11 narrowing was scoped to *semantic* retrieval and
+      nothing here is semantic, so it does not apply. **No ADR-0015**, and
+      `docs/adr/README.md` is untouched. OQ-3 and OQ-5 are one decision: preserving
+      the invariant forces the widen-the-prefilter strategy and rules out a SQL
+      tokenizer
+- [x] **OQ-4** — the Q63 re-ordering regression is **accepted by operator
+      decision**, on two conditions enforced in Stage 5: reported on the
+      **Postgres** path (a re-ordering can become a *disappearance* there, which
+      fails the merge gate) and named in the delivery release note
+- [x] **OQ-5** — prefilter strategy: **widen it** with prefix lexemes, no SQL
+      function. Migration: create **`idx_skills_search_v2`**, retain
+      `idx_skills_search` for one release, so rollback is a plain code revert and
+      there is never a window without an index. **No `CREATE INDEX CONCURRENTLY`** —
+      unusable, because `_DDL` runs as one multi-statement string on a connection
+      opened `autocommit=False`
+- [x] **OQ-6** — sync-time overlap rejection is **deferred with a named trigger**;
+      only R-7's `rank()` de-duplication ships. Feasible (`_resolve_compositions`
+      is the precedent) but the wrong layer: nondeterministic precedence across
+      jittered sync loops, the eventual-consistency hole the composition code
+      documents, and no store surface returning all bodies
+- [x] **Label-set ownership** confirmed: R-8 re-uses the author-proposed,
       operator-ratified fixture as-is, and operations ownership remains a
       precondition only if the row is ever reopened for embedding work
-- [ ] Record all resolutions in `spec.md` (Open Questions → resolved), lift the
-      `plan.md` / `tasks.md` provisional banners, and set status `draft` → `approved`
+- [x] Resolutions recorded in `spec.md`, `plan.md` / `tasks.md` provisional banners
+      lifted, status set `draft` → `approved`
+- [ ] **Verify (a): PostgreSQL prefix-lexeme behaviour on the live cluster.** R-5's
+      CamelCase reach assumes `to_tsquery('simple', 'reset:*')` matches an indexed
+      document lexeme `resetpasswordadhoc`. **This has not been exercised against
+      `postgres-0`.** Read-only check against the deployed instance; record the
+      actual behaviour. **Fallback if it does not hold:** drop the tsvector prefilter
+      for CamelCase-derived tokens entirely — correct, merely slower. Blocks Stage 3
+- [ ] **Verify (b): which CamelCase-splitting variant produced 0.711.** The offline
+      harness that measured it is **not committed** (`git ls-files` shows only the
+      label fixture and the two prose artifacts) and the eval-set records the change
+      only as "tokenizer regex" (§8.2's candidate row 2c), so the repository cannot
+      confirm whether the whole
+      token was retained. Re-derive it; if it was dropped, Stage 5 re-measures the
+      retention variant rather than assuming 0.711 carries over. Blocks Stage 2's
+      R-4 final rule
 
-## Stage 1: R-6 — parity harness first (no OQ dependency)
+## Stage 1: R-6 — parity harness first
 
 > Land before any scoring change, so the baseline is established and a pre-existing
 > invariant violation is found by the harness rather than blamed on the new code.
+> OQ-3 preserved the invariant **as written**, so there is no Postgres-only
+> carve-out: ordering **and** scores must match.
 
 - [ ] Decide the Postgres side of the harness: drive a **real** Postgres (the
       SPEC-063 campaign precedent) or an equivalent. **A `_fake_connect` that returns
@@ -77,6 +112,12 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 > Ordered cheapest and least-coupled first. R-4 precedes R-2 because R-4's tokenizer
 > determines R-2's `df`. **None of these is separately shippable** — no single fix
 > reaches significance alone.
+>
+> **Implementation order is not measurement order.** R-4's whole-token retention
+> makes sub-tokens such as `not` and `ready` score-bearing, and R-2 forbids a
+> stoplist, so IDF is the only thing that keeps them from carrying full weight.
+> R-4's fidelity gate therefore runs **with R-2's flag on**; measuring R-4 alone
+> measures an inflated scorer, not the shipped one.
 
 - [ ] Add the four module-level flags to `services/scoring.py` (naming fixed at
       implementation). Flags are a **measurement instrument**, removed at Stage 5
@@ -86,7 +127,7 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
       including empty and single-character; equal capped occurrences ⇒ the longer
       body contributes strictly less; **backend-neutral without corpus state**
 - [ ] **R-1** — add `id_tokens = set(tokenize(skill.skill_id))` to `score()`,
-      credited at the OQ-1(b) weight (`services/scoring.py`)
+      credited at **`TAG_WEIGHT` (2.0)** (OQ-1(b) resolved; `services/scoring.py`)
 - [ ] Test R-1: slug separators tokenize consistently with the title
       (`samples/password-reset-resetacmepassword` → `samples`, `password`, `reset`,
       `resetacmepassword`)
@@ -100,69 +141,176 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
       tokenize (CamelCase/digit boundary split, then the existing alphanumerics rule
       retained as the final step so non-CamelCase text is unaffected)
 - [ ] Commit the R-4 case table as tests: `KubePodNotReady`, `CrashLoopBackOff`,
-      `HTTP503` (acronym run — verify it does not become `h`/`t`/`t`/`p`/`503`),
-      `pgBouncer`, `v0211`, plus already-lowercase and digit-only cases that must be
-      unaffected
-- [ ] Apply the OQ-2 whole-token rule **identically** in `tokenize()`, in R-2's `df`
-      computation, and in R-5's prefilter — a mixed application is silently wrong
-- [ ] Update the **8 exact-score assertions** in `tests/test_scoring.py`
-      deliberately: `score("KubePodNotReady", skill) == 7.0` encodes the defect R-4
-      removes, so it must change. **Do not weaken any assertion to a vague
-      comparison to make the change pass** — old and new values both visible in
-      review
+      `HTTP503`, `pgBouncer`, `v0211`, `RealPlayer2`, plus already-lowercase and
+      digit-only cases that must be unaffected
+- [ ] **Decide the letter↔digit boundary explicitly, in both directions.** The two
+      standard CamelCase boundaries do **not** fire inside `HTTP503` (no lowercase
+      before the capitals; `P5` is not upper-then-lower), so measured output is the
+      **single token `http503`**, and `v0211` likewise stays whole — the draft's
+      gloss ("`http` + `503`, or `h`/`t`/`t`/`p`/`503` if done naively") describes
+      neither. A third boundary rule is needed to split an acronym run from a
+      trailing number, and it is consequential both ways: without it `503 error`
+      cannot reach a document titled `HTTP503`; with it `v0211` risks becoming `v` +
+      `0211`. Pin the decision in the case table, because R-2's `df` and R-5's
+      prefilter both inherit it
+- [ ] **Retain the whole token alongside its parts** (OQ-2's second half, resolved):
+      `tokenize("KubePodNotReady")` yields `kubepodnotready` **and** `kube`, `pod`,
+      `not`, `ready`. Apply the rule **identically** in `tokenize()`, in R-2's `df`
+      computation, and in R-5's prefilter — a mixed application is silently wrong.
+      Subject to Stage 0 verify (b)
+- [ ] **R-4 is not a `tokenize()`-only change.** Make `score()`'s aggregation
+      position-aware: one token **set** per surface alphanumerics run, the whole
+      token admitted only when it differs from its parts, body occurrences counted
+      **per run** rather than per emitted token, and query tokens de-duplicated
+      before the scoring loop. Without this, retention doubles every ordinary query
+      (measured: title 3.0 → 6.0, tag 2.0 → 4.0, three body occurrences 3.0 → 10.0)
+      and reaches `BODY_OCCURRENCE_CAP` at half the real count
+- [ ] Split CamelCase on the **original-cased** text and lowercase afterwards —
+      lowercasing first destroys the boundary and splits nothing
+- [ ] Test R-4's no-inflation criterion directly: for a corpus and query with **no**
+      CamelCase anywhere, every score is **identical** to the pre-R-4 value
+- [ ] Update the exact-score assertions in `tests/test_scoring.py` deliberately.
+      There are **8**; with the position-aware shape **exactly 1** changes value
+      (`score("KubePodNotReady", skill) == 7.0` → 27.0, encoding the defect R-4
+      removes). **Treat more than one changed value as a wrong implementation, not a
+      stale test.** Do not weaken any assertion to a vague comparison — old and new
+      values both visible in review
+- [ ] Where R-3's norm makes a body contribution non-integral, compute the expected
+      value **from the formula in the test** rather than hard-coding a rounded
+      literal or relaxing the comparison
+- [ ] Change the **fixture `skill_id`s**, not the expected numbers, for
+      `test_title_match_scores_three` and
+      `test_body_occurrences_score_one_and_saturate`: both use `a/pod`, whose slug
+      matches the query `pod` once R-1 scores it (+2.0), which would turn the
+      three-occurrence assertion into **5.0 — the value the next line asserts for
+      the saturating cap**, making the pair indistinguishable
+- [ ] Gate R-4's fidelity measurement on **R-2's flag being on**: retention makes
+      `not` and `ready` score-bearing and R-2 forbids a stoplist, so IDF is the only
+      thing keeping them from carrying full weight
 - [ ] **R-2** — introduce an explicit immutable corpus-statistics value (`N` + a `df`
-      map) and pass it to `score()`; implement `ln((1+N)/(1+df))+1`. **No
-      hand-written stoplist anywhere in the path**
-- [ ] Check for `score()` callers outside `skill_store.py` before changing the
-      signature (tool-gateway: none; portal: none — verified at drafting, re-verify).
-      Prefer an **explicit required** parameter over a default that hides a
-      wrong-by-default corpus
+      map) and implement `ln((1+N)/(1+df))+1`. **No hand-written stoplist anywhere
+      in the path**
+- [ ] **R-2 / OQ-2** — compute the statistics **in Python at sync time** and persist
+      them: a table on Postgres, the equivalent structure in memory. Refresh after
+      each successful `replace_source` in `services/sync.py`. Because `df` is
+      **global**, a per-source swap invalidates all of it, so the refresh is a
+      **full catalog pass**
+- [ ] **R-2** — change `rank()`'s and `score()`'s signatures to take the statistics.
+      **This is the load-bearing part of R-2, not an incidental refactor**: `rank()`
+      is **synchronous and pure** while both stores are `async`, so statistics
+      cannot be fetched inside it — the caller must pass them in
+      (`services/scoring.py`, both `search()` implementations in
+      `services/skill_store.py`)
+- [ ] Check for `score()`/`rank()` callers outside `skill_store.py` before changing
+      the signature (tool-gateway: none; portal: none — verified at drafting,
+      re-verify). Prefer an **explicit required** parameter over a default that
+      hides a wrong-by-default corpus
 - [ ] Ensure R-2's `df` is computed with the **same** `tokenize()` the scorer uses —
-      two tokenizers in one file is the failure mode
+      two tokenizers in one file is the failure mode, and a mismatch between the
+      statistics tokenizer and the scoring tokenizer is **silent**
 - [ ] Test R-2: IDF against hand-computed `N`/`df`; field-weight **ordering**
       (title 3.0 > tags 2.0 > body 1.0) unchanged so SPEC-014 R-3's guarantee holds;
       `certificate expired on the ingress` stops ranking a password-reset runbook
       first, with the mechanism assertable ("the" contributes materially less)
+- [ ] Test R-2: the `df` path and the scoring path call the **same** `tokenize()`;
+      a sync cycle refreshes `N`/`df` after `replace_source`; a **stale** table is
+      still usable (bounded staleness is a property, not an error); both backends
+      produce numerically equal statistics for the same catalog
+- [ ] Test R-2 explainability: the score stays **decomposable** into per-token,
+      per-field contributions (`weight × idf(token) × norm(document)`). This is the
+      surviving obligation from the memo's *"do not silently redefine `score`"* —
+      written about cosine fusion, which this spec does not do, but whose *reason*
+      (answering "why did this rank first?" in an incident review) binds here
 - [ ] **Fidelity gate** — test that with **all four flags off** the scorer reproduces
       the shipped behaviour exactly (the eval-set's 38/38 gate, reproduced in the
       product's own suite)
 
 ## Stage 3: R-5 — prefilter, index and migration
 
-> Depends on R-4's tokenizer rule being final. **Highest-risk stage**: the prefilter's
-> failure mode is a silently missing row.
+> Depends on R-4's tokenizer rule being final **and on Stage 0 verify (a)**.
+> **Highest-risk stage**: the prefilter's failure mode is a silently missing row.
 
 - [ ] Add `skill_id` to `_SEARCH_VECTOR` so a slug-only match is returned by the
-      prefilter (`services/skill_store.py`)
-- [ ] Implement the OQ-5 prefilter strategy: **widen the prefilter** (recommended —
-      no SQL tokenizer, so nothing can drift from Python; the failure mode is a slow
-      query, which is loud) **or** mirror R-4 in an **IMMUTABLE** SQL function
-- [ ] If a SQL split function is used: prove it IMMUTABLE (the DDL already records
-      that `array_to_string`/`array_out` are STABLE, which is why tags stay out of
-      the index) and pin it against the Python case table by test
+      prefilter: `to_tsvector('simple', skill_id || ' ' || title || ' ' || body)`.
+      **No new function and no new column** — text concatenation plus the two-argument
+      `to_tsvector` with a constant `regconfig` are both IMMUTABLE, and `skill_id` is
+      already the table's `TEXT PRIMARY KEY`. `tags` stay out for the reason the DDL
+      already records (`array_to_string`/`array_out` are STABLE)
+      (`services/skill_store.py`)
+- [ ] Implement the resolved prefilter strategy: **widen it with prefix lexemes** —
+      for each CamelCase-derived split part, OR a `part:*` term alongside the exact
+      token, so `reset:*` reaches the indexed single lexeme `resetpasswordadhoc`.
+      **Do not introduce a SQL tokenizer**: there is no `CREATE FUNCTION` anywhere in
+      the repository, so an IMMUTABLE PL/pgSQL splitter would be the platform's first
+      user-defined SQL function *and* a second implementation of the tokenizer that
+      must stay in exact sync with Python's regex — the drift hazard R-6 exists to
+      detect
+- [ ] Do **not** add a `LIKE`/substring arm. Prefix lexemes are GIN-served, so they
+      do not introduce a sequential scan; the draft's `LIKE` option is superseded
 - [ ] Keep the **OR-join** of query lexemes; do **not** introduce `plainto_tsquery`
       (it ANDs and would silently drop partial matches — already documented by
       `test_search_joins_multi_word_queries_with_or`)
 - [ ] Keep the prefilter an **over-approximation** of the scorer's non-zero set, per
-      the shipped comment's contract
-- [ ] Change the `idx_skills_search` GIN expression to match `_SEARCH_VECTOR`
-      **exactly**, and add a test that compares the two so the index cannot silently
-      stop being used
-- [ ] Write the migration: `_DDL` uses `CREATE INDEX IF NOT EXISTS`, so an existing
-      deployment keeps the **old** index and the new expression goes unindexed
-- [ ] Test the migration **actually rebuilds** the index on an existing database
-      (not silently skipped), and test the **rollback** — the `skills` database shares
-      `postgres-0`'s 1 Gi PVC with `audit`, `incidents` and `sessions`, so a botched
-      migration is not contained to skills
+      the shipped comment's contract. Over-admission is safe because Python still
+      decides; the failure mode of getting it wrong must stay **loud** (slow query),
+      never silent (missing row)
+- [ ] Add a test that the **GIN index expression and the `_SEARCH_VECTOR` expression
+      are identical**, so the index cannot silently stop being used
+- [ ] Write the migration: create **`idx_skills_search_v2`** on the new expression and
+      **retain `idx_skills_search`**. `CREATE INDEX IF NOT EXISTS` matches on *name*,
+      so changing the expression under the existing name silently keeps the old index
+      and leaves the new one unindexed
+- [ ] Do **not** use `CREATE INDEX CONCURRENTLY`. `_DDL` executes as one
+      multi-statement string on a connection opened `autocommit=False` and committed
+      afterwards (`initialize()`), so CONCURRENTLY would fail inside the transaction
+      block. At 18 rows a plain `CREATE INDEX` is milliseconds
+- [ ] Test the migration on an **existing** database: `idx_skills_search_v2` is
+      created (not silently skipped), `idx_skills_search` **still exists** afterwards
+      so there is never a window without an index, and the migration is idempotent on
+      re-run
+- [ ] Test the **rollback**: a plain code revert with the old index still present —
+      no index step at all. The `skills` database shares `postgres-0`'s **1 Gi** PVC
+      with `audit`, `incidents` and `sessions`, and that PVC is a StatefulSet
+      `volumeClaimTemplates` entry that **cannot be grown by `kubectl apply`**, so a
+      botched migration is neither contained to skills nor fixable from GitOps
+- [ ] Measure index size **before and after** and record it in the delivery note
+      (kilobytes at 18 rows — the point is that it is measured, not assumed)
 - [ ] Test R-5: a query whose only match is in `skill_id` returns rows on **Postgres**
       as well as in memory
+- [ ] Test R-5: **prefix lexemes actually reach an unsplit indexed lexeme** — Stage 0
+      verify (a) promoted into the suite, so the assumption stays verified rather
+      than being checked once
 - [ ] Test R-5/R-4 recall guard: **no query in the fixture returns fewer rows than it
       does today** on the Postgres path
 - [ ] Measure search latency p95 **end to end** on the Postgres path against the
       tool-gateway's 10.0 s `REQUEST_TIMEOUT_SECONDS`. Do **not** cite the eval-set's
       offline p50 2.726 ms — it excludes the prefilter, HTTP, auth and the audit write
+- [ ] Schedule the **drop of `idx_skills_search`** for the *following* release. This
+      is a deliberate one-release tail, not an unfinished task; record it where the
+      next release will see it
 
 ## Stage 4: R-7 — de-duplication guardrail (parallel with Stages 2–3)
+
+> **OQ-6 resolved: R-7 contributes no `services/sync.py` task.** Only `rank()`
+> de-duplication ships, so there is deliberately **no sync-time task below**.
+> (`services/sync.py` *is* touched by Stage 2's R-2 statistics refresh — that is
+> a different change and it is not deferred.)
+>
+> The draft carried one, reading "implement it where body hashes exist
+> (`services/sync.py`)". That rested on a **false claim** — no body hashes exist
+> anywhere in `skills-hub` (`md5`/`sha256`/`hashlib` appear nowhere outside
+> `uv.lock`'s dependency hashes). Sync holds the body *text*, so a hash is
+> trivially computable there; the machinery the draft assumed simply does not
+> exist. The work is deferred on three structural grounds: nondeterministic
+> precedence across independently-jittered sync loops, the eventual-consistency
+> hole `_resolve_compositions` already documents, and no store surface returning
+> all bodies. **Trigger to revisit:** when duplicate *ingestion* cost rather than
+> duplicate *ranking* becomes the problem, or when an operator needs to be **told**
+> rather than silently protected. If it is ever built, precedence must come from
+> configured `SKILLS_SOURCES` order, a new bounded label must join
+> `_rejection_category()`'s cardinality guard, and the rejection text must stay
+> safe for the **auth-exempt** `/api/v1/skills/status` surface that exposes
+> `Rejection.reason` verbatim.
 
 - [ ] Implement content-hash collapse in `rank()` **before** `hits.sort(...)` and
       before `[:limit]`, retaining the **lowest `skill_id`** (consistent with the
@@ -171,7 +319,9 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 - [ ] Use `md5(body)` as the identity key, matching the `body_md5` the label fixture
       pins. Record in a comment that MD5 here is a **content-identity key, not a
       security digest**, so a future security review does not flag it as a weak hash
-      in a security context
+      in a security context. **This introduces hashing to `skills-hub` — none exists
+      today** (`md5`/`sha256`/`hashlib` appear nowhere in `products/skills-hub`
+      outside `uv.lock`'s dependency hashes)
 - [ ] **Do not** put overlap detection in `core/config.py::parse_sources` — it
       validates `SKILLS_SOURCES` JSON and never sees file content, so it structurally
       cannot detect content overlap
@@ -180,9 +330,6 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
       document
 - [ ] Test R-7: collapse precedes truncation (the measured defect was wasted slots,
       not duplicate output)
-- [ ] If OQ-6 chose sync-time rejection: implement it where body hashes exist
-      (`services/sync.py`), with the decided failure posture and an operator-visible
-      error; test both the reject and warn paths
 - [ ] Record that `skill_searched` details `result_count` and `skill_ids` change
       observably when duplicates collapse — existing event type, existing fields, new
       values, **no vocabulary change**
@@ -194,8 +341,21 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 
 > **This gates the merge; it is not a post-merge report.**
 
-- [ ] Extend the offline evaluation harness to drive `PostgresSkillStore.search()`
-      rather than `rank()` directly, so the prefilter is inside the measured path
+- [ ] **Reconstruct and commit the evaluation harness.** The draft said "extend the
+      offline evaluation harness" — but **no harness is committed** (`git ls-files`
+      shows only the label fixture and the two prose artifacts). R-8 is the merge
+      gate, so its instrument must exist in the repository. Rebuild it and drive it
+      through `PostgresSkillStore.search()` rather than `rank()` directly, so the
+      prefilter is inside the measured path
+- [ ] **Harness fidelity gate** — before any candidate number from the rebuilt
+      harness is believed, it must reproduce the **shipped** scorer's published
+      baseline (**19/38** combined top-1), the same way §8's harness gated every
+      candidate on 38/38 identity with its flags off. A rebuilt instrument that
+      cannot reproduce the known baseline measures nothing
+- [ ] Re-derive the **CamelCase variant** that produced 0.711 (Stage 0 verify (b)).
+      If the rebuilt harness with whole-token retention does not reproduce the
+      offline candidate numbers, **publish the discrepancy** and ship the
+      configuration that was actually measured — not the one the memo described
 - [ ] Assert the fixture's `body_md5` per document **first**, failing loudly on
       mismatch rather than silently invalidating the comparison
       (`semantic-skill-retrieval-labels.json`, 38 × 18 = 684 judgments, 173 non-zero)
@@ -209,8 +369,15 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
       resamples, seed 20261001) with 95% CIs on per-query deltas, plus an exact
       two-sided sign test on discordant top-1 pairs. **Do not rely on Precision@5**
       (its baseline CI lower bound rounds to zero)
-- [ ] Disclose the Q63 regression and report abstention as **unchanged at 4/38**, so
-      the result cannot be over-read as fixing zero-relevant
+- [ ] **Assert Q63's `D18` is present in the Postgres-path returned window** (OQ-4's
+      first condition). The offline acceptance covered a *re-ordering* — top-1 grade
+      2 → grade 1, with `D18` falling to rank 2 of 5 and `R@5(=2)` unaffected. A
+      prefilter change could turn that into a **disappearance**, which the acceptance
+      does not cover and which **fails the merge gate**
+- [ ] Disclose the Q63 regression in the **delivery release note** as a known
+      behaviour change (OQ-4's second condition), and report abstention as
+      **unchanged at 4/38**, so the result cannot be over-read as fixing
+      zero-relevant
 - [ ] Append the result as a **new section** to the eval-set artifact; do not rewrite
       its published numbers
 - [ ] **Null-result path** — if the Postgres-path gain is not outside the noise band,
@@ -228,75 +395,158 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
       field**, not only a tie-break
 - [ ] Rewrite the `services/scoring.py` module docstring, which states the fixed
       weighting and the byte-identical rationale as load-bearing documentation
+- [ ] Ensure **no published prose implies `score` is comparable across queries** —
+      R-4's retention makes it query-shape dependent (measured: an exact identifier
+      match scores **15.0** where the equivalent three-word phrase scores **9.0**).
+      Nothing consumes the magnitude, so this is a documentation obligation; record
+      the constraint for the separate abstention backlog row, which cannot derive a
+      threshold from these numbers without accounting for query shape
 - [ ] Amend or annotate **SPEC-014 R-3** ("keyword matching against title, tags, and
       body with fixed weighting") and state the relationship in both specs — SPEC-014
       is `delivered` and its criterion is now inaccurate
-- [ ] Check `docs/guides/skills-guide.md` for any restated weighting and update if
-      present
-- [ ] Add a status-header **pointer** to this spec in the retrieval memo and the
-      eval-set. Do **not** rewrite their text — they are measurement artifacts
+- [ ] Update `docs/guides/skills-guide.md` in **three** specific places — the draft's
+      "check for any restated weighting" would have missed two of them:
+      - its **"Never register the same files twice"** warning justifies itself with
+        *"because ranking does no content de-duplication the copies consume result
+        slots"* — a clause R-7 makes **false**. Keep the warning (duplicates still
+        cost ingestion, storage and sync time), rewrite its rationale, and reframe
+        the measured 32-of-63 figure as history
+      - its authoring advice to *"name so alert → runbook lookups rank well"* becomes
+        materially stronger: with R-1 the slug is a **scored field** and with R-4 its
+        CamelCase parts are matchable, so tell authors the `skill_id` is now a
+        retrieval surface and how to name for it. This is an improvement the fixes
+        make possible, not just a correction
+      - its search prose ("multi-word queries match OR-wise; the shared scorer ranks
+        them") is checked against the shipped behaviour and updated if the OR
+        semantics or the prefilter widening change what an operator would expect
+- [ ] Document R-2's **bounded staleness** for operators: a newly ingested document
+      is searchable immediately, but its arrival does not rebalance token weights
+      until the next sync (`SKILLS_SYNC_INTERVAL_SECONDS`, default **300**)
+- [ ] **Do not edit the delivered release note.**
+      `docs/agentic-aiops-platform/release-notes/2026-08-15-skills-and-grounded-guidance.md`
+      states "Deterministic scorer: title ×3, tags ×2, body ×1, saturating", which
+      this spec makes inaccurate — but it is delivered release history. Record the
+      change in **SPEC-066's own** delivery release note and leave the old one as the
+      record of what shipped on 2026-08-15
+- [ ] Confirm the status-header **pointers** in the retrieval memo and the eval-set
+      state the **current** lifecycle status, not the status at drafting. Do **not**
+      rewrite their measurement text — they are measurement artifacts, and headers
+      plus dated corrections are the only in-place edits permitted. The
+      `approved`-step update is **already applied** in the approval commit — this
+      pass found both headers still saying `draft`, with the memo also saying "six
+      Open Questions block `approved`", which the approval made false. What remains
+      here is the same update at `delivered`. Both artifacts also carry the false
+      "where body hashes exist" claim, corrected in place with a dated note rather
+      than left standing
 - [ ] Verify (do not assume) `products/tool-gateway/tests/test_skills_connector.py`
       passes unchanged — `_MATCH_KEYS` drops `score`, so only ordering and excerpts
       are agent-visible
 - [ ] Verify `shared/platform-ops/e2e/skills-demo.sh` still passes: it searches
       `q=KubePodNotReady` and is directly affected by R-4. If its assertions encode
       the old tokenization, update them deliberately
-- [ ] Confirm no `shared/shared-contracts` JSON schema changed; record the
+- [ ] Confirm no `shared/shared-contracts` JSON schema changed — OQ-1(a) established
+      `score` is in none of them, so **no contract version bump**; record the
       published-field vs validated-contract distinction in the README
 - [ ] `CHANGELOG.md` entry referencing SPEC-066; `VERSION` + the lockstep version
       files bump at delivery; `make validate-version` green
 - [ ] Update `docs/specs/README.md` and the delivery-roadmap Exploration Backlog row
-      through the draft → approved → delivered lifecycle
-- [ ] If OQ-3 narrowed the invariant: add ADR-0015 and update `docs/adr/README.md`
+      through the draft → approved → delivered lifecycle. The `draft` and `approved`
+      steps are **already recorded** (2026-10-01 and 2026-10-02); what remains is
+      `delivered`, with the version and date
+- [x] **No ADR** — closed by OQ-3, which preserved the byte-identical invariant as
+      written, so ADR-0015 is **not** raised and `docs/adr/README.md` stays
+      untouched. The draft's conditional task here ("if OQ-3 narrowed the
+      invariant") is therefore recorded as done-with-no-work rather than left
+      pending
 
 ## Delivery Gate
 
 > Per ADR-0008, the spec advances to `delivered` only when every `R-x` acceptance
 > criterion maps to at least one asserting test. Mapping (criterion → asserting test):
 
-- [ ] **R-1** slug scored at the OQ-1(b) weight → weight test + the fixture-based
-      stratum-A owner-recovery test (0/3 → 3/3)
+- [ ] **Stage 0(a)** prefix lexemes reach an unsplit indexed lexeme on the live
+      cluster → verified read-only **and** promoted into the R-5 prefilter test, so
+      the assumption stays verified rather than being checked once
+- [ ] **Stage 0(b)** the CamelCase variant behind 0.711 is re-derived → the rebuilt
+      harness reproduces the shipped 19/38 baseline, and any discrepancy against the
+      offline candidate numbers is published
+- [ ] **R-1** slug scored at **`TAG_WEIGHT` (2.0)** (OQ-1(b)) → weight test + the
+      fixture-based stratum-A owner-recovery test (0/3 → 3/3)
 - [ ] **R-1** slug-only match non-empty on **both** backends → R-5 cross-backend test
 - [ ] **R-2** `ln((1+N)/(1+df))+1`, no stoplist → hand-computed IDF test
+- [ ] **R-2** statistics computed in Python and **persisted at sync time**, refreshed
+      after `replace_source` (OQ-2) → sync-refresh test + a stale-table-still-usable
+      test
+- [ ] **R-2** the `df` path and the scoring path call the **same** `tokenize()` →
+      same-tokenizer test (a mismatch would be silent)
 - [ ] **R-2** backend-independent statistics → parity harness asserting identical
       **scores** (not only ordering)
 - [ ] **R-2** field-weight ordering preserved (SPEC-014 R-3) → weighting-order test
+- [ ] **R-2** score stays **decomposable** into per-token, per-field contributions
+      (the surviving explainability obligation) → decomposition test
 - [ ] **R-3** `1/log2(2 + len(body)/1000)`, cap retained, bounds hold → factor-bounds
       test incl. empty and single-character bodies
 - [ ] **R-3** backend-neutral by construction → per-`Skill` identical-score test with
       no corpus state
-- [ ] **R-4** `tokenize("KubePodCrashLooping")` → `kube`/`pod`/`crash`/`looping`;
-      case table committed → tokenizer table test
-- [ ] **R-4** whole-token rule applied consistently in all three places → consistency
-      test
+- [ ] **R-4** `tokenize("KubePodCrashLooping")` → `kube`/`pod`/`crash`/`looping`
+      **plus the retained whole token** `kubepodcrashlooping`; case table committed →
+      tokenizer table test
+- [ ] **R-4** whole-token retention applied consistently in all three places →
+      consistency test
 - [ ] **R-4** existing exact-score assertions updated, not weakened → review + the
-      updated assertions themselves
+      updated assertions themselves; **exactly 1 of 8** values changes, and two
+      fixtures change their `skill_id` rather than their expected number
+- [ ] **R-4** no score inflation on CamelCase-free text → the position-aware
+      aggregation, plus a test that every score is identical to its pre-R-4 value
+      when nothing in the corpus or query has CamelCase
+- [ ] **R-4** letter↔digit boundary decided and pinned → the committed case table
+      covers `HTTP503` and `v0211` in whichever direction was chosen
+- [ ] **R-4 not shipped without R-2** → the R-4 fidelity gate is recorded as run
+      with R-2's flag on
 - [ ] **R-4/R-5** no query returns fewer rows on Postgres than today → recall guard
       over the committed fixture
 - [ ] **R-5** `_SEARCH_VECTOR` covers `skill_id`; GIN expression identical to it →
       expression-equality test
 - [ ] **R-5** OR-join retained, no `plainto_tsquery` → existing
       `test_search_joins_multi_word_queries_with_or` still green
-- [ ] **R-5** IMMUTABLE constraint respected → index-creation test on a real
-      Postgres
-- [ ] **R-5** migration actually rebuilds + rollback tested → migration and rollback
-      tests
+- [ ] **R-5** **no user-defined SQL function introduced** (OQ-5) → no `CREATE
+      FUNCTION` in `_DDL`; Python stays the single tokenizer
+- [ ] **R-5** IMMUTABLE constraint respected — `to_tsvector('simple', skill_id || …)`
+      uses only concatenation and a constant `regconfig` → index-creation test on a
+      real Postgres
+- [ ] **R-5** migration creates `idx_skills_search_v2` on an existing database,
+      **retains** `idx_skills_search`, is idempotent, and uses **no** `CONCURRENTLY`
+      → migration test asserting both indexes exist afterwards
+- [ ] **R-5** rollback is a plain code revert with the old index still present →
+      rollback test; index size measured before and after and recorded
 - [ ] **R-5** p95 inside the 10.0 s gateway timeout, measured end to end → latency
       measurement recorded
 - [ ] **R-6** harness drives both backends over the same corpus and query set, in the
       ordinary suite → the harness
+- [ ] **R-6** invariant preserved **as written** with no Postgres-only carve-out
+      (OQ-3) → the harness asserts ordering **and** numeric scores; **no ADR** raised
 - [ ] **R-6** SPEC-014's stale task line annotated → the annotation
 - [ ] **R-7** duplicate bodies collapse to one hit **before** `[:limit]` → the
       two-identical-bodies test
 - [ ] **R-7** deterministic survivor (lowest `skill_id`) → survivor-rule test
 - [ ] **R-7** `parse_sources` unchanged → no overlap logic in `core/config.py`
+- [ ] **R-7** adds **no overlap logic** to `services/sync.py` — OQ-6 deferred → the
+      only change in that file is R-2's statistics refresh, and the deferral plus
+      its trigger is recorded in `spec.md`
+- [ ] **R-8** harness **reconstructed and committed** (not reused) and passing its own
+      19/38 fidelity gate → the committed harness + the fidelity test
 - [ ] **R-8** fixture `body_md5` asserted before any metric; full metric set reported
       per backend; pre-registered statistics reused; Q63 regression and 4/38
       abstention disclosed → the published measurement section
+- [ ] **R-8** Q63's `D18` **present in the Postgres-path window** (OQ-4's condition)
+      → the disappearance assertion; its absence fails the merge gate
 - [ ] **R-8** null-result path is coded, not assumed → the branch exists and was
       exercised or explicitly not taken
-- [ ] **R-9** README, `scoring.py` docstring, SPEC-014 annotation, guide, memo/eval-set
-      pointers, CHANGELOG, VERSION + lockstep, spec index, roadmap row all updated
+- [ ] **R-9** README, `scoring.py` docstring, SPEC-014 annotation, the **three**
+      skills-guide places, memo/eval-set pointers, CHANGELOG, VERSION + lockstep,
+      spec index, roadmap row, and SPEC-066's own delivery release note all updated
+- [ ] **R-9** the **delivered** 2026-08-15 release note is **not** edited → confirmed
+      absent from the diff
 - [ ] All four measurement flags removed; the fixes are unconditional
 - [ ] Full root `make verify` green (every product suite, overlay render, policy
       rules, version lockstep, secret vocabulary)
