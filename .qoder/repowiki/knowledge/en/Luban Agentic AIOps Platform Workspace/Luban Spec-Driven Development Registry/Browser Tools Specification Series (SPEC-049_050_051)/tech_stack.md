@@ -1,1 +1,0 @@
-Specs describe a Playwright-based browser connector communicating with a chromium-headless-shell sidecar over Chrome DevTools Protocol (CDP); operator-facing UI uses the existing operator-portal confirmation card rendering; samples are driven by shell scripts (`browser-check-demo.sh`, `samples/web-checks/password-reset/demo/demo.sh`).

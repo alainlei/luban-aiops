@@ -1,1 +1,0 @@
-Gitops layout consolidated from per-provider `runtime-profiles/{deepseek,dashscope,openai}` directories into a single `runtime-profiles/default/` plus `mutating-dev/`; all referencing scripts (`select-runtime-profile.sh`, `sync-runtime-secret.sh`, `verify-runtime-profile.sh`, `sync-otel-secrets.sh`) and the Makefile profile list must be updated, validated via `make verify`.

@@ -1,1 +1,0 @@
-Specification documents for the three-part runtime model-switching feature: per-session model selection, multi-model provider catalogs, and live OpenAI-compatible model discovery with cached fallback.

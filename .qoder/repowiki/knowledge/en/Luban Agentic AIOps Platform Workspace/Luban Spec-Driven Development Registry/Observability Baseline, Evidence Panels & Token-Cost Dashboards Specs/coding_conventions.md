@@ -1,4 +1,0 @@
-- Each spec package follows a fixed triad layout of `spec.md` (requirements + acceptance criteria + non-goals + impact + changelog), `plan.md` (implementation plan), and `tasks.md` (derived task list).
-- Requirements use stable `R-x` IDs with explicit acceptance criteria per requirement, and open questions are resolved inline before approval rather than left unresolved.
-- Cross-spec evolution is tracked in a running `Changelog` section inside `spec.md` that records status transitions, scope refinements, and implementation deviations from the approved spec.
-- New observability surfaces are documented in `shared/shared-contracts/observability-conventions.md` as the single canonical reference that implementations cite, keeping metric naming and label conventions out of service-specific code.

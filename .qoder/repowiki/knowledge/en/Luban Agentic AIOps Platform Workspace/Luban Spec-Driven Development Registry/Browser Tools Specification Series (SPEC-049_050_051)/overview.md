@@ -1,1 +1,0 @@
-Specification documents defining the browser web-check tools capability: initial connector, expanded tool surface with samples reorganization, and platform-enforced one-HITL-gate-per-flow enforcement.

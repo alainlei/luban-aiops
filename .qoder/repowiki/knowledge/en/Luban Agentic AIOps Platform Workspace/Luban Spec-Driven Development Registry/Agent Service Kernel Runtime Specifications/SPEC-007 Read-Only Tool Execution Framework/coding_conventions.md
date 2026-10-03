@@ -1,4 +1,0 @@
-- Requirements are expressed as numbered R-N statements followed by bulleted acceptance criteria, making each deliverable independently verifiable.
-- Open questions are recorded as Q-N entries with candidate directions and a final resolution section that ties back to an ADR or follow-up spec rather than leaving them unresolved.
-- Implementation alternatives are explicitly listed and rejected with a one-line rationale (e.g., entry_points over-engineered, raw httpx manual, kubectl hard to secure) instead of silently omitting them.
-- Feature toggles gate new capabilities via environment variables with safe defaults (`GATEWAY_K8S_ENABLED=false`, `TOOL_GATEWAY_URL` unset) so existing behavior is preserved when not enabled.

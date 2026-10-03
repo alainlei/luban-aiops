@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: specs
-title: Luban Spec-Driven Development Registry
-scope:
-    - docs/specs/
-source_files: []
-depends_on: []
-related_to: []

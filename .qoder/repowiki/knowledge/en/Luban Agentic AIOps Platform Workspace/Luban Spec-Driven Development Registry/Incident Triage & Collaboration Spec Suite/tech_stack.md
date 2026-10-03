@@ -1,1 +1,0 @@
-Markdown-based spec format with YAML front-matter fields (`status`, `owner`, `created`, `approved`, `delivered`, `release slice`, `related ADRs`); schemas live in `shared/shared-contracts/schemas/`; policy actions declared against the deny-by-default engine in `shared/shared-contracts/policies/policy-default.yaml`.

@@ -1,5 +1,0 @@
-- Specs follow a fixed section order (Status, Summary, Motivation, Requirements with acceptance criteria, Non-Goals, Impact, Open Questions, Changelog) and mark status as `draft`/`approved`/`delivered`.
-- Each requirement is numbered R-N and paired with bullet-point acceptance criteria that are testable assertions rather than prose descriptions.
-- Open questions are resolved inline during draft/plan review and folded back into requirements, then listed as closed in the Open Questions section.
-- Cross-spec dependencies are declared via an `extends:` field pointing at the parent spec's path, establishing a linear extension chain (024 → 026 → 027).
-- Impact sections enumerate concrete product paths, contract schema files, and living-state docs to update, keeping delivery scope explicit.

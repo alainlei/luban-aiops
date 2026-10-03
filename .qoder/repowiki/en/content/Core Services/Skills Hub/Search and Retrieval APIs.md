@@ -13,7 +13,18 @@
 - [Skill format specification](file://shared/shared-contracts/skill-format.md)
 - [Route tests](file://products/skills-hub/tests/test_routes.py)
 - [Query auth tests](file://products/skills-hub/tests/test_query_auth.py)
+- [SPEC-066 spec](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md)
+- [SPEC-066 release notes](file://docs/agentic-aiops-platform/release-notes/2026-10-03-spec-066-skill-retrieval-ranking-fidelity.md)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated search endpoint documentation to reflect skill_id as a scored retrieval surface with TAG_WEIGHT (2.0)
+- Added comprehensive coverage of IDF weighting system with corpus-derived inverse document frequency
+- Documented bounded-staleness behavior for IDF weight refresh timing tied to sync cycles
+- Updated scoring algorithm description to include sublinear body-length normalization
+- Enhanced query tokenization documentation to cover query-side-only CamelCase splitting
+- Added new sections covering corpus statistics persistence and cross-backend parity guarantees
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -32,8 +43,11 @@ This document provides comprehensive API documentation for skill search and retr
 
 The Skills Hub ingests team-owned Markdown skills from federated sources, validates frontmatter, normalizes metadata, and serves deterministic ranked search results and full-record retrieval to platform consumers (primarily the tool-gateway).
 
+**Updated** The search endpoint now includes `skill_id` as a scored retrieval surface alongside title, tags, and body, with corpus-derived IDF weighting that refreshes on sync cycles rather than per-query.
+
 **Section sources**
 - [skills-hub README:1-74](file://products/skills-hub/README.md#L1-L74)
+- [SPEC-066 spec:75-86](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L75-L86)
 
 ## Project Structure
 The Skills Hub is organized into clear layers:
@@ -47,7 +61,8 @@ graph TB
 Client["Client (tool-gateway or operator portal)"] --> Router["FastAPI Router<br/>/api/v1/*"]
 Router --> Auth["Query Authentication<br/>Basic or Workload Bearer"]
 Router --> Store["SkillStore Protocol<br/>InMemory or Postgres"]
-Store --> Scorer["Scoring & Ranking<br/>title×3, tags×2, body×1"]
+Store --> Scorer["Scoring & Ranking<br/>title×3, tags×2, skill_id×2, body×1"]
+Store --> Stats["Corpus Statistics<br/>IDF weights (sync-time)"]
 Store --> DB["PostgreSQL<br/>GIN tsvector index"]
 Router --> Audit["Audit Emitter<br/>skill_searched / skill_retrieved"]
 ```
@@ -55,12 +70,12 @@ Router --> Audit["Audit Emitter<br/>skill_searched / skill_retrieved"]
 **Diagram sources**
 - [API routes (skills):1-215](file://products/skills-hub/src/skills_hub/api/routes/skills.py#L1-L215)
 - [Skill store implementation:30-67](file://products/skills-hub/src/skills_hub/services/skill_store.py#L30-L67)
-- [Deterministic scoring:1-97](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L97)
+- [Deterministic scoring:1-336](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L336)
 - [Query authentication:1-120](file://products/skills-hub/src/skills_hub/services/query_auth.py#L1-L120)
 
 **Section sources**
 - [API routes (skills):1-215](file://products/skills-hub/src/skills_hub/api/routes/skills.py#L1-L215)
-- [Skill store implementation:1-498](file://products/skills-hub/src/skills_hub/services/skill_store.py#L1-L498)
+- [Skill store implementation:1-658](file://products/skills-hub/src/skills_hub/services/skill_store.py#L1-L658)
 - [Skill schema model:1-66](file://products/skills-hub/src/skills_hub/schemas/skill.py#L1-L66)
 - [Skills settings:1-209](file://products/skills-hub/src/skills_hub/core/config.py#L1-L209)
 
@@ -79,18 +94,22 @@ Router --> Audit["Audit Emitter<br/>skill_searched / skill_retrieved"]
   - InMemorySkillStore for dev/tests.
   - PostgresSkillStore using GIN tsvector index for full-text search; re-ranks candidates with shared scorer for deterministic ordering.
 - Scoring:
-  - Deterministic keyword scoring with fixed weights: title ×3, tags ×2, body ×1 (capped occurrences).
+  - Deterministic keyword scoring with fixed weights: title ×3, tags ×2, skill_id ×2, body ×1 (capped occurrences).
+  - Corpus-derived IDF weighting applied to each token contribution.
+  - Sublinear body-length normalization dampens long documents.
   - Tie-break by skill_id ascending; zero-score records excluded.
 - Result shaping:
   - List returns summaries without body.
   - Search returns summaries plus score and excerpt (≤400 chars).
   - Get returns full record including body.
 
+**Updated** The scoring algorithm now includes skill_id as a fourth scored field at TAG_WEIGHT (2.0), corpus-derived IDF weighting, and sublinear body-length normalization.
+
 **Section sources**
 - [skills-hub README:35-41](file://products/skills-hub/README.md#L35-L41)
 - [API routes (skills):68-215](file://products/skills-hub/src/skills_hub/api/routes/skills.py#L68-L215)
 - [Skill store implementation:30-67](file://products/skills-hub/src/skills_hub/services/skill_store.py#L30-L67)
-- [Deterministic scoring:1-97](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L97)
+- [Deterministic scoring:1-336](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L336)
 - [Skill schema model:31-66](file://products/skills-hub/src/skills_hub/schemas/skill.py#L31-L66)
 
 ## Architecture Overview
@@ -111,9 +130,9 @@ R->>S : search(q, limit, source, tag)
 alt Postgres backend
 S->>D : SELECT ... WHERE (tsvector @@ tsquery OR tags match) AND filters
 D-->>S : candidate rows
-S->>S : rank(query, candidates, limit)
+S->>S : rank(query, candidates, limit, stats)
 else In-memory backend
-S->>S : filter + rank(query, records, limit)
+S->>S : filter + rank(query, records, limit, stats)
 end
 S-->>R : hits (score, excerpt)
 R->>M : record_search(), emit_audit_event("skill_searched")
@@ -123,7 +142,7 @@ R-->>C : {matches, total}
 **Diagram sources**
 - [API routes (skills):99-146](file://products/skills-hub/src/skills_hub/api/routes/skills.py#L99-L146)
 - [Skill store implementation:417-443](file://products/skills-hub/src/skills_hub/services/skill_store.py#L417-L443)
-- [Deterministic scoring:85-97](file://products/skills-hub/src/skills_hub/services/scoring.py#L85-L97)
+- [Deterministic scoring:302-336](file://products/skills-hub/src/skills_hub/services/scoring.py#L302-L336)
 - [Query authentication:107-120](file://products/skills-hub/src/skills_hub/services/query_auth.py#L107-L120)
 
 ## Detailed Component Analysis
@@ -177,6 +196,8 @@ Example response:
   - Zero matches returns 200 with empty matches array.
 - Audit: Emits skill_searched event with query details and result_count.
 
+**Updated** The search endpoint now scores skill_id as a fourth field at TAG_WEIGHT (2.0), applies corpus-derived IDF weighting, and uses sublinear body-length normalization.
+
 Example request:
 - GET /api/v1/skills/search?q=pod+events&limit=5&source=sre-alerting
 
@@ -185,7 +206,7 @@ Example response:
 
 **Section sources**
 - [API routes (skills):99-146](file://products/skills-hub/src/skills_hub/api/routes/skills.py#L99-L146)
-- [Deterministic scoring:28-52](file://products/skills-hub/src/skills_hub/services/scoring.py#L28-L52)
+- [Deterministic scoring:207-257](file://products/skills-hub/src/skills_hub/services/scoring.py#L207-L257)
 - [Route tests:138-176](file://products/skills-hub/tests/test_routes.py#L138-L176)
 
 #### GET /api/v1/skills/{source_id}/{slug}
@@ -291,12 +312,17 @@ MapClient --> Next
   - skills table with columns for skill identity, metadata, body, and optional executable-flow fields.
   - GIN index on tsvector(title || ' ' || body) for full-text search.
   - Index on source_id for efficient filtering.
+  - New idx_skills_search_v2 index covering skill_id with separator normalization.
 - Search strategy:
   - Pre-filter candidates using PostgreSQL full-text match (OR-joined lexemes) combined with source/tag filters.
-  - Re-rank candidates deterministically using shared scorer (title ×3, tags ×2, body ×1 with occurrence cap).
+  - Re-rank candidates deterministically using shared scorer (title ×3, tags ×2, skill_id ×2, body ×1 with occurrence cap).
+  - Apply corpus-derived IDF weighting to each token contribution.
+  - Apply sublinear body-length normalization to dampen long documents.
   - Tie-break by skill_id ascending; return top N limited by request.
 - List strategy:
   - Apply source/tag filters, count total, then paginate by skill_id order.
+
+**Updated** The search strategy now includes skill_id scoring, corpus-derived IDF weighting, and sublinear body-length normalization.
 
 ```mermaid
 classDiagram
@@ -307,6 +333,7 @@ class SkillStore {
 +get(skill_id)
 +list(offset, limit, source, tag)
 +search(query, limit, source, tag)
++refresh_statistics()
 +count()
 +ready()
 +close()
@@ -331,10 +358,21 @@ SkillStore <|.. PostgresSkillStore
 - Weights:
   - Title match: 3.0 per token.
   - Tag match: 2.0 per token.
+  - skill_id match: 2.0 per token (fourth scored field).
   - Body match: 1.0 per token, capped at 5 occurrences per token.
+- IDF Weighting:
+  - Each token contribution scaled by corpus-derived inverse document frequency.
+  - Formula: ln((1+N)/(1+df))+1 where N is document count and df is document frequency.
+  - No stoplist; high-frequency tokens like "the" are down-weighted automatically.
+  - Statistics computed in Python at sync time and persisted across restarts.
+- Sublinear Length Normalization:
+  - Body contribution damped by factor: 1/log2(2 + len(body)/1000).
+  - Prevents long documents from outranking short ones based on occurrence count alone.
 - Filtering: Zero-score records excluded.
 - Ordering: Descending score, then ascending skill_id for deterministic tie-breaking.
 - Excerpts: Up to 400 characters around the first matched region in body; fallback to description head if match only in title/tags.
+
+**Updated** The scoring algorithm now includes skill_id as a scored field, corpus-derived IDF weighting, and sublinear body-length normalization.
 
 ```mermaid
 flowchart TD
@@ -342,20 +380,43 @@ Start(["Search input"]) --> Tokenize["Tokenize query"]
 Tokenize --> HasTokens{"Any tokens?"}
 HasTokens --> |No| ReturnEmpty["Return []"]
 HasTokens --> |Yes| CandidateSet["Candidate set from store<br/>with source/tag filters"]
-CandidateSet --> Score["Score each candidate<br/>title×3, tags×2, body×1 (cap)"]
+CandidateSet --> Score["Score each candidate<br/>title×3, tags×2, skill_id×2, body×1 (cap)<br/>× IDF(token) × length_norm"]
 Score --> FilterZero["Filter zero scores"]
-FilterZero --> Sort["Sort by (-score, skill_id)"]
-Sort --> Cap["Cap to limit"]
+Sort["Sort by (-score, skill_id)"]
+Cap["Cap to limit"]
 Cap --> ReturnHits["Return hits with excerpts"]
 ```
 
 **Diagram sources**
-- [Deterministic scoring:28-52](file://products/skills-hub/src/skills_hub/services/scoring.py#L28-L52)
-- [Deterministic scoring:55-75](file://products/skills-hub/src/skills_hub/services/scoring.py#L55-L75)
-- [Deterministic scoring:85-97](file://products/skills_hub/src/skills_hub/services/scoring.py#L85-L97)
+- [Deterministic scoring:207-257](file://products/skills-hub/src/skills_hub/services/scoring.py#L207-L257)
+- [Deterministic scoring:302-336](file://products/skills-hub/src/skills_hub/services/scoring.py#L302-L336)
 
 **Section sources**
-- [Deterministic scoring:1-97](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L97)
+- [Deterministic scoring:1-336](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L336)
+
+### Corpus Statistics and IDF Weighting
+- Statistics Computation:
+  - Full-catalog pass over all skills using the same tokenizer as scoring.
+  - Computes document count (N) and document frequency (df) for each token.
+  - Uses document-side tokenizer (unsplit) to maintain parity with PostgreSQL lexemes.
+- Persistence:
+  - In-memory stores keep statistics in process memory.
+  - PostgreSQL stores persist statistics in skills_corpus_stats table.
+  - Statistics loaded on startup from persistent storage.
+- Refresh Timing:
+  - Triggered after each successful replace_source operation.
+  - Bounded staleness: statistics lag catalog changes by at most one sync interval (SKILLS_SYNC_INTERVAL_SECONDS, default 300).
+  - Global scope: per-source swap invalidates all statistics requiring full catalog recomputation.
+- Graceful Degradation:
+  - Unrefreshed stores use EMPTY_STATS with neutral IDF values (idf = 1.0).
+  - Scores degrade gracefully to plain field weighting until statistics are available.
+
+**New Section** Coverage of the corpus-derived IDF weighting system introduced in SPEC-066.
+
+**Section sources**
+- [Deterministic scoring:135-192](file://products/skills-hub/src/skills_hub/services/scoring.py#L135-L192)
+- [Skill store implementation:167-172](file://products/skills-hub/src/skills_hub/services/skill_store.py#L167-L172)
+- [Skill store implementation:492-523](file://products/skills-hub/src/skills_hub/services/skill_store.py#L492-L523)
 
 ### Data Models and Schema
 - Skill envelope:
@@ -382,6 +443,7 @@ Cap --> ReturnHits["Return hits with excerpts"]
 - Store backends depend on:
   - PostgreSQL driver (psycopg v3) for PostgresSkillStore.
   - Shared scorer for consistent ranking across backends.
+  - Corpus statistics for IDF weighting.
 - Settings drive:
   - Backend selection (memory/postgres).
   - Database URL requirement for postgres backend.
@@ -392,6 +454,7 @@ graph LR
 Routes["API Routes"] --> Auth["QueryAuth"]
 Routes --> Store["SkillStore"]
 Store --> Scorer["Scoring"]
+Store --> Stats["CorpusStats"]
 Store --> PG["PostgreSQL"]
 Routes --> Audit["Audit Emitter"]
 Settings["SkillsSettings"] --> Store
@@ -413,6 +476,7 @@ Settings --> Auth
   - PostgreSQL GIN tsvector index accelerates full-text pre-filtering.
   - Tags are filtered at query time due to STABLE function constraints in index expressions.
   - Re-ranking in Python ensures deterministic ordering independent of database-specific ranking.
+  - New idx_skills_search_v2 index covers skill_id with separator normalization.
 - Pagination:
   - List uses OFFSET/LIMIT with stable sort by skill_id to ensure consistent pages.
 - Limits:
@@ -422,11 +486,12 @@ Settings --> Auth
 - Caching:
   - No application-level cache for search results; rely on database index and small result sets.
   - JWKS clients cached per issuer URL to reduce network overhead during workload token validation.
+  - Corpus statistics persisted to avoid per-query computation overhead.
 - Monitoring:
   - Metrics recorded for search operations.
   - Usage audit events emitted for skill_searched and skill_retrieved, correlated by x-request-id.
 
-[No sources needed since this section provides general guidance]
+**Updated** Added coverage of corpus statistics persistence and new index optimizations.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -440,9 +505,15 @@ Common issues and resolutions:
 - 404 SKILL_NOT_FOUND:
   - Confirm skill_id follows source_id/slug format and exists in the store.
 - Empty search results:
-  - Verify query tokens exist in title/tags/body; consider adjusting query terms or ensuring tags are present and correctly cased.
+  - Verify query tokens exist in title/tags/body/skill_id; consider adjusting query terms or ensuring tags are present and correctly cased.
+  - Check if corpus statistics have been refreshed; unrefreshed stores fall back to neutral IDF weighting.
+- Stale search results:
+  - IDF weights have bounded staleness tied to sync cycles; wait for next sync interval (default 300 seconds) for updated statistics.
+  - Manual refresh can be triggered via refresh_statistics() method.
 - Audit correlation:
   - Include x-request-id in requests to correlate skill_searched/skill_retrieved events with upstream tool_invoked events.
+
+**Updated** Added troubleshooting guidance for corpus statistics and bounded staleness behavior.
 
 **Section sources**
 - [API routes (skills):40-44](file://products/skills-hub/src/skills_hub/api/routes/skills.py#L40-L44)
@@ -455,7 +526,7 @@ Common issues and resolutions:
 ## Conclusion
 The Skills Hub provides secure, deterministic search and retrieval for team-owned skills through well-defined REST endpoints. The combination of PostgreSQL full-text indexing and a shared deterministic scorer ensures fast, predictable results. Authentication supports both static credentials and projected workload tokens, enabling flexible integration patterns. Operators can monitor search effectiveness via metrics and audit events, and tune performance using appropriate limits, indexes, and backend selection.
 
-[No sources needed since this section summarizes without analyzing specific files]
+**Updated** The search endpoint now includes skill_id as a scored retrieval surface, corpus-derived IDF weighting with bounded staleness, and sublinear body-length normalization for improved ranking fidelity.
 
 ## Appendices
 
@@ -492,16 +563,26 @@ The Skills Hub provides secure, deterministic search and retrieval for team-owne
 
 ### Advanced Search Capabilities
 - Full-text search:
-  - Uses PostgreSQL tsvector over title and body; OR-joined lexemes to avoid strict AND semantics.
+  - Uses PostgreSQL tsvector over title, body, and skill_id; OR-joined lexemes to avoid strict AND semantics.
+  - New idx_skills_search_v2 index covers skill_id with separator normalization.
 - Metadata filtering:
   - Source and tag filters applied before ranking; tag matching is case-insensitive exact.
 - Version-specific queries:
   - Version field is stored but not used as a search filter in current endpoints; clients can post-process results by version if needed.
+- Corpus-derived IDF weighting:
+  - Each token contribution scaled by inverse document frequency computed over the entire corpus.
+  - High-frequency tokens automatically down-weighted without explicit stoplists.
+  - Statistics refreshed on sync cycles with bounded staleness.
+- Sublinear body-length normalization:
+  - Long documents receive reduced body contribution scores to prevent them from outranking shorter, more relevant content.
+
+**Updated** Added coverage of corpus-derived IDF weighting and sublinear body-length normalization.
 
 **Section sources**
 - [Skill store implementation:244-249](file://products/skills-hub/src/skills_hub/services/skill_store.py#L244-L249)
 - [Skill store implementation:445-463](file://products/skills-hub/src/skills_hub/services/skill_store.py#L445-L463)
 - [Skill JSON schema:53-57](file://shared/shared-contracts/schemas/skill.schema.json#L53-L57)
+- [Deterministic scoring:135-192](file://products/skills-hub/src/skills_hub/services/scoring.py#L135-L192)
 
 ### Rate Limiting Policies
 - Endpoint-level caps:
@@ -514,3 +595,19 @@ The Skills Hub provides secure, deterministic search and retrieval for team-owne
 - [API routes (skills):30-33](file://products/skills-hub/src/skills_hub/api/routes/skills.py#L30-L33)
 - [API routes (skills):81-86](file://products/skills-hub/src/skills_hub/api/routes/skills.py#L81-L86)
 - [API routes (skills):114-119](file://products/skills-hub/src/skills_hub/api/routes/skills.py#L114-L119)
+
+### SPEC-066 Changes Summary
+The search endpoint has been enhanced with four lexical fidelity fixes:
+
+1. **skill_id as scored retrieval surface**: The slug is now a fourth scored field at TAG_WEIGHT (2.0), improving identifier-owner recovery.
+2. **Corpus-derived IDF weighting**: Each token contribution is scaled by inverse document frequency computed over the entire corpus at sync time.
+3. **Sublinear body-length normalization**: Long documents receive reduced body contribution scores to prevent them from outranking shorter content.
+4. **Query-side-only CamelCase splitting**: Query tokens are split while document tokens remain unsplit, maintaining cross-backend parity.
+
+These changes improve search relevance while maintaining byte-identical ordering between in-memory and PostgreSQL backends.
+
+**New Section** Summary of SPEC-066 changes affecting the search endpoint.
+
+**Section sources**
+- [SPEC-066 spec:75-86](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L75-L86)
+- [SPEC-066 release notes:36-81](file://docs/agentic-aiops-platform/release-notes/2026-10-03-spec-066-skill-retrieval-ranking-fidelity.md#L36-L81)

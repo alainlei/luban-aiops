@@ -1,1 +1,0 @@
-Specification documents (SPEC-001, SPEC-003, SPEC-009) defining the Release 1 security hardening of Luban's gateway, identity broker, and agent platform.

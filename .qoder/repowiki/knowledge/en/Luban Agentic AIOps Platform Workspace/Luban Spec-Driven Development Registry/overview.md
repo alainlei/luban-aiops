@@ -1,1 +1,0 @@
-Central registry of numbered, tiered specification documents that govern Luban's feature lifecycle, tying requirements, plans, and tasks to code via shared templates and the `make verify` gate.

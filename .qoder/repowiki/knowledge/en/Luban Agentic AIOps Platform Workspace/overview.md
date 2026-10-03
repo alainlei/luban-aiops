@@ -1,1 +1,1 @@
-Monorepo orchestrating Luban's Python services, operator portal, shared contracts, GitOps overlays, specs, and samples under a single Makefile-driven build, verify, and deploy pipeline.
+Monorepo for the Luban agentic AIOps platform, containing six Python services, an operator portal, shared contracts, sample applications, specs, and GitOps/operator tooling.

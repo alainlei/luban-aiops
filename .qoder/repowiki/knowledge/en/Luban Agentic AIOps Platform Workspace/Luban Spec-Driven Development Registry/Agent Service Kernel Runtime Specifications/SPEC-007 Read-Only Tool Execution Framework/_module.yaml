@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: specs/agent_service_kernel_runtime/tool_execution_framework
-title: SPEC-007 Read-Only Tool Execution Framework
-scope:
-    - docs/specs/SPEC-007-tool-execution-framework/
-source_files: []
-depends_on: []
-related_to:
-    - path: specs/bounded_mutating_actions

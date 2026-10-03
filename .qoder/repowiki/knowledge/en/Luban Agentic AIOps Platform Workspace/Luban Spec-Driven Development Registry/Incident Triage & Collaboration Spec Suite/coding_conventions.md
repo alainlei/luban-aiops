@@ -1,5 +1,0 @@
-- Each spec directory ships a fixed plan/spec/tasks triple, with the spec file carrying YAML front-matter metadata followed by numbered Requirements (R-N) sections, each ending with bulleted Acceptance criteria.
-- Specs explicitly enumerate Non-Goals and Impact sections listing every product touched, contract/schema changed, identity/policy/audit surface altered, and living-state docs to update on delivery.
-- Cross-spec dependencies are declared in the Related ADRs field and referenced inline (e.g., SPEC-045 cites SPEC-043's incident client and SPEC-015's triage sessions) rather than redefining contracts.
-- Policy gates are expressed as combinations of existing actions (e.g., `documents:create` + `incident:read` for incident reports, `incident:skill_draft` + `incident:read` for drafts) instead of introducing new resource verbs when reuse is possible.
-- Failure paths are specified deterministically: missing configuration returns 503, unreachable upstream returns 502, unknown ids return 404, and precondition failures (no validated triage) return structured 409 — generation never raises 500.

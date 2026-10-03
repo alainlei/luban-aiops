@@ -1,4 +1,0 @@
-- Each requirement block pairs a numbered requirement statement with explicit acceptance criteria written as testable 'X does Y' assertions rather than prose goals.
-- New capabilities introduce a dedicated deny-by-default policy action (e.g. `chat:confirm`, `approvals:list`) added to `policy-default.yaml` and propagated through `make sync-policy`, with observers explicitly excluded.
-- Specs record post-delivery deviations and live-hardening fixes in a running Changelog section instead of patching the requirements, preserving the original acceptance criteria as the stable contract.
-- Impact sections enumerate products touched, shared-contract schemas changed, identity/policy/audit execution-safety implications, and living-state docs to update, keeping cross-cutting side effects visible at a glance.

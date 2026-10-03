@@ -27,15 +27,25 @@
 - [adhoc-password-reset README](file://samples/acme-admin/adhoc-password-reset/README.md)
 - [adhoc-password-reset WALKTHROUGH](file://samples/acme-admin/adhoc-password-reset/WALKTHROUGH.md)
 - [demo-suite.sh](file://samples/acme-admin/demo-suite.sh)
+- [SPEC-066 spec](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md)
+- [SPEC-066 plan](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md)
+- [SPEC-066 tasks](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/tasks.md)
+- [SPEC-066 delivery release note](file://docs/agentic-aiops-platform/release-notes/2026-10-03-spec-066-skill-retrieval-ranking-fidelity.md)
+- [test_parity.py](file://products/skills-hub/tests/test_parity.py)
+- [test_evaluation.py](file://products/skills-hub/tests/test_evaluation.py)
+- [conftest.py](file://products/skills-hub/tests/conftest.py)
+- [eval_harness.py](file://products/skills-hub/tests/support/eval_harness.py)
+- [corpus.py](file://products/skills-hub/tests/support/corpus.py)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Enhanced the skills guide with conversational-first interaction patterns that allow operators to ask for runbooks naturally without naming specific skills
-- Improved operator guidance for password reset workflows with detailed walkthroughs for both bound flow and unbound per-action approval models
-- Added comprehensive documentation for the complete approval model triad including enhanced examples demonstrating ad-hoc per-action approval and develop-as-you-go graduation workflows
-- Updated skill pattern examples to include both bound flow and unbound per-action approval models with improved operator guidance
-- Enhanced password reset workflow documentation with better separation between flow cards and action cards
+- Updated the skills hub service documentation to reflect SPEC-066 delivery: enhanced lexical ranking fidelity with four measured fixes (skill_id scoring, corpus-derived IDF weighting, sublinear body-length normalization, and query-side CamelCase splitting)
+- Added comprehensive coverage of the new evaluation framework including R-8 merge gate with real PostgreSQL measurement through the prefilter path
+- Documented the enforced cross-backend parity harness (R-6) that ensures byte-identical ordering and scores across InMemory and Postgres backends
+- Updated search and ranking section with new scoring algorithm details, CorpusStats persistence, and de-duplication guardrail
+- Enhanced troubleshooting guide with SPEC-066-specific issues including index migration and parity test failures
+- Updated performance considerations to reflect GIN index changes and latency measurements on real PostgreSQL 16
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -56,10 +66,12 @@ The system now includes comprehensive examples through the ACME Admin sample app
 
 **Updated** The skills system now supports conversational-first interactions where operators can ask for guidance naturally without needing to know or specify exact skill IDs. The agent uses `skills.search` to find relevant runbooks based on intent rather than requiring explicit naming.
 
+**Updated** With SPEC-066 delivery, the skills-hub service now features enhanced lexical ranking fidelity with four measured improvements: skill_id slug scoring, corpus-derived IDF weighting, sublinear body-length normalization, and query-side CamelCase splitting. These changes improve search accuracy while maintaining byte-identical results across different storage backends through an enforced parity harness.
+
 ## Project Structure
 The skills system spans several components:
 - Skill format contract defines the Markdown + YAML frontmatter schema consumed by ingestion.
-- skills-hub ingests skills from local directories or Git repositories, validates them, stores them, and exposes search/list/get endpoints.
+- skills-hub ingests skills from local directories or Git repositories, validates them, stores them, and exposes search/list/get endpoints with enhanced ranking.
 - tool-gateway exposes read-only skills tools to agents (skills.search, skills.get, skills.list).
 - agent-platform captures approved authoring traces and supports drafting and graduating executable-flow skills.
 - platform-gateway enforces policy and proxies draft/graduation requests to the agent service.
@@ -74,23 +86,33 @@ end
 subgraph "Ingestion & Storage"
 C["skills-hub<br/>ingest_directory()"]
 D["Skill store<br/>InMemory / Postgres"]
-E["Scorer<br/>rank(), score()"]
+E["Scorer<br/>rank(), score() with IDF"]
+F["CorpusStats<br/>Sync-time statistics"]
 end
 subgraph "Consumption"
-F["tool-gateway<br/>skills.* tools"]
-G["Agent runtime"]
+G["tool-gateway<br/>skills.* tools"]
+H["Agent runtime"]
 end
 subgraph "Graduation"
-H["agent-platform<br/>skill_graduation.py"]
-I["platform-gateway<br/>sessions routes"]
+I["agent-platform<br/>skill_graduation.py"]
+J["platform-gateway<br/>sessions routes"]
+end
+subgraph "Evaluation & Testing"
+K["Parity Harness<br/>test_parity.py"]
+L["Evaluation Framework<br/>test_evaluation.py"]
+M["Real PostgreSQL<br/>conftest.py"]
 end
 A --> C --> D
 B --> C
 D --> E
-F --> D
-G --> F
-I --> H
-H --> A
+E --> F
+G --> D
+H --> G
+J --> I
+I --> A
+K --> D
+L --> D
+M --> K
 ```
 
 **Diagram sources**
@@ -100,6 +122,8 @@ H --> A
 - [skills_connector.py:219-250](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py#L219-L250)
 - [skill_graduation.py:587-664](file://products/agent-platform/src/agent_service/services/skill_graduation.py#L587-L664)
 - [sessions routes:267-322](file://products/platform-gateway/src/platform_gateway/api/routes/sessions.py#L267-L322)
+- [test_parity.py:1-151](file://products/skills-hub/tests/test_parity.py#L1-L151)
+- [test_evaluation.py:1-483](file://products/skills-hub/tests/test_evaluation.py#L1-L483)
 
 **Section sources**
 - [skills-guide.md:12-35](file://docs/guides/skills-guide.md#L12-L35)
@@ -110,21 +134,25 @@ H --> A
 - Skill Format v2: Markdown with YAML frontmatter; optional executable-flow steps; strict validation rules and size caps.
 - Ingestion pipeline: walks source directories, parses frontmatter, validates against the contract, builds records, and returns rejections.
 - Store backends: in-memory for dev/test; PostgreSQL for production with full-text search index and per-source atomic replacement.
-- Search and ranking: deterministic keyword scoring with title/tag/body weights and bounded excerpts.
+- **Enhanced Search and Ranking**: deterministic keyword scoring with title/tag/body/skill_id weights, corpus-derived IDF weighting, sublinear body-length normalization, and query-side CamelCase splitting.
 - Agent tools: read-only skills tools exposed via tool-gateway, returning ranked matches and evidence.
 - Graduation: deterministic rendering of an approved authoring trace into an executable-flow skill draft with blast-radius re-validation and human merge.
+- **Evaluation Framework**: R-8 merge gate with real PostgreSQL measurement through the prefilter path, ensuring shipped behavior matches measured outcomes.
+- **Cross-Backend Parity**: R-6 enforced harness ensuring byte-identical ordering and scores across InMemory and Postgres backends.
 - Sample applications: ACME Admin provides six complete skill examples demonstrating different approval models including flow cards, action cards, and graduation workflows.
 
 **Section sources**
 - [skill-format.md:1-203](file://shared/shared-contracts/skill-format.md#L1-L203)
 - [ingestion.py:1-113](file://products/skills-hub/src/skills_hub/services/ingestion.py#L1-L113)
 - [skill_store.py:158-200](file://products/skills-hub/src/skills_hub/services/skill_store.py#L158-L200)
-- [scoring.py:1-97](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L97)
+- [scoring.py:1-336](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L336)
 - [skills_connector.py:219-250](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py#L219-L250)
 - [skill_graduation.py:1-42](file://products/agent-platform/src/agent_service/services/skill_graduation.py#L1-L42)
 
 ## Architecture Overview
 Skills flow from team-authored Markdown into a validated catalog, then are consumed by agents through gateway tools. Executable flows can be graduated from approved session traces into production-ready skills after quality gates. The ACME Admin sample demonstrates how different approval models integrate with this architecture.
+
+**Updated** The architecture now includes enhanced evaluation and parity testing infrastructure that ensures the improved lexical ranking works correctly across all storage backends.
 
 ```mermaid
 sequenceDiagram
@@ -132,17 +160,22 @@ participant Author as "Author"
 participant ACME as "ACME Samples"
 participant Hub as "skills-hub"
 participant Store as "Skill Store"
+participant Scorer as "Enhanced Scorer"
 participant GW as "tool-gateway"
 participant Agent as "Agent runtime"
 participant PlatGW as "platform-gateway"
 participant AgentSvc as "agent-service"
+participant Eval as "Evaluation Framework"
 Author->>Hub : Sync local dir or git repo
 ACME->>Hub : Deploy sample skills
 Hub->>Hub : ingest_directory() validate_document()
 Hub->>Store : replace_source(source_id, records)
+Store->>Scorer : compute_stats() refresh_statistics()
 Agent->>GW : skills.search(q, limit)
 GW->>Hub : GET /api/v1/skills/search
 Hub->>Store : search(query, limit)
+Store->>Scorer : rank(query, candidates, stats)
+Scorer-->>Store : ranked hits with IDF weighting
 Store-->>Hub : ranked hits
 Hub-->>GW : matches + total
 GW-->>Agent : ToolResult(matches, evidence)
@@ -151,6 +184,9 @@ Author->>PlatGW : POST /sessions/{id}/skill-graduate
 PlatGW->>AgentSvc : graduate_session_skill(...)
 AgentSvc->>AgentSvc : revalidate_blast_radius()
 AgentSvc-->>PlatGW : draft markdown (human review)
+Note over Eval,Store : Evaluation runs through real PostgreSQL
+Eval->>Store : search() with prefilter in path
+Store-->>Eval : measured results
 ```
 
 **Diagram sources**
@@ -160,6 +196,7 @@ AgentSvc-->>PlatGW : draft markdown (human review)
 - [skills_connector.py:219-250](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py#L219-L250)
 - [skill_graduation.py:217-497](file://products/agent-platform/src/agent_service/services/skill_graduation.py#L217-L497)
 - [sessions routes:267-322](file://products/platform-gateway/src/platform_gateway/api/routes/sessions.py#L267-L322)
+- [test_evaluation.py:428-483](file://products/skills-hub/tests/test_evaluation.py#L428-L483)
 
 ## Detailed Component Analysis
 
@@ -224,35 +261,53 @@ Next --> End(["Return IngestResult"])
 - [validate.py:1-48](file://products/skills-hub/src/skills_hub/validate.py#L1-L48)
 - [ingestion.py:476-559](file://products/skills-hub/src/skills_hub/services/ingestion.py#L476-L559)
 
-### Search, Ranking, and Retrieval API
-- Search endpoint: GET /api/v1/skills/search?q=... with optional source/tag filters and capped limit.
-- Ranking is deterministic: tokenized query scored against title (×3), tags (×2), body occurrences (×1, capped). Zero-score results excluded; ties broken by skill_id ascending.
-- Postgres backend pre-filters candidates using tsvector and re-ranks in Python to match in-memory behavior.
+### Enhanced Search, Ranking, and Retrieval API
+**Updated** The search and ranking system has been significantly enhanced with SPEC-066's four measured lexical fixes:
+
+- **Search endpoint**: GET /api/v1/skills/search?q=... with optional source/tag filters and capped limit.
+- **Four Measured Fixes**:
+  - **R-1**: Score the `skill_id` slug at tag weight (×2) for identifier-owner recovery
+  - **R-2**: Corpus-derived IDF weighting using `ln((1+N)/(1+df))+1` formula
+  - **R-3**: Sublinear body-length normalization `1/log2(2 + len(body)/1000)`
+  - **R-4**: Query-side CamelCase splitting while keeping document side unsplit
+- **Deterministic Ranking**: Tokenized query scored against title (×3), tags (×2), skill_id (×2), body occurrences (×1, capped), with corpus-derived IDF scaling and bounded excerpts. Zero-score results excluded; ties broken by skill_id ascending.
+- **Postgres Backend**: Pre-filters candidates using tsvector with widened expression covering skill_id, then re-ranks in Python to match in-memory behavior.
+- **De-duplication Guardrail**: R-7 collapses byte-identical bodies before sorting and truncation, retaining lowest skill_id.
 
 ```mermaid
 classDiagram
 class Scoring {
 +tokenize(text) list[str]
-+score(query, skill) float
++tokenize_query(query) list[str]
++score(query, skill, stats) float
 +excerpt(query, skill) str
-+rank(query, records, limit) list[SearchHit]
++rank(query, records, limit, stats) list[SearchHit]
++compute_stats(skills) CorpusStats
++body_md5(skill) str
+}
+class CorpusStats {
++n : int
++df : Mapping[str, int]
++idf(token) float
 }
 class SkillStore {
 +search(query, limit, source, tag) list[SearchHit]
 +list(offset, limit, source, tag) tuple[list[Skill], int]
 +get(skill_id) Skill?
++refresh_statistics() None
 }
 Scoring <.. SkillStore : "used by"
+CorpusStats --> Scoring : "passed to score/rank"
 ```
 
 **Diagram sources**
-- [scoring.py:28-97](file://products/skills-hub/src/skills_hub/services/scoring.py#L28-L97)
+- [scoring.py:28-336](file://products/skills-hub/src/skills_hub/services/scoring.py#L28-L336)
 - [skill_store.py:137-145](file://products/skills-hub/src/skills_hub/services/skill_store.py#L137-L145)
 - [skill_store.py:417-443](file://products/skills-hub/src/skills_hub/services/skill_store.py#L417-L443)
 
 **Section sources**
 - [skills routes:99-146](file://products/skills-hub/src/skills_hub/api/routes/skills.py#L99-L146)
-- [scoring.py:1-97](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L97)
+- [scoring.py:1-336](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L336)
 - [skill_store.py:158-200](file://products/skills-hub/src/skills_hub/services/skill_store.py#L158-L200)
 
 ### Agent Consumption via tool-gateway
@@ -278,6 +333,52 @@ GW-->>Agent : ToolResult(status="success", data={matches,total}, evidence)
 **Section sources**
 - [skills_connector.py:219-250](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py#L219-L250)
 - [test_skills_connector.py:87-135](file://products/tool-gateway/tests/test_skills_connector.py#L87-L135)
+
+### Evaluation Framework and Cross-Backend Parity
+**New Section** SPEC-066 introduces comprehensive evaluation infrastructure to ensure the enhanced ranking works correctly across all storage backends:
+
+#### R-6 Enforced Cross-Backend Parity Harness
+- **Purpose**: Ensures byte-identical ordering and numeric scores across InMemory and Postgres backends
+- **Implementation**: Real PostgreSQL 16 instance provisioned lazily, failing loudly without Docker
+- **Query Set**: Union of 63-query audit pool and 18 authored stratum-C paraphrases (81 distinct queries)
+- **Invariant**: Preserved as written — no narrowing for semantic retrieval since this is lexical only
+
+#### R-8 Evaluation Merge Gate
+- **Purpose**: Re-measures the evaluation against committed label fixture through the Postgres backend
+- **Measurement**: Drives store's async `search()` method so the `to_tsvector` prefilter is inside the measured path
+- **Baseline**: Frozen V0 baseline (19/38 combined top-1 grade 2) vs shipped scorer (24/38)
+- **Significance**: Paired bootstrap over queries (10,000 resamples, seed 20261001) giving 95% CIs on per-query metric deltas
+
+```mermaid
+sequenceDiagram
+participant Test as "Test Suite"
+participant Memory as "InMemorySkillStore"
+participant Postgres as "PostgresSkillStore"
+participant Harness as "Evaluation Harness"
+participant Labels as "Label Fixture"
+Test->>Harness : Load graded set (38 queries × 18 docs)
+Harness->>Labels : Verify corpus MD5
+Test->>Memory : Build store from corpus
+Test->>Postgres : Build store from corpus
+Harness->>Memory : search(query, depth) for each query
+Harness->>Postgres : search(query, depth) for each query
+Memory-->>Harness : Ranked results
+Postgres-->>Harness : Ranked results
+Harness->>Harness : Compare ordering + scores
+Harness-->>Test : Assert identical results
+```
+
+**Diagram sources**
+- [test_parity.py:111-151](file://products/skills-hub/tests/test_parity.py#L111-L151)
+- [test_evaluation.py:428-483](file://products/skills-hub/tests/test_evaluation.py#L428-L483)
+- [conftest.py:1-29](file://products/skills-hub/tests/conftest.py#L1-L29)
+
+**Section sources**
+- [test_parity.py:1-151](file://products/skills-hub/tests/test_parity.py#L1-L151)
+- [test_evaluation.py:1-483](file://products/skills-hub/tests/test_evaluation.py#L1-L483)
+- [conftest.py:1-29](file://products/skills-hub/tests/conftest.py#L1-L29)
+- [eval_harness.py:1-29](file://products/skills-hub/tests/support/eval_harness.py#L1-L29)
+- [corpus.py:129-166](file://products/skills-hub/tests/support/corpus.py#L129-L166)
 
 ### Graduation Workflow and Quality Gates
 - Draft creation: agent-service builds a validated skill draft from a session or incident; validation runs on skills-hub's code path before returning.
@@ -470,8 +571,9 @@ Note over LUL,US : Same revision proves single store
 ## Dependency Analysis
 - skills-hub depends on:
   - Ingestion module for parsing and validating skills.
-  - Scorer for deterministic ranking.
+  - **Enhanced scorer** for deterministic ranking with IDF weighting and CamelCase splitting.
   - Store backends (in-memory or PostgreSQL) for persistence and retrieval.
+  - **Evaluation framework** for parity testing and measurement through real PostgreSQL.
 - tool-gateway depends on skills-hub via HTTP for skills tools.
 - agent-platform depends on authoring trace store and graduation logic to produce executable-flow drafts.
 - platform-gateway enforces policy and proxies to agent-service for draft/graduation endpoints.
@@ -481,17 +583,20 @@ Note over LUL,US : Same revision proves single store
 graph LR
 Ing["ingestion.py"] --> Sch["schemas/skill.schema.json"]
 Ing --> Store["skill_store.py"]
-Store --> Score["scoring.py"]
+Store --> Score["scoring.py (enhanced)"]
+Store --> Stats["CorpusStats (sync-time)"]
 Tools["skills_connector.py"] --> Store
 PlatGW["platform-gateway sessions routes"] --> AgentSvc["agent-service skill_graduation.py"]
 AgentSvc --> Trace["authoring_trace.py"]
 ACME["ACME Samples"] --> Ing
+Eval["evaluation framework"] --> Store
+Parity["parity harness"] --> Store
 ```
 
 **Diagram sources**
 - [ingestion.py:1-113](file://products/skills-hub/src/skills_hub/services/ingestion.py#L1-L113)
 - [skill_store.py:1-67](file://products/skills-hub/src/skills_hub/services/skill_store.py#L1-L67)
-- [scoring.py:1-97](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L97)
+- [scoring.py:1-336](file://products/skills-hub/src/skills_hub/services/scoring.py#L1-L336)
 - [skills_connector.py:219-250](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py#L219-L250)
 - [sessions routes:267-322](file://products/platform-gateway/src/platform_gateway/api/routes/sessions.py#L267-L322)
 - [skill_graduation.py:587-664](file://products/agent-platform/src/agent_service/services/skill_graduation.py#L587-L664)
@@ -504,10 +609,14 @@ ACME["ACME Samples"] --> Ing
 - [authoring_trace.py:1-48](file://products/agent-platform/src/agent_service/services/authoring_trace.py#L1-L48)
 
 ## Performance Considerations
-- Search performance: Postgres uses GIN tsvector index on title||body; tags filtered separately due to STABLE functions; final ranking done in Python for determinism.
-- Limits: search limit capped at 20; list limit capped at 100; excerpts bounded to 400 chars; steps capped at 200 and 64 KiB serialized.
-- Ingestion: atomic per-source replacement ensures readers always see consistent snapshots; failed syncs do not poison healthy sources.
-- Graduation: blast-radius checks run before rendering to avoid producing un-replayable artifacts; large arguments elided in runbook to respect body cap.
+- **Search performance**: Postgres uses GIN tsvector index on title||body with skill_id included; tags filtered separately due to STABLE functions; final ranking done in Python for determinism.
+- **Index Migration**: New `idx_skills_search_v2` replaces old index (+8,192 bytes at 18 rows); old index retained for one release.
+- **Measured Latency**: End-to-end search latency on Postgres path is p50 19.077 ms / p95 24.849 ms, well within tool-gateway's 10.0 s timeout.
+- **Limits**: search limit capped at 20; list limit capped at 100; excerpts bounded to 400 chars; steps capped at 200 and 64 KiB serialized.
+- **Ingestion**: atomic per-source replacement ensures readers always see consistent snapshots; failed syncs do not poison healthy sources.
+- **IDF Statistics**: Computed in Python at sync time over whole catalog; refresh is full catalog pass but cheap against sync's git clone.
+- **Graduation**: blast-radius checks run before rendering to avoid producing un-replayable artifacts; large arguments elided in runbook to respect body cap.
+- **Evaluation**: R-8 measures through real PostgreSQL with prefilter in path; R-6 parity harness fails loudly without Docker.
 - ACME Admin samples demonstrate performance considerations including connection pooling, response caching, and efficient browser automation.
 
 ## Troubleshooting Guide
@@ -519,6 +628,12 @@ ACME["ACME Samples"] --> Ing
 - Agent claims no skills exist: verify GATEWAY_SKILLS_SERVICE_URL and query-secret match.
 - ACME Admin samples fail: check credential synchronization, browser sidecar status, and network policies.
 - **Updated**: After web-checks migration, ensure all browser samples point to acme-admin instead of the retired static target.
+- **SPEC-066 Specific Issues**:
+  - **Index migration needed**: Run database migration to create `idx_skills_search_v2`; old index retained for rollback safety.
+  - **Parity test failures**: Ensure real PostgreSQL 16 is available; tests fail loudly without Docker rather than skipping.
+  - **Evaluation harness failures**: Check that corpus MD5 matches label fixture; verify PostgreSQL connectivity for PostgresPath tests.
+  - **Ranking changes**: The four measured fixes may change result ordering; review new IDF weighting and CamelCase splitting effects.
+  - **Statistics staleness**: If IDF statistics appear stale, verify sync cycle completed successfully and `refresh_statistics()` was called.
 
 **Section sources**
 - [skills-guide.md:338-374](file://docs/guides/skills-guide.md#L338-L374)
@@ -526,14 +641,19 @@ ACME["ACME Samples"] --> Ing
 ## Conclusion
 The skills system provides a robust, team-owned operational guidance model with clear contracts, deterministic ingestion and search, safe agent consumption, and a high-trust graduation pathway for executable flows. By enforcing strict validation, blast-radius re-validation, and human-in-the-loop merges, it balances agility with safety, enabling grounded responses during operations while preserving auditability and reproducibility.
 
-**Updated** The enhanced skills system now supports conversational-first interactions where operators can ask for guidance naturally without needing to know specific skill IDs. The improved operator guidance for password reset workflows demonstrates the complete approval model triad—from simple health checks to complex browser workflows with multi-step approvals, ad-hoc per-action approval, and develop-as-you-go skill graduation. These enhancements make the system more accessible while maintaining the security and auditability that operators require.
+**Updated** The enhanced skills system now supports conversational-first interactions where operators can ask for guidance naturally without needing to know specific skill IDs. The improved operator guidance for password reset workflows demonstrates the complete approval model triad—from simple health checks to complex browser workflows with multi-step approvals, ad-hoc per-action approval, and develop-as-you-go skill graduation. 
+
+**Updated** With SPEC-066 delivery, the skills-hub service now features enhanced lexical ranking fidelity with four measured improvements that move combined top-1 correctness from 0.500 to 0.711, while maintaining byte-identical results across different storage backends through an enforced parity harness. The comprehensive evaluation framework ensures these improvements work correctly through the real PostgreSQL path, providing confidence in the enhanced search capabilities.
 
 ## Appendices
 
 ### Skill Lifecycle Summary
 - Authoring: create Markdown skill with frontmatter; validate locally with CLI.
 - Ingestion: skills-hub syncs sources, validates documents, stores records.
+- **Statistics Refresh**: CorpusStats computed at sync time with corpus-derived IDF weighting.
+- **Enhanced Ranking**: Four measured fixes applied: skill_id scoring, IDF weighting, length normalization, CamelCase splitting.
 - Consumption: agents call skills tools; results include provenance and excerpts.
+- **Evaluation**: R-8 merge gate measures through real PostgreSQL; R-6 parity harness ensures backend consistency.
 - Graduation: approve session trace, re-validate blast radius, render draft, merge into repo.
 - Production: merged skill ingested and available for grounding and replay under policy.
 - Testing: ACME Admin samples provide comprehensive test suites for each skill pattern.
@@ -658,3 +778,30 @@ The migration consolidates all browser samples under the stateful `acme-admin` a
 - [SPEC-060 spec:47-80](file://docs/specs/SPEC-060-rebase-web-checks-samples-onto-acme-admin/spec.md#L47-L80)
 - [SPEC-060 plan:1-101](file://docs/specs/SPEC-060-rebase-web-checks-samples-onto-acme-admin/plan.md#L1-L101)
 - [release notes:59-80](file://docs/agentic-aiops-platform/release-notes/2026-09-19-web-checks-consolidation.md#L59-L80)
+
+### SPEC-066 Implementation Details
+
+**New Section** Technical details of the SPEC-066 delivery for enhanced skills hub service:
+
+#### Four Measured Lexical Fixes
+1. **R-1 - Skill ID Scoring**: The slug becomes a fourth scored field at tag weight (×2), recovering identifier-owner queries
+2. **R-2 - Corpus-Derived IDF Weighting**: Smoothed inverse document frequency `ln((1+N)/(1+df))+1` with no stoplist
+3. **R-3 - Sublinear Body-Length Normalization**: Damps long documents with `1/log2(2 + len(body)/1000)`
+4. **R-4 - Query-Side CamelCase Splitting**: Splits identifiers like `KubePodNotReady` into parts while keeping document side unsplit
+
+#### Cross-Backend Parity Mechanism
+- **Query-Only Split**: R-4 applies CamelCase splitting only to queries, not documents
+- **Sound Over-Approximation**: R-5's prefilter widens to admit all potential matches
+- **Python Decider**: Both backends use shared Python `rank()` function for final ordering
+- **Byte-Identical Results**: R-6 harness asserts identical ordering and scores across backends
+
+#### Evaluation Framework
+- **R-8 Merge Gate**: Re-measures through real PostgreSQL with prefilter in path
+- **Frozen Baseline**: V0 fixture (19/38) vs shipped scorer (24/38) 
+- **Statistical Significance**: nDCG@10 bootstrap CI [+0.022, +0.111] excludes zero
+- **Known Regressions**: Q62 and Q63 in-window re-orderings disclosed
+
+**Section sources**
+- [SPEC-066 spec:1-800](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L1-L800)
+- [SPEC-066 plan:87-396](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/plan.md#L87-L396)
+- [SPEC-066 delivery release note:1-180](file://docs/agentic-aiops-platform/release-notes/2026-10-03-spec-066-skill-retrieval-ranking-fidelity.md#L1-L180)

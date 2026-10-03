@@ -1,5 +1,5 @@
-- Each product under `products/<name>/` is self-contained with its own `pyproject.toml`, `Dockerfile`, `Makefile`, `src/<package>/`, and `tests/`, registered in the root `PYTHON_PRODUCTS` / `IMAGE_PRODUCTS` lists rather than via auto-discovery.
-- Cross-product data contracts (Pydantic schemas, policy bundles, SQL, scripts) live in `shared/shared-contracts/` and are imported or copied by consumers instead of being duplicated.
-- Feature work follows spec-driven development: new capabilities are authored as `docs/specs/SPEC-NNN-<slug>/` with plan.md/spec.md/tasks.md using the template, and implemented only when the spec is present.
-- Policy bundles are authored once at `shared/shared-contracts/policies/` and synchronized into `tool-gateway` and `platform-gateway` via `make sync-policy`, keeping consumer copies derived artifacts.
-- Build configuration defaults are centralized in `mk/defaults.mk` and included by both the root Makefile and per-product fragments, with all values using `?=` so command-line overrides win uniformly.
+- Each product follows the same layout: `src/<service_name>/` with `app.py` (FastAPI app factory), `main.py` (entrypoint), `metadata.py`, plus `api/`, `core/`, `services/`, `schemas/` subpackages, and a sibling `tests/` directory.
+- Products declare dependencies and build metadata in `pyproject.toml` with a matching `uv.lock` lockfile, and share common Make targets via `include mk/python.mk` rather than duplicating rules.
+- Cross-service data shapes live in `shared/shared-contracts/schemas/` and are imported by producers/consumers instead of being redefined locally.
+- Feature work is tracked through `docs/specs/SPEC-NNN-<slug>/` directories containing the triad `plan.md`, `spec.md`, `tasks.md`, and linked from release notes under `docs/agentic-aiops-platform/release-notes/`.
+- Architecture decisions are recorded as numbered ADRs under `docs/adr/0001-...` following the template in `template.md`, with a central `README.md` indexing them.

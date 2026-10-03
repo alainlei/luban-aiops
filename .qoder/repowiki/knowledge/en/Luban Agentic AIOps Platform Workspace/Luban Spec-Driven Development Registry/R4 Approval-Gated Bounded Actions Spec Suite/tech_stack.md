@@ -1,1 +1,0 @@
-HMAC-SHA256 signing over canonical JSON envelopes (sorted keys, no insignificant whitespace) for execution requests/receipts; Postgres-backed execution record store using the same memory backend pattern as SPEC-031 confirmation records; shared base-uv Python product layout for the `execution-runtime` worker.

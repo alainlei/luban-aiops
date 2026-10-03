@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: specs/agent_service_kernel_runtime/agent_service_contract
-title: SPEC-002 Platform-Owned Agent-Service Contract
-scope:
-    - docs/specs/SPEC-002-agent-service-contract/
-source_files: []
-depends_on: []
-related_to: []

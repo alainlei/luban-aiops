@@ -1,1 +1,0 @@
-Prometheus exposition format via `prometheus_client` (pull `/metrics`), OpenTelemetry SDK with `opentelemetry-instrumentation-fastapi` and OTLP exporter pushing to Elastic APM / OpenObserve, official `elasticsearch` Python client for the connector, and OpenObserve dashboards committed as version-controlled config-as-code.

@@ -1,5 +1,0 @@
-- Each SPEC directory ships a fixed triad of `spec.md` (requirements + acceptance criteria), `plan.md`, and `tasks.md` with a Status block listing status/owner/created/approved/delivered/release slice/related risks.
-- Requirements are numbered R-N and each carries testable acceptance criteria rather than prose-only descriptions.
-- Backend selection is environment-driven via `SESSION_STORE_BACKEND` with a factory function that returns the active implementation and falls back to `InMemorySessionStore` on connection failure, logging a warning and incrementing `session_store_fallbacks_total`.
-- Observability integration is expressed as concrete Prometheus metrics (`session_store_backend`, `session_store_errors_total`, `session_store_fallbacks_total`) plus `/health` readiness fields reported per spec requirement.
-- Non-Goals and Risks sections explicitly bound scope and enumerate mitigations, keeping out-of-surface work (e.g., kernel Redis replacement, portal UI rebuild) deferred to separate specs.

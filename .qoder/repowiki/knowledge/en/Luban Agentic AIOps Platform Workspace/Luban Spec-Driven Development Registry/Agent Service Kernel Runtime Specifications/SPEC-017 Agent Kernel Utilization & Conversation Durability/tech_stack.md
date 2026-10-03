@@ -1,1 +1,0 @@
-Agentscope 2.0.6 kernel (`ReActConfig`, `ContextConfig`, `InjectionConfig`, `ModelConfig`, `AgentState`, `AsyncSQLAlchemyStorage`); synchronous `psycopg[binary]` driver for Postgres JSONB persistence; Pydantic model round-trip (`model_dump_json` / `model_validate_json`) for state serialization.

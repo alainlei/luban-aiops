@@ -1,1 +1,0 @@
-Verification includes running `kustomize build` against `shared/platform-ops/gitops/dev-k8s/base/tool-gateway/rbac.yaml` to validate the RBAC overlay renders without errors, plus unit tests for registry CRUD, mocked K8s connector invocations, and the tool invoke endpoint under allow/deny policy paths.

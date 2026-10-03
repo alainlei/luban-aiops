@@ -1,1 +1,0 @@
-Markdown-based spec format driven by the shared templates under `docs/specs/templates/`; verification gated by the root `make verify` target which invokes product test suites, Kustomize overlay rendering, and contract tests against `shared/shared-contracts`.

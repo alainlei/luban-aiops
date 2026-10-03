@@ -1,3 +1,0 @@
-- Contract surfaces are defined as standalone JSON Schema files under `shared/shared-contracts/schemas/` and referenced by both producer and consumer rather than duplicated.
-- HTTP boundaries are versioned by URL path prefix (`/api/v1/` transitional, `/api/v2/` stable) so old and new surfaces can coexist during migration.
-- Framework-specific types (AgentScope `Msg`, `AgentApp`, `Toolkit`) are kept out of route signatures and response bodies, flowing through a dedicated adapter layer instead.

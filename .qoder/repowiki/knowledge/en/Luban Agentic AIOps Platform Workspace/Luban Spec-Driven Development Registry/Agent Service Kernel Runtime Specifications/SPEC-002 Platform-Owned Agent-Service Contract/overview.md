@@ -1,1 +1,0 @@
-Specification, plan, and task list for replacing the dual-surface agent-platform HTTP boundary with a single platform-owned JSON Schema contract consumed by tool-gateway.

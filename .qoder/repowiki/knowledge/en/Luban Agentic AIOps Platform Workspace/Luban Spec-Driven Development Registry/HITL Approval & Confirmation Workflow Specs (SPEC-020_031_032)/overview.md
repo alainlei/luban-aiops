@@ -1,1 +1,0 @@
-Specification trio defining the human-in-the-loop approval workflow: kernel ASK bridging to portal confirm, durable confirmation records with an approver inbox, and owner-side live decision sync.

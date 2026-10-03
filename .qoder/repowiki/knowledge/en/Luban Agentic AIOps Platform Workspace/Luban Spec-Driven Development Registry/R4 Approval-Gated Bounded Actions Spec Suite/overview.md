@@ -1,1 +1,0 @@
-Three delivered R4 specifications that introduce approval-gated mutating tools, tamper-evident signed execution requests/receipts, and an isolated execution-worker process.

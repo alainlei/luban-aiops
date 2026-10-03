@@ -1,5 +1,0 @@
-- Each spec directory ships a plan.md / spec.md / tasks.md triad, with the spec.md carrying status metadata (status, owner, created, release slice, related ADRs) and a Changelog section tracking draft → approved → delivered transitions.
-- New API surfaces are additive: existing schemas (`audit-event.schema.json`) are not mutated; new response shapes get their own schema files (e.g. `audit-summary.schema.json`) so emitters and consumers stay decoupled.
-- Frontend vocabulary constants (`EVENT_TYPES`, `EMITTER_SERVICES`, `OUTCOMES`) are pinned in the portal and guarded by vitest tests that read the corresponding shared JSON schema and assert equality, preventing stale UI filters.
-- Reporting endpoints reuse the existing `audit:read` policy action and platform-gateway pass-through rather than introducing new gates or routes, keeping auditor access read-only and deny-by-default.
-- Aggregate queries operate only on envelope columns (`event_type`, `outcome`, `service`, `username`) and never excavate the `details` JSONB field, preserving report stability across emitter payload changes.

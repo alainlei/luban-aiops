@@ -1,5 +1,0 @@
-- Each spec directory follows a fixed triad of `plan.md` (implementation plan), `spec.md` (requirements + acceptance criteria + changelog), and `tasks.md` (task breakdown).
-- Requirements are numbered R-1, R-2, … and each carries explicit acceptance criteria rather than prose-only goals.
-- Specs carry a YAML-like header block with `status`, `owner`, `created`, `release slice`, and related ADR/risk references for traceability.
-- Delivery state is tracked through a chronological `Changelog` section within `spec.md` that records draft/approved/in-progress/delivered transitions and test counts.
-- Non-goals are explicitly enumerated to bound scope and prevent feature creep into later release slices (e.g., RBAC, external IdP, mTLS deferred to future specs).

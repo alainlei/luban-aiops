@@ -1,1 +1,0 @@
-Portal frontend rebuilt on React + Ant Design X + TypeScript built with Vite, served through nginx-static with content-hashed assets and SPA fallback; voice input uses the browser Web Speech API with `input_modality: "voice"` passed as an additive query parameter on the streaming route.

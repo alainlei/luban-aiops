@@ -1,1 +1,0 @@
-SSE-based stream contract (`agent-stream-event.schema.json` bumped v3→v4→v5), Postgres-backed durable records for confirmation lifecycle, Deno-style policy bundles (`policy-default.yaml` with `chat:confirm` and `approvals:list` actions), and a portal web-ui built on React hooks (`usePendingDecisionPoll`).

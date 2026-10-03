@@ -1,1 +1,0 @@
-Plain Markdown specs; the three specs reference FastAPI services, React/antd/vite/vitest for the portal, uv.lock-based Python backends, and dev-k8s overlays (kustomize), but the module itself contains only documentation.

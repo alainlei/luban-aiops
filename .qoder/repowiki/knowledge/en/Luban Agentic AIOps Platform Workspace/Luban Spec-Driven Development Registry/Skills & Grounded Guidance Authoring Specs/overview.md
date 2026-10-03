@@ -1,1 +1,0 @@
-Specification documents defining the skills-hub ingestion pipeline, session-to-skill draft export, and the Studio authoring workspace that splits operation vs development sessions in the operator portal.

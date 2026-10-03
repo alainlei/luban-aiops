@@ -1,1 +1,0 @@
-`make verify` is the cross-spec delivery gate — reviewers advance a spec to `delivered` only when every `R-x` acceptance criterion maps to at least one asserting test recorded in `tasks.md` and any shipped `samples/` demo is exercised by its own script in the verification path.

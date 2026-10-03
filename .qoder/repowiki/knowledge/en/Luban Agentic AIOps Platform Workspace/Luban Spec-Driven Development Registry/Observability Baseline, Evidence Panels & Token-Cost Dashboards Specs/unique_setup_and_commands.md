@@ -1,1 +1,0 @@
-SPEC-065's R-4 live-check requires an authorized paid call against the external `deepseek-v4-flash` provider with `OTEL_ENABLED=true` and `AGENTSCOPE_KERNEL_TRACING=true`; it is separated into a mocked-I/O execution (run in CI) and a gated live leg invoked from the same entrypoint as other demos.

@@ -1,5 +1,0 @@
-- Each spec directory is named `SPEC-NNN-<kebab-case-title>/` and contains exactly `spec.md`, `plan.md`, and `tasks.md`.
-- The top of every `spec.md` carries a YAML-like Status block listing `status`, `owner`, `created`, `delivered`, `release slice`, and `related ADRs`.
-- Requirements are enumerated as R-1, R-2, … and each requirement ends with an Acceptance criteria bullet list that makes the requirement testable.
-- Impact sections consistently enumerate products touched, contracts touched, identity/policy/audit/execution safety impact, and living-state docs to update on delivery.
-- Open questions are captured inline during drafting and then collapsed into a `Design Decisions` section once resolved, leaving `Open Questions` empty at approval.
