@@ -25,11 +25,13 @@ Task states: `[ ]` pending, `[x]` done. Keep tasks small and tied to requirement
 ## R-3: Search and retrieval API
 
 - [x] deterministic scorer: title ×3 / tags ×2 / body ×1 saturating, `skill_id` tie-break (`services/scoring.py` + `tests/test_scoring.py`)
+  - **Correction (2026-10-03, SPEC-066 R-9, delivered).** SPEC-014 is `delivered`, so this is recorded by annotation rather than silent edit. SPEC-066 made four lexical-fidelity fixes unconditional in the same `services/scoring.py`, so this frozen weighting summary is superseded: `skill_id` is now a **fourth scored field** at tag weight (×2), not only the tie-break; every per-token contribution is scaled by a corpus-derived **IDF**; the capped body term is **length-normalized**; and the **query** is CamelCase-split (document fields stay unsplit, so Postgres `to_tsvector('simple')` parity holds by construction). The field-weight *ordering* (title 3 > tags 2 > body 1) and the ascending `skill_id` tie-break are **unchanged**, so the determinism/explainability guarantee still holds. See `docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/` and the `services/scoring.py` module docstring.
 - [x] query auth: `SKILLS_QUERY_CLIENTS` Basic registry + workload tokens, 401 path (`services/query_auth.py` + `tests/test_query_auth.py`)
 - [x] `GET /api/v1/skills` list with source/tag filters + capped offset pagination (`api/routes/skills.py` + tests)
 - [x] `GET /api/v1/skills/{skill_id:path}` full record, structured 404 (tests)
 - [x] `GET /api/v1/skills/search` ranked hits with excerpt ≤ 400 chars and provenance; 400 on malformed params (tests)
 - [x] Postgres candidate selection (`to_tsvector`/`plainto_tsquery`) re-ranked by the shared scorer; byte-identical ordering parity test vs in-memory store
+  - **Correction (2026-10-03, SPEC-066 R-6).** Two claims on the line above drifted from the shipped code. SPEC-014 is `delivered`, so this is recorded by annotation rather than silent edit. **(1)** The prefilter never used `plainto_tsquery`: it OR-joins `to_tsquery` lexemes, and `test_search_joins_multi_word_queries_with_or` documents that `plainto_tsquery` (which ANDs the words) would silently drop partial matches. **(2)** The "byte-identical ordering parity test vs in-memory store" was documented but never delivered — the existing Postgres tests ran against a fake driver that cannot exercise the `to_tsvector` prefilter. SPEC-066 R-6 (`products/skills-hub/tests/test_parity.py`) is the harness that actually enforces byte-identical ordering *and* numeric score equality across both backends over a committed 81-query set, against a real PostgreSQL 16. See `docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/`.
 
 ## R-4: skills.search read-only tool in the tool execution framework
 

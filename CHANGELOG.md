@@ -11,10 +11,85 @@ portal is enforced by `make validate-version`.
 Versions prior to 0.1.0 were not numbered; Release 0 foundation work and
 Release 1 entries are grouped retrospectively under 0.1.0.
 
-## Unreleased
+## 0.46.0 — 2026-10-03
+
+Feature release: skill-retrieval ranking fidelity. The `skills-hub` scorer gains
+the four measured lexical fixes — score the `skill_id` slug, corpus-derived IDF
+weighting, sublinear body-length normalization, and a query-side-only CamelCase
+split — plus an enforced cross-backend parity harness and a product-side
+de-duplication guardrail, delivered under
+[SPEC-066](docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md) (extending
+[SPEC-014](docs/specs/SPEC-014-skills-and-grounded-guidance/spec.md) R-3, whose
+"title, tags, and body with fixed weighting" criterion is annotated superseded in
+part). Re-measured on the shipped PostgreSQL 16 path against the committed label
+fixture, combined top-1 grade-2 recall rises **19/38 → 24/38** and identifier-owner
+recovery **0/3 → 3/3**, with the paired nDCG@10 bootstrap (10,000 resamples) 95% CI
+**[+0.022, +0.111]** excluding zero; the pre-registered top-1 sign test is reported
+as **directional only** ((7, 2), p = 0.1797), not significant. No new route, action,
+contract, JSON schema, audit event type, or execution path: the `score` field's
+*value distribution* changes but its shape does not, no consumer reads its magnitude
+(the tool-gateway connector drops it, the portal never renders it), and the only
+database change is the additive, idempotent `idx_skills_search` →
+`idx_skills_search_v2` GIN expression-index swap (+8 KiB). Two accepted in-window
+top-1 re-orderings (**Q62**, **Q63**) are disclosed as known behavior changes. Also
+carries the accumulated unreleased work: the dev-k8s `SKILLS_SOURCES` single-route
+cleanup that R-7 generalizes, the semantic-retrieval gate-1 close, and two SPEC-063
+harness fixes.
 
 ### Changed
 
+- **SPEC-066: skill-retrieval ranking fidelity — four measured lexical fixes,
+  cross-backend parity, and a de-duplication guardrail.** The `skills-hub` scorer
+  (`services/scoring.py`) ships four fixes together, made **unconditional** at R-9
+  (the flags that gated them during R-8's incremental re-measurement are removed).
+  **R-1** scores the `skill_id` slug as a fourth field at the tag weight (×2), so an
+  identifier query (`KubePodNotReady`) recovers its runbook — stratum-A owner
+  recovery **0/3 → 3/3**. **R-2** replaces the flat weighting with a corpus-derived
+  IDF (`ln((1+N)/(1+df))+1`, no stoplist) computed in Python at sync time and
+  refreshed after each successful `replace_source`; an unrefreshed store scores with
+  a neutral `idf = 1.0`. **R-3** damps the capped body contribution sublinearly by
+  document length (`1/log2(2+len(body)/1000)`, body-occurrence cap 5) so a long
+  sample can no longer out-score a short runbook on raw term count. **R-4** splits
+  CamelCase/digit identifiers into their parts *and* retains the whole token, on the
+  **query side only** (`tokenize_query`); every document field and R-2's `df` stay on
+  the unsplit `tokenize` (`[a-z0-9]+`) that is byte-identical to PostgreSQL's
+  `to_tsvector('simple', …)`. Because `score()` matches by exact token membership,
+  query-side splitting only ever widens the candidate set, so **R-5**'s GIN prefilter
+  stays a sound over-approximation and **R-6**'s cross-backend parity holds **by
+  construction** — the migration swaps `idx_skills_search` (155,648 B) for
+  `idx_skills_search_v2` (163,840 B, +8 KiB, one page), keeping Python the sole
+  decider of ordering on both backends. **R-7** adds a product-side de-duplication
+  guardrail in `rank()` — collapse hits sharing an `md5(body)` before the sort and
+  before `[:limit]`, retaining the lowest `skill_id` — which generalizes the
+  dev-overlay source cleanup below so an overlapping `SKILLS_SOURCES` registration
+  can no longer consume result slots regardless of configuration (a no-op on the now
+  duplicate-free dev corpus, so it is regression protection, not a ranking gain; it
+  introduces the only hashing in `skills-hub`, MD5 used as a content-identity key,
+  not a security digest). Measured on the shipped PostgreSQL path against the
+  committed label fixture (38 queries × 18 documents, pinned by `body_md5`):
+  combined top-1 grade-2 recall **19/38 → 24/38**, combined MRR **0.842**,
+  stratum-B MRR **0.900**, stratum-C top-1 **10/18** and MRR **0.778**; the null
+  result holds (**0** grade-2 documents leave the window, abstention unchanged
+  **4/38**). Significance: the paired nDCG@10 bootstrap (10,000 resamples, seed
+  20261001) 95% CI **[+0.022, +0.111]** excludes zero, but the pre-registered top-1
+  sign test is **directional only** at (7, 2) **p = 0.1797** — downgraded from the
+  offline document-side (9, 1) p = 0.0117 and reported as such. **Two accepted
+  in-window top-1 re-orderings are disclosed, not smoothed: Q62** (`D17` grade 2 →
+  `D18` grade 1) and **Q63** (`D18` grade 2 → `D13` grade 1, `D18` to rank 2 of 5,
+  `R@5` unaffected) — both stratum-C paraphrases whose grade-2 document stays
+  returned. **No contract change**: `score` is published on
+  `GET /api/v1/skills/search` but appears in no `shared/shared-contracts` schema, so
+  a changed value distribution is not a schema change; the tool-gateway connector
+  drops `score` and the portal never renders it, leaving only ordering and excerpts
+  observable. **Not fixed here:** `rank()` still cannot abstain when nothing applies
+  (unchanged 4/38) — a product decision carried as its own backlog row. **R-9**
+  updates the living docs (skills-hub README weighting, the `scoring.py` docstring, a
+  superseded-in-part annotation on SPEC-014 R-3, `skills-guide.md`, and
+  status-header pointers from the retrieval memo/eval-set) and records the
+  score-comparability constraint: `score` is an ordering key within one query's
+  result set, never comparable across queries, because R-4's whole-token retention
+  makes it query-shape dependent (measured 3.0 / 9.0 / 0.0). The delivered SPEC-014
+  release note is left untouched.
 - **dev-k8s skills-hub: one route per skill tree.** `SKILLS_SOURCES` no longer
   registers `platform-runbooks` and `sre-alerting` as `local` ConfigMap mounts
   alongside the `platform-skills` **git** source that already ingests their parent

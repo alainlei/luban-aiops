@@ -236,6 +236,15 @@ class SyncManager:
                 result.records = resolved_records
                 result.rejections.extend(composition_rejections)
                 await self._store.replace_source(spec.source_id, result.records)
+                # SPEC-066 R-2: refresh the corpus statistics (IDF ``df``) now
+                # that the catalog changed, so the shared scorer's weighting
+                # tracks the population. A full-catalog Python pass that rides
+                # this cycle, so ``df`` lags a change by at most one sync
+                # interval (bounded staleness, recorded in the plan). It runs
+                # only after a successful ``replace_source``; a failed cycle
+                # raises before this point and leaves the prior snapshot — and
+                # the prior statistics — intact.
+                await self._store.refresh_statistics()
                 status = SourceStatus(
                     source_id=spec.source_id,
                     source_type=spec.type,

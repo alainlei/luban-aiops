@@ -1,0 +1,421 @@
+{
+  "_provenance": {
+    "spec": "SPEC-066 R-6 cross-backend parity harness query set",
+    "description": "Union of the 63-query audit pool (14 stratum-A identifier lookups + 49 stratum-B operator-vocabulary queries) and the 18 authored stratum-C paraphrases/negative controls. The 20 stratum-B queries carrying graded labels are a subset of the 49; all 81 texts are distinct. Committed so the parity harness is reproducible offline.",
+    "pool_source": "docs/workspace/semantic-skill-retrieval-eval-set.md §5 (Q01-Q63)",
+    "stratum_c_source": "docs/workspace/semantic-skill-retrieval-labels.json queries where stratum=='C' (C01-C18)",
+    "count": 81,
+    "strata": {
+      "A": 14,
+      "B": 49,
+      "C": 18
+    }
+  },
+  "queries": [
+    {
+      "id": "Q01",
+      "stratum": "A",
+      "text": "DemoTriage synthetic demo deployment SPEC-015 triage"
+    },
+    {
+      "id": "Q02",
+      "stratum": "A",
+      "text": "DemoTriage synthetic demo deployment triage SPEC-015"
+    },
+    {
+      "id": "Q03",
+      "stratum": "B",
+      "text": "KubePodNotReady"
+    },
+    {
+      "id": "Q04",
+      "stratum": "B",
+      "text": "KubePodNotReady alert"
+    },
+    {
+      "id": "Q05",
+      "stratum": "A",
+      "text": "ResetPasswordAdHoc password reset admin portal"
+    },
+    {
+      "id": "Q06",
+      "stratum": "A",
+      "text": "ResetPasswordAdHoc reset password admin portal"
+    },
+    {
+      "id": "Q07",
+      "stratum": "A",
+      "text": "ResetUserPassword admin portal"
+    },
+    {
+      "id": "Q08",
+      "stratum": "A",
+      "text": "ResetUserPassword admin portal reset password"
+    },
+    {
+      "id": "Q09",
+      "stratum": "A",
+      "text": "ResetUserPassword admin portal reset user password"
+    },
+    {
+      "id": "Q10",
+      "stratum": "A",
+      "text": "ResetUserPassword reset password user admin portal"
+    },
+    {
+      "id": "Q11",
+      "stratum": "B",
+      "text": "acme"
+    },
+    {
+      "id": "Q12",
+      "stratum": "B",
+      "text": "acme-admin password reset alice"
+    },
+    {
+      "id": "Q13",
+      "stratum": "B",
+      "text": "acme-admin password reset runbook"
+    },
+    {
+      "id": "Q14",
+      "stratum": "B",
+      "text": "adhoc password reset admin panel"
+    },
+    {
+      "id": "Q15",
+      "stratum": "A",
+      "text": "adhoc password reset resetpasswordadhoc admin panel"
+    },
+    {
+      "id": "Q16",
+      "stratum": "B",
+      "text": "admin panel password reset legacy"
+    },
+    {
+      "id": "Q17",
+      "stratum": "B",
+      "text": "admin portal password reset ad-hoc credential set"
+    },
+    {
+      "id": "Q18",
+      "stratum": "B",
+      "text": "admin portal password reset user"
+    },
+    {
+      "id": "Q19",
+      "stratum": "B",
+      "text": "admin portal password reset user account"
+    },
+    {
+      "id": "Q20",
+      "stratum": "B",
+      "text": "admin portal reset password user"
+    },
+    {
+      "id": "Q21",
+      "stratum": "B",
+      "text": "admin portal reset user password"
+    },
+    {
+      "id": "Q22",
+      "stratum": "B",
+      "text": "admin portal user password reset"
+    },
+    {
+      "id": "Q23",
+      "stratum": "B",
+      "text": "admin portal user password reset web check"
+    },
+    {
+      "id": "Q24",
+      "stratum": "B",
+      "text": "admin portal web check"
+    },
+    {
+      "id": "Q25",
+      "stratum": "B",
+      "text": "admin portal web user management"
+    },
+    {
+      "id": "Q26",
+      "stratum": "B",
+      "text": "admin portal write action user management approval"
+    },
+    {
+      "id": "Q27",
+      "stratum": "B",
+      "text": "argo workflows health check controller workflow"
+    },
+    {
+      "id": "Q28",
+      "stratum": "B",
+      "text": "argo-cd controller restart pod health namespace argocd"
+    },
+    {
+      "id": "Q29",
+      "stratum": "B",
+      "text": "argocd application-server repo-server deployment pod"
+    },
+    {
+      "id": "Q30",
+      "stratum": "B",
+      "text": "argocd argocd-server repo-server restart crashloop"
+    },
+    {
+      "id": "Q31",
+      "stratum": "B",
+      "text": "argocd health check"
+    },
+    {
+      "id": "Q32",
+      "stratum": "B",
+      "text": "argocd restarting pods repo-server crash troubleshooting"
+    },
+    {
+      "id": "Q33",
+      "stratum": "A",
+      "text": "demo deployment triage DemoTriage warning"
+    },
+    {
+      "id": "Q34",
+      "stratum": "A",
+      "text": "demo deployment triage DemoTriage warning deployment not ready"
+    },
+    {
+      "id": "Q35",
+      "stratum": "B",
+      "text": "demo deployment triage warning"
+    },
+    {
+      "id": "Q36",
+      "stratum": "B",
+      "text": "deployment needs triage warning pod not ready demo"
+    },
+    {
+      "id": "Q37",
+      "stratum": "B",
+      "text": "deployment triage warning pod not ready"
+    },
+    {
+      "id": "Q38",
+      "stratum": "A",
+      "text": "inventory portal sign in failed browser-check-target svc-check credential set"
+    },
+    {
+      "id": "Q39",
+      "stratum": "B",
+      "text": "lock account acme-admin disable user"
+    },
+    {
+      "id": "Q40",
+      "stratum": "B",
+      "text": "password reset"
+    },
+    {
+      "id": "Q41",
+      "stratum": "B",
+      "text": "password reset account recovery admin console"
+    },
+    {
+      "id": "Q42",
+      "stratum": "B",
+      "text": "password reset admin web"
+    },
+    {
+      "id": "Q43",
+      "stratum": "B",
+      "text": "password reset user account admin portal credential change"
+    },
+    {
+      "id": "Q44",
+      "stratum": "B",
+      "text": "password reset write-class web-check flow binding"
+    },
+    {
+      "id": "Q45",
+      "stratum": "B",
+      "text": "pod health check readiness verify running ready conditions"
+    },
+    {
+      "id": "Q46",
+      "stratum": "B",
+      "text": "pod keeps restarting CrashLoopBackOff"
+    },
+    {
+      "id": "Q47",
+      "stratum": "B",
+      "text": "pod keeps restarting CrashLoopBackOff restart"
+    },
+    {
+      "id": "Q48",
+      "stratum": "B",
+      "text": "reset acme-admin password"
+    },
+    {
+      "id": "Q49",
+      "stratum": "B",
+      "text": "reset acme-admin password alice"
+    },
+    {
+      "id": "Q50",
+      "stratum": "B",
+      "text": "reset alice acme-admin password"
+    },
+    {
+      "id": "Q51",
+      "stratum": "B",
+      "text": "reset alice password"
+    },
+    {
+      "id": "Q52",
+      "stratum": "B",
+      "text": "reset password admin portal credential"
+    },
+    {
+      "id": "Q53",
+      "stratum": "B",
+      "text": "reset password admin portal user"
+    },
+    {
+      "id": "Q54",
+      "stratum": "B",
+      "text": "reset password user admin"
+    },
+    {
+      "id": "Q55",
+      "stratum": "B",
+      "text": "reset user password admin portal"
+    },
+    {
+      "id": "Q56",
+      "stratum": "B",
+      "text": "restart pod"
+    },
+    {
+      "id": "Q57",
+      "stratum": "B",
+      "text": "restart pod deployment workload"
+    },
+    {
+      "id": "Q58",
+      "stratum": "A",
+      "text": "restart pod scratch-restart-demo"
+    },
+    {
+      "id": "Q59",
+      "stratum": "B",
+      "text": "scratch restart demo repeatedly restarting container"
+    },
+    {
+      "id": "Q60",
+      "stratum": "A",
+      "text": "synthetic demo deployment triage DemoTriage alert"
+    },
+    {
+      "id": "Q61",
+      "stratum": "B",
+      "text": "user password reset web admin"
+    },
+    {
+      "id": "Q62",
+      "stratum": "B",
+      "text": "web check confirmation gate HITL blocked or page not advancing"
+    },
+    {
+      "id": "Q63",
+      "stratum": "B",
+      "text": "web check sign in inventory portal does not transition successful login troubleshooting"
+    },
+    {
+      "id": "C01",
+      "stratum": "C",
+      "text": "pod won't start"
+    },
+    {
+      "id": "C02",
+      "stratum": "C",
+      "text": "container keeps dying"
+    },
+    {
+      "id": "C03",
+      "stratum": "C",
+      "text": "app crash looping after deploy"
+    },
+    {
+      "id": "C04",
+      "stratum": "C",
+      "text": "process out of memory killed"
+    },
+    {
+      "id": "C05",
+      "stratum": "C",
+      "text": "disk full on node"
+    },
+    {
+      "id": "C06",
+      "stratum": "C",
+      "text": "node went offline"
+    },
+    {
+      "id": "C07",
+      "stratum": "C",
+      "text": "image won't download"
+    },
+    {
+      "id": "C08",
+      "stratum": "C",
+      "text": "pod stuck in pending"
+    },
+    {
+      "id": "C09",
+      "stratum": "C",
+      "text": "service name not resolving"
+    },
+    {
+      "id": "C10",
+      "stratum": "C",
+      "text": "user locked out of admin console"
+    },
+    {
+      "id": "C11",
+      "stratum": "C",
+      "text": "issue a temporary password for alice"
+    },
+    {
+      "id": "C12",
+      "stratum": "C",
+      "text": "is the admin portal up"
+    },
+    {
+      "id": "C13",
+      "stratum": "C",
+      "text": "check whether the account is suspended"
+    },
+    {
+      "id": "C14",
+      "stratum": "C",
+      "text": "replica count is wrong"
+    },
+    {
+      "id": "C15",
+      "stratum": "C",
+      "text": "container waiting to start"
+    },
+    {
+      "id": "C16",
+      "stratum": "C",
+      "text": "certificate expired on the ingress"
+    },
+    {
+      "id": "C17",
+      "stratum": "C",
+      "text": "argocd sync keeps failing"
+    },
+    {
+      "id": "C18",
+      "stratum": "C",
+      "text": "database connection pool exhausted"
+    }
+  ]
+}

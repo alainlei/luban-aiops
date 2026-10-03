@@ -34,6 +34,18 @@ from the file path (not frontmatter). See
 [skill-format.md](../../shared/shared-contracts/skill-format.md) for the full
 contract.
 
+> **Ranking weights refresh on the sync cycle, not per query (SPEC-066 R-2).**
+> The scorer weights each token by how rare it is across the whole catalog
+> (inverse document frequency), and that weighting is a snapshot recomputed each
+> sync — not on every search. A document you add or revise becomes searchable
+> when the next sync picks it up (within one `SKILLS_SYNC_INTERVAL_SECONDS`,
+> default 300s / 5 minutes), and that same sync recomputes the weights over the
+> full catalog. The practical consequence: adding a document can subtly re-rank
+> *unrelated* queries (a token that stays rare keeps its weight; one that becomes
+> common is down-weighted). The lag is bounded by the sync interval by design — a
+> stale snapshot is still usable, and a failed sync leaves both the previous
+> skills and the previous weights intact.
+
 ## Asking for a runbook without naming it
 
 You do not have to know a skill's id — or name it at all — to use it. The agent
@@ -350,7 +362,13 @@ not a manifest change.
 1. Create the Markdown file under the source directory (e.g.
    `shared/platform-ops/skills/sre-alerting/alerts/MyNewAlert.md`), with
    frontmatter as above. For alert runbooks, tag the skill with the alert
-   name so alert → runbook lookups rank well.
+   name so alert → runbook lookups rank well. The file path is a retrieval
+   surface too, not just an address: since SPEC-066 the derived `skill_id`
+   slug is a **scored field** (at tag weight), and a searcher's CamelCase query
+   (`KubePodNotReady`) is split into parts that match the words in your title,
+   tags, and slug. So name the file after the alert or symptom an operator would
+   type (`KubePodNotReady.md`, not `runbook-7.md`) — the slug
+   `.../alerts/kubepodnotready` then helps the lookup rank, on top of the tags.
 2. Validate it, then merge to the branch the source tracks (`main`):
 
    ```sh
@@ -379,11 +397,15 @@ The resulting `skill_id` is source-prefixed — here
 >
 > **Never register the same files twice.** Mounting a tree as a `local` source
 > while a `git` source's `path` also covers it stores every document twice under
-> two `skill_id`s, and because ranking does no content de-duplication the copies
-> consume result slots — measured at **32 of 63** recorded queries before the
-> duplicate `sre-alerting`/`platform-runbooks` mounts were removed on
-> 2026-10-01. See
-> [the retrieval evaluation set](../workspace/semantic-skill-retrieval-eval-set.md).
+> two `skill_id`s. Since SPEC-066 R-7 the scorer de-duplicates by body hash, so
+> two *byte-identical* copies now collapse to one result (the lower `skill_id`)
+> instead of consuming two slots — but double registration still costs ingestion,
+> storage, and sync time, and a *near*-duplicate (an edited copy) still ranks
+> separately, so keep exactly one route per tree. *(History: before R-7 ranking
+> did no content de-duplication, and the duplicate
+> `sre-alerting`/`platform-runbooks` mounts wasted result slots on **32 of 63**
+> recorded queries; they were removed 2026-10-01. See
+> [the retrieval evaluation set](../workspace/semantic-skill-retrieval-eval-set.md).)*
 
 ## Revising a skill
 
@@ -499,7 +521,8 @@ kubectl -n dev-luban-aiops exec deployment/skills-hub -- \
   curl -fsS -u "tool-gateway:${QUERY_SECRET}" \
   "http://localhost:8000/api/v1/skills?limit=100"
 
-# Search (multi-word queries match OR-wise; the shared scorer ranks them)
+# Search (multi-word queries match OR-wise; a CamelCase query is also split into
+# parts on the query side; the shared IDF-weighted scorer ranks the candidates)
 kubectl -n dev-luban-aiops exec deployment/skills-hub -- \
   curl -fsS -u "tool-gateway:${QUERY_SECRET}" \
   "http://localhost:8000/api/v1/skills/search?q=kubernetes%20incident"
@@ -547,7 +570,7 @@ Prometheus metrics on `/metrics`:
 | Git source errors mention auth, others healthy | `SKILLS_GIT_TOKENS` missing the source's token | Re-run `sync-skills-secrets.sh` with `SKILLS_GIT_TOKEN` exported (dev) or update the Secret (prod) |
 | Git source errors mention a subpath | Configured `path` absent from the repo checkout | Fix `path` in `SKILLS_SOURCES` or move the skills directory |
 | Search returns no matches | Query words co-occur nowhere, or source never synced | Try `skills.list` / the catalog endpoint to confirm the skill exists; check status |
-| The same document appears twice in search results | One tree is registered both as a `local` mount and inside a `git` source's `path` | Keep exactly one route per tree. `skill_id` is source-prefixed, so both copies rank separately and consume result slots |
+| The same document appears twice in search results | One tree is registered both as a `local` mount and inside a `git` source's `path`, and the copies are not byte-identical | Keep exactly one route per tree. SPEC-066 R-7 collapses byte-identical bodies to one hit (the lower `skill_id`), but a near-duplicate (an edited copy) still ranks separately, and any duplicate wastes ingestion/storage/sync |
 | `kustomize build` fails | A ConfigMap generator entry points at a deleted/renamed file | Align the generator's keys with the files on disk (the base overlay generates `platform-policy` and `postgres-initdb`; skill ConfigMaps are created by `make deploy-samples`) |
 | Agent claims no skills exist | skills connector not registered | Check `GATEWAY_SKILLS_SERVICE_URL` and the query-secret match (see [Configuration Reference](configuration-reference.md)) |
 

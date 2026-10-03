@@ -157,7 +157,12 @@ Flag removal is a task in `tasks.md`, not an assumption.
     so a `df` derived from SQL lexemes is a different statistic from the one the
     scorer uses, and the byte-identical invariant breaks numerically. Any surviving
     option must compute `df` in Python. Only the sync-time option does that without
-    a per-request catalog read.
+    a per-request catalog read. *(2026-10-03, #2 — **moot and inverted**: R-4 now
+    splits the query only, so the document-side `tokenize()` that `compute_stats`
+    uses is byte-identical to `to_tsvector('simple', …)` and a SQL `df` would in
+    fact match; `df` is also flag-independent. The Python/sync-time resolution
+    stands on its two other reasons — `rank()` is sync-and-pure, and a per-request
+    catalog read is rejected on cost — not on this one.)*
 - alternatives considered and why rejected:
   - *Statistics over the pool passed to `rank()`* (OQ-2 (iii)) — **rejected**: the
     two callers pass different pools (`_all_records(source, tag)` vs prefiltered
@@ -213,6 +218,42 @@ Flag removal is a task in `tasks.md`, not an assumption.
 
 ### R-4: CamelCase-splitting tokenization — *OQ-2's second half resolved: retain the whole token*
 
+> **Amended 2026-10-03 (#2 — the split is QUERY-SIDE ONLY; this section's
+> document-side framing is superseded).** Everything below was written for a
+> **document-side** split. That design cannot ship: splitting `tokenize()` (the
+> document unit) makes R-5's prefilter **under-admit** on **5 of 81** committed
+> parity queries (Q17/Q19/Q39/Q41/C09), because a plain query word (`set`) matches
+> a part Python splits out of a document identifier (`StatefulSet`) that
+> `to_tsvector('simple')` keeps whole and the prefix term `set:*` cannot reach (a
+> prefix anchors at lexeme **start**). The shipped #2 design keeps the split but
+> moves it to the **query only**, in a new `tokenize_query()`; `tokenize()` (every
+> document field) and R-2's `df` stay unsplit (`[a-z0-9]+`), byte-identical to
+> `to_tsvector` lexemes, so `score()`'s exact-membership match makes R-5's
+> over-approximation and R-6 parity hold **by construction**. Consequences for the
+> text below, all measured on real PostgreSQL 16 (`spec.md`'s R-4 amendment is the
+> normative record):
+> - **`affected:`** is now `tokenize_query()` + `score()`'s query-token aggregation
+>   (`_query_tokens`), **not** `tokenize()`/`df`. The document side is untouched.
+> - **`df` is flag-independent** under #2 (`compute_stats` calls only the unsplit
+>   `tokenize()`), so the "*After R-4, SQL-computed `df` is impossible*" claim in
+>   R-2's design is **moot and inverted** — a SQL `df` would now *match*; the
+>   Python-computed/sync-persisted resolution stands on its other two reasons.
+> - **0 of the 8 exact-score assertions move** (not "1 of 8"): the doc-side
+>   `test_weights_compose_per_token` 7.0 → 27.0 inflation is gone — it stays
+>   **7.0** — because the document fields no longer split. The split is exercised
+>   by new query-side tests instead.
+> - **The "intended win" is forgone.** `score("pod not ready",
+>   title="KubePodNotReady")` stays **0.0**, *not* 9.0 — that plain-word →
+>   CamelCase-title recall is exactly the parity-breaking class. The query-shape
+>   asymmetry example likewise changes: identifier-vs-identifier **15.0 → 3.0**,
+>   phrase-vs-phrase **9.0** (unchanged), phrase-vs-identifier-title **9.0 → 0.0**.
+> - **0.711 does not carry over.** The offline aggregate was doc-side; the
+>   query-only candidate re-measures at **24/38** combined top-1 (see R-8).
+>
+> The position-aware, whole-token-retaining *shape* below is retained — it now
+> lives entirely inside `tokenize_query`/`_run_tokens`/`_query_tokens`, where its
+> de-duplication keeps the split non-inflating on the query side.
+
 - affected: `services/scoring.py::tokenize()` **and `score()`'s aggregation**, and
   by consequence R-2's `df`, R-5's prefilter, and the assertions in
   `tests/test_scoring.py`.
@@ -261,13 +302,21 @@ Flag removal is a task in `tasks.md`, not an assumption.
   hiding: measured, `score("KubePodNotReady", title="KubePodNotReady")` = **15.0**
   while `score("pod not ready", title="pod not ready")` = **9.0**, because one
   identifier-shaped surface form yields five credit-bearing tokens and the phrase
-  yields three. Scores are therefore **not comparable across query shapes**, which
+  yields three. *(2026-10-03, #2: identifier-vs-identifier is now **3.0** — only
+  the retained whole token matches the unsplit title — while phrase-vs-phrase stays
+  **9.0**, so the asymmetry **reverses direction**; the incomparability point
+  survives but the 15.0/9.0 figures are the doc-side ones.)* Scores are therefore **not comparable across query shapes**, which
   matters for R-9's published prose and for any future threshold work (the separate
   abstention backlog row), and is harmless for ordering *within* one query only to
   the extent every candidate matches the same number of the query's tokens — which
   they do not. The intended win is real and measured alongside it:
   `score("pod not ready", title="KubePodNotReady")` goes **0.0 → 9.0**, exactly
-  matching the plain-title case.
+  matching the plain-title case. *(2026-10-03, #2 — **this win is forgone**: under
+  the query-only split it stays **0.0**, because the title is unsplit and no query
+  part equals the whole lexeme `kubepodnotready`. That plain-word → CamelCase-title
+  recall is precisely the class that broke R-5/R-6 parity, so losing it is the
+  deliberate cost of parity-by-construction — see `spec.md` R-4's published cost
+  and R-8's re-measured 24/38.)*
 - the case table is **fixed at implementation and committed as tests**, because the
   rule determines `df` and the prefilter: `KubePodNotReady`, `CrashLoopBackOff`,
   `HTTP503`, `pgBouncer`, `v0211`, `RealPlayer2`, plus the already-lowercase and
@@ -779,10 +828,10 @@ unmeasured subset. (*Steps*, not `tasks.md`'s *Stages*: the numbering differs, a
 | Migration silently skipped | `CREATE INDEX IF NOT EXISTS` matches on *name*, so a changed expression under the old name keeps the old index | Versioned `idx_skills_search_v2`; a test asserts the new index exists on an already-initialized database |
 | No window without an index | The catalog is live and shared with three other databases | The old index is retained for one release, so create-then-drop-later never leaves search unindexed |
 | Measured gain does not reproduce on the shipped path | 0.711 is a memory-path upper bound. **Stage 0(b) closed one half of this** — the tokenizer variant behind the number is now known and retention reproduces it exactly — but the memory-vs-Postgres half is untouched and the prefilter is where a re-ordering could become a disappearance | R-8 is the merge gate, with a coded null-result path, and reports the Postgres path separately |
-| Whole-token retention silently doubles every score | `score()` aggregates `body` via `Counter` and `query` via a loop over a **list** — neither is idempotent, so a tokenizer emitting whole + parts inflates both. Measured on the shipped scorer: title 3.0 → 6.0, tag 2.0 → 4.0, three body occurrences 3.0 → 10.0, and `BODY_OCCURRENCE_CAP` reached at half the real count | R-4's position-aware aggregation, plus the hard criterion that CamelCase-free text scores **identically**; with the correct shape 7 of the 8 existing exact-score assertions are unchanged, so a second changed value is the alarm |
+| Whole-token retention silently doubles every score | `score()` aggregates `body` via `Counter` and `query` via a loop over a **list** — neither is idempotent, so a tokenizer emitting whole + parts inflates both. Measured on the shipped scorer: title 3.0 → 6.0, tag 2.0 → 4.0, three body occurrences 3.0 → 10.0, and `BODY_OCCURRENCE_CAP` reached at half the real count | R-4's position-aware aggregation, plus the hard criterion that CamelCase-free text scores **identically**; with the correct shape 7 of the 8 existing exact-score assertions are unchanged, so a second changed value is the alarm *(2026-10-03, #2: **all 8** are unchanged — the query-only split touches no document-side assertion, so **any** changed value is the alarm)* |
 | Retention makes stopword-like sub-tokens score-bearing | `KubePodNotReady` now contributes `not` and `ready` as query tokens; R-2 forbids a stoplist by design | IDF is the mechanism that keeps them honest, so **R-4's fidelity gate runs with R-2's flag on** — implementation order is not measurement order |
-| Scores become incomparable across query shapes | Measured: an exact identifier match scores **15.0** where the equivalent three-word phrase scores **9.0**, because one surface form yields five credit-bearing tokens | Recorded rather than hidden: `score` is not agent-visible (`_MATCH_KEYS` drops it) so nothing consumes the magnitude, but R-9's published prose must not imply scores are comparable across queries, and the separate abstention backlog row must not treat the value as a threshold without re-deriving it |
+| Scores become incomparable across query shapes | Measured: an exact identifier match scores **15.0** where the equivalent three-word phrase scores **9.0**, because one surface form yields five credit-bearing tokens *(2026-10-03, #2: now **3.0** vs **9.0** — the direction reverses and the phrase-vs-identifier-title cross-match is **0.0**, the forgone recall; incomparability survives)* | Recorded rather than hidden: `score` is not agent-visible (`_MATCH_KEYS` drops it) so nothing consumes the magnitude, but R-9's published prose must not imply scores are comparable across queries, and the separate abstention backlog row must not treat the value as a threshold without re-deriving it |
 | The rebuilt harness measures the wrong thing | The original harness is **not committed**, so R-8's instrument is new | Its own fidelity gate: it must reproduce the shipped scorer's 19/38 baseline before any candidate number is believed |
-| Q63's `D18` disappears rather than re-orders | A prefilter change can turn a re-ordering into a missing row, which the offline acceptance did not cover | R-8 asserts `D18` is present in the Postgres-path window; its absence fails the merge gate |
-| Test suite "fixed" by weakening assertions | 8 exact-score assertions pin the current behaviour | R-4's criterion forbids loosening to vague comparisons; review sees old and new values. **Only 1 of the 8 should change value** — with the position-aware shape the other 7 are unchanged, so a diff touching several expected numbers is the tell |
+| Q63's `D18` disappears rather than re-orders | A prefilter change can turn a re-ordering into a missing row, which the offline acceptance did not cover | R-8 asserts `D18` is present in the Postgres-path window; its absence fails the merge gate *(2026-10-03, #2: R-8 measured **0 missing** — neither Q63's `D18` nor the second regression Q62's `D17` leaves the window; both are in-window re-orderings)* |
+| Test suite "fixed" by weakening assertions | 8 exact-score assertions pin the current behaviour | R-4's criterion forbids loosening to vague comparisons; review sees old and new values. **Only 1 of the 8 should change value** — with the position-aware shape the other 7 are unchanged, so a diff touching several expected numbers is the tell *(2026-10-03, #2: **none** of the 8 change — the query-only split leaves every document-side assertion at its shipped value, so a diff touching **any** expected number is the tell)* |
 | Shared-PVC blast radius | `skills` shares `postgres-0`'s 1 Gi PVC with `audit`, `incidents`, `sessions`, and the PVC cannot be grown by GitOps | Tested rollback; index size measured before and after and recorded in the delivery note |

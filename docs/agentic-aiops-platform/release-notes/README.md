@@ -7,6 +7,28 @@ waves and validation outcomes rather than published product releases.
 
 ## Available Notes
 
+- `2026-10-03-spec-066-skill-retrieval-ranking-fidelity.md`
+  - minor (v0.46.0) — the skill-retrieval ranking-fidelity slice (SPEC-066,
+    extending SPEC-014 R-3), closing the "Semantic (vector) skill retrieval"
+    exploration-backlog row on the cheap-lexical step. Ships four measured fixes to
+    the `skills-hub` scorer, made unconditional at R-9: the `skill_id` slug scored
+    as a fourth field at ×2 (R-1), corpus-derived IDF weighting with no stoplist
+    (R-2), sublinear body-length normalization (R-3), and a **query-side-only**
+    CamelCase split that leaves every document field byte-identical to
+    `to_tsvector('simple', …)` (R-4) — which is what makes the GIN prefilter a sound
+    over-approximation and cross-backend parity hold **by construction** (R-5/R-6),
+    via an additive `idx_skills_search` → `idx_skills_search_v2` swap (+8 KiB). Adds
+    a product-side de-duplication guardrail in `rank()` (R-7) that collapses
+    identical bodies before truncation. Re-measured on the shipped PostgreSQL path,
+    combined top-1 grade-2 recall rises **19/38 → 24/38** and identifier-owner
+    recovery **0/3 → 3/3**, with the paired nDCG@10 bootstrap 95% CI
+    **[+0.022, +0.111]** excluding zero; the pre-registered top-1 sign test is
+    reported honestly as **directional only** ((7, 2), p = 0.1797), and **two**
+    accepted in-window re-orderings (**Q62**, **Q63**) are disclosed rather than
+    smoothed. No new route, action, contract, JSON schema, audit event type, or
+    execution path; `score` keeps its shape and no consumer reads its magnitude.
+    **Vector retrieval remains unauthorized** — the recorded scale trigger (>2,000
+    skills or search p95 >300 ms) is the only reopening condition.
 - `2026-09-29-spec-065-r5-observability-token-metrics-and-dashboards.md`
   - minor (v0.45.0) — the R5 observability slice (SPEC-065, implementing
     ADR-0014) and the last R5 deliverable. Adds an always-on

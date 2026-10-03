@@ -134,6 +134,19 @@ Acceptance criteria:
 - all ingested skills are retrievable by all authenticated platform callers;
   per-team read scoping is out of scope for this slice
 
+> **Superseded in part (2026-10-03, SPEC-066 R-9, delivered).** The "keyword
+> matching against title, tags, and body with fixed weighting" and "`skill_id`
+> tie-break" wording above is no longer complete: SPEC-066 made four
+> lexical-fidelity fixes unconditional in `services/scoring.py` — `skill_id` is a
+> **fourth scored field** (tag weight), every term is **IDF-weighted**, the capped
+> body term is **length-normalized**, and the **query** is CamelCase-split
+> (document fields stay unsplit, so Postgres `to_tsvector('simple')` parity holds
+> by construction). The determinism/explainability guarantee, the field-weight
+> *ordering* (title > tags > body), the ascending `skill_id` tie-break, and "no
+> machine-learning retrieval in this slice" all still hold. The criterion text is
+> preserved as delivered history; see
+> `docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/`.
+
 ### R-4: skills.search read-only tool in the tool execution framework
 
 The agent reaches skills exclusively through tool-gateway, as a registered
@@ -292,3 +305,10 @@ None — all resolved (see Changelog).
   optional `source_url` frontmatter key for upstream attribution; R-6
   gains the e2e demo smoke script and the operator-guide Skills demo tour
   as acceptance criteria.
+- 2026-10-03: R-3's ranking criterion annotated (not edited) — SPEC-066
+  (`delivered`) made four lexical-fidelity fixes unconditional in
+  `services/scoring.py`: `skill_id` is now a fourth scored field, terms are
+  IDF-weighted, the capped body term is length-normalized, and the query is
+  CamelCase-split (document side unsplit, so Postgres parity holds by
+  construction). Determinism/explainability, the title > tags > body ordering,
+  the `skill_id` tie-break, and the no-ML boundary are unchanged.

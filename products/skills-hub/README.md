@@ -35,7 +35,7 @@ Current implementation status (SPEC-014):
 API surface (all query routes require Basic/workload auth unless noted):
 
 - `GET /api/v1/skills` — list skills with `source`/`tag` filters and capped offset pagination
-- `GET /api/v1/skills/search?q=...` — deterministic ranked matches (title ×3, tags ×2, body ×1, `skill_id` tie-break) with excerpt ≤ 400 chars and provenance
+- `GET /api/v1/skills/search?q=...` — deterministic ranked matches across four scored fields (title ×3; tags ×2; `skill_id` ×2 — a **scored field** since SPEC-066, not only the tie-break; body ×1, saturating at 5 occurrences), every term IDF-weighted and the body term length-normalized, with excerpt ≤ 400 chars and provenance. Ties break by `skill_id` ascending; `score` orders one result set and is not comparable across queries
 - `GET /api/v1/skills/{source_id}/{slug}` — full skill record conforming to `skill.schema.json`
 - `GET /api/v1/skills/status` — per-source sync state (auth-exempt health surface)
 - `/health/live`, `/health/ready`, `/metrics`
@@ -66,7 +66,7 @@ Current runtime environment knobs:
 - `tool-gateway` is the only platform caller: the skills connector registers `skills.search`, `skills.get`, and `skills.list`, authenticated against `SKILLS_QUERY_CLIENTS`
 - `agent-platform` reaches skills indirectly through those tools; its system prompt carries the skills discipline (consult, cite, separate guidance from live data, honest no-match)
 - `operator-portal` surfaces `skills.search` evidence frames in the evidence panel without changes
-- `shared/shared-contracts` owns `skill.schema.json` and the `skill-format.md` frontmatter convention
+- `shared/shared-contracts` owns `skill.schema.json` and the `skill-format.md` frontmatter convention. The search `score` is a **published API field, not a validated-contract field** — it appears in no `shared-contracts` schema (SPEC-066 OQ-1(a)), so SPEC-066's re-weighting shipped with **no contract version bump**; only this README's prose describes it
 
 ## Boundary
 

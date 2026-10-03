@@ -2,20 +2,33 @@
 
 ## Status
 
-- status: `approved`
+- status: `delivered`
 - owner: luban-platform-team
 - created: 2026-10-01
 - approved: 2026-10-02 — the six Open Questions were resolved against the shipped
   code and the operator ratified the resolutions, including the two that were
   product decisions rather than code questions (OQ-4 accept the Q63
   re-ordering; OQ-6 defer sync-time overlap rejection).
-- release slice: **none assigned.** R5 closed at v0.45.0 (SPEC-065, delivered
-  2026-09-29) and no R6 theme exists yet. This spec's roadmap home is the
+- amended: 2026-10-03 — R-4 re-scoped to a **query-side-only** CamelCase split
+  (#2) so R-5's prefilter is a sound over-approximation and R-6 parity holds **by
+  construction**, resolving the document-side-split parity blocker that had blocked
+  R-9. R-8 re-measured on real PostgreSQL 16 (**24/38** candidate; parity green).
+  Status remains **`approved`** — *not* delivered; R-9 and the delivery boundary
+  are separate authorizations. See the R-4/R-5/R-8 amendment notes and Changelog.
+- delivered: 2026-10-03 (v0.46.0) — R-9 (the four measurement flags removed, R-1..R-4
+  unconditional) and the delivery boundary (VERSION lockstep, CHANGELOG close, the
+  delivery release note carrying the Q62 + Q63 disclosure, and this status flip)
+  executed under the separate authorizations the `amended` note above reserved. The
+  live `idx_skills_search_v2` migration and deployment are the remaining operator
+  step, and the drop of the retained `idx_skills_search` is scheduled for the
+  following release.
+- release slice: **v0.46.0** (2026-10-03) — a standalone minor. R5 closed at v0.45.0
+  (SPEC-065, delivered 2026-09-29) and no R6 theme train exists, so this ships on its
+  own version bump rather than inside a theme slice. Its roadmap home is the
   [Exploration Backlog](../../agentic-aiops-platform/delivery-roadmap.md#exploration-backlog)
   row "Semantic (vector) skill retrieval", **closed 2026-10-01** with the explicit
   condition that *"promoting them needs its own spec"* — this is that spec.
-- target version: unassigned (next minor after v0.45.0, pending an R6 theme
-  decision)
+- target version: v0.46.0
 - related ADRs: **none.** OQ-3 resolved to *preserve* the cross-backend
   byte-identical ordering invariant as written, so no architectural narrowing
   occurs and ADR-0015 is not needed. The invariant is preserved **by mechanism**
@@ -68,7 +81,9 @@ package, together with the **cross-backend parity work the measurement could not
 see** and a **product-side de-duplication guardrail**. Combined on the labeled
 set these move top-1 correctness **0.500 → 0.711** and stratum-C (paraphrase)
 top-1 **0.333 → 0.611**, with bootstrap 95% CIs excluding zero on MRR, MRR(2)
-and nDCG@10 and an exact sign test at **p = 0.0117**.
+and nDCG@10 and an exact sign test at **p = 0.0117** *(offline, in-memory; the
+shipped #2 candidate's re-measured significance — 24/38, nDCG@10 bootstrap CI
+excluding zero, top-1 sign test **p = 0.18** — is published in R-8)*.
 
 The measurement was taken on the **in-memory path only** — `rank()` over a corpus
 export, with no Postgres prefilter in front of it. Three of the four fixes are
@@ -283,6 +298,50 @@ Acceptance criteria:
 
 ### R-4: CamelCase-splitting tokenization
 
+> **Amended 2026-10-03 (#2 — query-side-only split).** The requirement as approved
+> cannot ship: splitting CamelCase on the **document** side makes R-5's prefilter
+> under-admit, so byte-identical cross-backend parity (R-6, OQ-3) fails on **5 of
+> 81** committed queries (Q17/Q19/Q39/Q41/C09). A plain query word (`set`) matches
+> a part Python splits out of a document identifier (`StatefulSet`) that
+> `to_tsvector('simple')` keeps whole and the prefix term `set:*` cannot reach (a
+> prefix anchors at lexeme **start**). With a SQL tokenizer forbidden (OQ-5), the
+> prefilter cannot be both sound and useful while the document side splits, so R-4
+> is re-scoped:
+>
+> - **CamelCase splitting applies to the QUERY ONLY**, via a new `tokenize_query()`.
+>   Every **document** field (`title`, `tags`, `body`, `skill_id`) and R-2's `df`
+>   stay on the unsplit `tokenize()` (`[a-z0-9]+`), byte-identical to
+>   `to_tsvector('simple', …)` lexemes.
+> - This makes R-5's prefilter a sound over-approximation **by construction**: each
+>   document token *is* one whole SQL lexeme, the prefilter ORs an exact term for
+>   every query token, and `score()` matches by **exact** membership — so query-side
+>   splitting can only **widen** the candidate set, never under-admit. No SQL
+>   tokenizer, no bypass of R-5's recorded fallback, no ADR: OQ-3 and OQ-5 stand.
+>
+> **Clauses this supersedes** (kept below for the audit trail, not deleted):
+> - "in `tokenize()` — the single matching unit for the whole path" → the split
+>   lives in `tokenize_query()`; `tokenize()` is the unsplit document unit.
+> - "The rule is applied consistently in `tokenize()`, in the R-2 `df` computation,
+>   and in the R-5 prefilter; a partial application … is the failure mode" →
+>   **inverted**: the application is *deliberately* asymmetric (query splits,
+>   document does not); symmetric document-side splitting is now the failure mode.
+> - "exactly **one** [of the 8 exact-score assertions] changes value … 7.0 → 27.0"
+>   → under the query-only split **none of the eight** document-side assertions
+>   changes (`score("KubePodNotReady", skill)` stays **7.0**); the split is
+>   exercised by new query-side tests. The position-aware anti-inflation shape is
+>   retained but now lives entirely in `tokenize_query`.
+> - Stage-0's "0.711 carries over to retention" → **superseded**: the offline
+>   aggregate was measured with the split on the document side, so it does *not*
+>   carry to query-only splitting. R-8 re-measures (**24/38**; see R-8).
+>
+> **Cost, published (R-8).** Query-only splitting forgoes plain-word →
+> CamelCase-title recall — `score("pod not ready", title="KubePodNotReady")` stays
+> **0.0** rather than the doc-side **9.0** — because that match is exactly the class
+> that broke parity. The measured candidate is **24/38** combined top-1 (doc-side
+> rebuild 26/38, memo 27/38); the R-1 headline (identifier-owner recovery
+> **0/3 → 3/3**), the null result, and the nDCG@10 bootstrap (CI excludes zero) all
+> hold. The trade is deliberate: parity by construction over 2 top-1 points.
+
 Split CamelCase runs into their component words so alert titles and skill names
 become matchable, in `tokenize()` — the single matching unit for the whole path.
 
@@ -378,6 +437,31 @@ Make the Postgres prefilter and its index admit **every** record the new scorer
 can rank above zero, so the deployed backend delivers the measured fix instead of
 a subset of it. This is the requirement the measurement could not see, and it is
 not optional: without it R-1 does not ship and R-4 regresses recall.
+
+> **Amended 2026-10-03 (#2 — soundness is now structural, not prefix-lexeme luck).**
+> With R-4 re-scoped to a **query-side-only** split, the document side
+> (`tokenize()`) is byte-identical to `to_tsvector('simple', …)`, so **every
+> document token *is* one whole SQL lexeme** and `score()` matches by **exact**
+> membership. The prefilter ORs an exact `token` term (plus a `token:*` prefix
+> term) for every query token, so any document that could score above zero — i.e.
+> shares one exact token with the query — is admitted by that exact term. The
+> over-approximation therefore holds **by construction**; the prefix terms only
+> ever *add* candidates (whole-lexeme prefix reach such as `reset:*` →
+> `resetpasswordadhoc`), which Python re-ranks. The Stage-0 prefix-lexeme
+> verification below is retained as a promoted regression test, but R-5's
+> soundness no longer *depends* on it, and the document-side under-admission that
+> broke parity (a plain `set` matching a part split out of `StatefulSet`, which
+> `set:*` cannot reach because a prefix anchors at lexeme start) is **structurally
+> impossible** under #2.
+>
+> **Measured on real PostgreSQL 16 (this amendment's re-measurement):** the
+> migration's index-size delta is `idx_skills_search` **155,648 B** →
+> `idx_skills_search_v2` **163,840 B** (+8,192 B, one 8 KiB page — kilobytes at 18
+> rows, as predicted; the shared 1 Gi PVC is unaffected). End-to-end search latency
+> on the Postgres path is **p50 19.077 ms / p95 24.849 ms**, far inside the
+> tool-gateway's 10.0 s `REQUEST_TIMEOUT_SECONDS`. Both figures satisfy the
+> "measured, not assumed" criteria below; the parity harness
+> (`test_parity_candidate`) is **green with `idx_skills_search_v2` in service**.
 
 Acceptance criteria:
 
@@ -566,6 +650,54 @@ Acceptance criteria:
 Re-run the evaluation against the committed label fixture **through the Postgres
 backend**, and publish the result whether or not it reproduces the offline gain.
 
+> **Amended 2026-10-03 (#2 — the measured result, published as measured).** The
+> rebuilt harness (`tests/support/eval_harness.py`, driven through
+> `PostgresSkillStore.search()` so the prefilter is in the measured path) was
+> re-run against real PostgreSQL 16 under the **query-side-only** split. It first
+> reproduces the shipped scorer's baseline — **V0 = 19/38** combined top-1 grade 2,
+> unchanged — before any candidate number is believed. The shipped #2 candidate
+> (all four flags on) measures:
+>
+> | Config | Combined top-1 (grade 2) | Note |
+> |---|---|---|
+> | V0 (shipped, flags off) | **19/38** | fidelity gate — reproduces the baseline |
+> | V3 (IDF + length-norm + query-split, no `skill_id`) | **23/38** | the three backend-neutral fixes |
+> | **V6 / candidate (all four, #2)** | **24/38** | R-1's `skill_id` adds the 24th |
+>
+> Combined MRR **0.842**; stratum-B MRR **0.900**; stratum-C MRR **0.778**,
+> stratum-C top-1 grade 2 **10/18**. Stratum-A identifier-owner recovery — R-1's
+> headline — is intact at **0/3 → 3/3**. The null result holds: **0** grade-2
+> documents leave the returned window, and zero-relevant abstention is **unchanged
+> at 4/38**. The offline memo's 27/38 and the document-side rebuild's 26/38 are
+> **not** reproduced, and are not claimed: the query-only split forgoes the
+> plain-word → CamelCase-title recall that doc-side splitting bought (see R-4's
+> published cost), and **24/38 is the number that ships**.
+>
+> **Two disclosures, recorded not smoothed (R-8's "ship what was measured" rule):**
+> 1. **The pre-registered top-1 sign test lost significance.** Offline doc-side it
+>    was (9 improved, 1 regressed) **p = 0.0117**; re-measured under #2 it is
+>    **(7, 2) p = 0.1797** — *directional only, not significant at α = 0.05*. The
+>    **primary** significance result still holds: the paired nDCG@10 bootstrap
+>    (10,000 resamples, seed 20261001) gives a 95% CI of **[+0.022, +0.111]**,
+>    which **excludes zero**. The claim narrows to "a real nDCG@10 gain whose
+>    top-1 win count is directional", and the Summary/`spec.md` prose is amended to
+>    say so rather than citing p = 0.0117 unqualified.
+> 2. **There are two top-1 regressions, not one.** OQ-4 accepted **Q63** (`D18`
+>    grade 2 → `D13` grade 1, `D18` to rank 2 of 5, `R@5(=2)` unaffected). #2 adds
+>    **Q62** (`D17` grade 2 → `D18` grade 1) of the *same* severity class — an
+>    in-window re-ordering, not a disappearance, so the null result stays 0 missing.
+>    Q62 was not in OQ-4's original single-regression acceptance; it is disclosed
+>    here under R-8's criterion and named in the delivery release note alongside
+>    Q63. Both are stratum-C paraphrases whose grade-2 document remains returned.
+>
+> **Q45 reconciled (mechanism corrected).** Under doc-side splitting Q45's story
+> was "R-1's slug promotes `D15` over `D12`". Re-measured per-query, `D15` is top-1
+> in **all three** configs (V0, V3, candidate) with `D12` at rank 2 — so Q45 is
+> **not** an R-1 slug regression but the **R-4 query-only recall cost**: `D12`
+> (`KubePodNotReady`) no longer matches a bare plain-word query because the
+> document side is unsplit. `test_evaluation.py` asserts this directly
+> (`test_r4_query_only_scope_is_the_gap`).
+
 Acceptance criteria:
 
 - **The harness is reconstructed and committed, not reused.** Correction to this
@@ -600,7 +732,13 @@ Acceptance criteria:
   metric deltas, plus an exact two-sided sign test on discordant top-1 pairs.
   **Precision@5 is not relied on** — its baseline CI lower bound rounds to zero
   and the eval-set already flags it as borderline.
-- The **one known regression is disclosed, not buried**: Q63 `web check sign in
+- The **known regressions are disclosed, not buried** *(2026-10-03, #2: there are
+  now **two**, not one — Q63 below plus **Q62**, `D17` grade 2 → `D18` grade 1, an
+  in-window re-ordering of the same severity class; both keep their grade-2
+  document returned, so the null result stays 0 missing. Q62 was not in OQ-4's
+  original single-regression acceptance and is disclosed under this criterion and
+  named in the delivery release note beside Q63. See the R-8 amendment note.)*:
+  Q63 `web check sign in
   inventory portal does not transition successful login troubleshooting` moves
   top-1 from `D18` (grade 2) to `D13` (grade 1), with `D18` falling to rank 2 of
   5 so `R@5(=2)` is unaffected. **OQ-4 is resolved: the operator accepts it**, on
@@ -633,7 +771,16 @@ Acceptance criteria:
   queries.** R-4's retention makes the score depend on how many tokens a query's
   surface form yields: measured, an exact identifier match (`KubePodNotReady`
   against a `KubePodNotReady` title) scores **15.0** where the equivalent
-  three-word phrase scores **9.0**. Nothing consumes the magnitude — the
+  three-word phrase scores **9.0**. *(2026-10-03, #2 — superseded by measurement:
+  under the query-only split the same comparison is **3.0** for the exact
+  identifier match, **9.0** for the phrase against a `pod not ready` title, and
+  **0.0** for the phrase against the `KubePodNotReady` title. The direction
+  therefore **reverses** — the exact identifier no longer out-scores the phrase —
+  and the cross-match recall is the deliberately forgone one (R-4's published
+  cost). The obligation is unchanged: `score` remains incomparable across query
+  shapes, so no threshold may be re-derived from these numbers without accounting
+  for query shape. The 15.0/9.0 pair is the doc-side figure and must not be
+  published.)* Nothing consumes the magnitude — the
   tool-gateway connector drops it and the portal never renders it — so this is a
   documentation obligation rather than a behavioural one, but it also constrains
   the separate abstention backlog row: a threshold over `score` cannot be
@@ -784,7 +931,8 @@ Acceptance criteria:
   `docs/specs/README.md`, and the delivery-roadmap Exploration Backlog row.
 - risk: **the ordering of search results changes for real operators.** That is the
   point, and it is measured — but it is a behaviour change on a path the agent
-  calls, with one known mild regression (R-8) and a prefilter co-change whose
+  calls, with ~~one known mild regression~~ *(2026-10-03, #2: **two** known mild
+  in-window re-orderings, Q62 and Q63 — see R-8)* (R-8) and a prefilter co-change whose
   failure mode is *silent* under-admission. R-5 and R-6 exist to make that failure
   mode loud.
 
@@ -826,6 +974,15 @@ checkable facts rather than decisions; they are listed at the end.
   `tokenize()` splits CamelCase and PostgreSQL's `to_tsvector('simple', …)` does
   not, so `df` computed in SQL **cannot** match the scorer's `df` and parity
   breaks — SQL-side statistics are eliminated outright, not merely disfavoured.
+  *(2026-10-03, #2 — this specific reason is **moot, and inverted**: R-4 now
+  splits the **query only**, so the document-side `tokenize()` that `compute_stats`
+  uses is byte-identical to `to_tsvector('simple', …)` and a SQL-computed `df`
+  would in fact **match**. `df` is nonetheless still Python-computed and
+  sync-persisted, because the other two reasons stand independently — `rank()` is
+  synchronous and pure so statistics must be passed in, and a per-request
+  whole-catalog read is rejected on cost. Under #2 `df` is also **flag-independent**:
+  `compute_stats` calls only the unsplit `tokenize()`, so `refresh_statistics()`
+  yields the same snapshot regardless of `SPLIT_CAMEL_CASE`.)*
   And a per-request whole-catalog read on the Postgres path would read exactly
   what the prefilter exists to avoid, scaling badly against the memo's own
   >2,000-skill trigger. Option (iii), statistics over the pool passed to `rank()`,
@@ -837,7 +994,11 @@ checkable facts rather than decisions; they are listed at the end.
   diverge at the dev deployment's `replicas: 1`, but that makes correctness
   depend on a deployment shape. **Second half: `tokenize()` retains the whole
   CamelCase token alongside its parts**, a strict superset for matching that
-  cannot reduce recall and preserves exact-identifier lookups.
+  cannot reduce recall and preserves exact-identifier lookups. *(2026-10-03, #2 —
+  the retention now lives in `tokenize_query()` on the **query side only**; the
+  document-side `tokenize()` is unsplit. "Cannot reduce recall" holds for the
+  query, but the doc-side plain-word → CamelCase-title recall is deliberately
+  forgone — see R-4's published cost.)*
 - **OQ-3 — Is the byte-identical cross-backend ordering invariant preserved or
   narrowed?** → **Preserved as written; no ADR.** The memo §11 narrowing
   recommendation was scoped to *semantic* retrieval, where a vector path cannot be
@@ -852,7 +1013,14 @@ checkable facts rather than decisions; they are listed at the end.
   `D18` falls to **rank 2 of 5**, so `R@5(=2)` is unaffected (0.977 combined,
   1.000 on stratum B) and the correct document stays inside the returned window.
   The sign test remains **p = 0.0117** with the regression counted, so the
-  measured cost is one re-ordering on 1 of 38 queries. The two conditions are
+  measured cost is one re-ordering on 1 of 38 queries. *(2026-10-03, #2 —
+  superseded by the shipped re-measurement: the top-1 sign test is **(7, 2)
+  p = 0.1797** (directional, not significant), and there is a **second**
+  re-ordering of the same in-window class, **Q62** (`D17` grade 2 → `D18` grade
+  1). OQ-4's acceptance named Q63 alone; Q62 is disclosed under R-8's criterion
+  and named in the delivery release note beside it. The nDCG@10 bootstrap CI
+  **[+0.022, +0.111]** still excludes zero, so the gain itself stands. See the R-8
+  amendment note.)* The two conditions are
   enforced in R-8: the regression must also be reported on the **Postgres** path,
   because a prefilter change could convert a re-ordering into a *disappearance*
   (a different severity, and if `D18` leaves the window entirely the acceptance
@@ -931,7 +1099,13 @@ exposed, and neither was assumed:
    parts-only — the whole token was dropped.** Retention nevertheless reproduces
    every published aggregate metric with no re-ordering on any of the 38 queries,
    so retention stands and R-8 may carry 0.711 over. R-8 still publishes any
-   discrepancy its own rebuilt harness finds.
+   discrepancy its own rebuilt harness finds. *(2026-10-03, #2 — the "carry 0.711
+   over" conclusion is **superseded**: it held for the **document-side** split, but
+   #2 splits the **query only**, which forgoes the plain-word → CamelCase-title
+   recall the 0.711 aggregate counted. R-8 re-measured the query-only candidate at
+   **24/38** (≈ 0.632 combined top-1), not 0.711; see the R-4 and R-8 amendment
+   notes. The re-derivation itself — that the offline variant was parts-only —
+   stands.)*
 
 Also inherited and **not** resolved here: **label-set ownership is unsettled.**
 The fixture is author-proposed and operator-ratified, not operations-owned, and no
@@ -1130,3 +1304,110 @@ reopened for embedding work.
   dependency was verify (b)). No requirement's scope and no OQ resolution changed;
   what changed is one index expression, two lifted caveats and one added
   enforcement rationale.
+- 2026-10-03: **R-4 re-scoped to a query-side-only CamelCase split (#2); R-8
+  re-measured on the shipped path; parity now holds by construction.** With
+  Stages 1–5 implemented, the R-6 parity harness (`test_parity_candidate`) XFAILed
+  under the all-on candidate: splitting CamelCase on the **document** side made
+  R-5's GIN prefilter **under-admit** on **5 of 81** committed queries
+  (Q17/Q19/Q39/Q41/C09). Mechanism — a plain query word (`set`) matches a part
+  Python split out of a document identifier (`StatefulSet`) that
+  `to_tsvector('simple')` keeps whole, and the prefix term `set:*` cannot reach it
+  (a prefix anchors at lexeme **start**). With a SQL tokenizer forbidden (OQ-5),
+  the prefilter cannot be both sound and useful while the document side splits.
+  Rather than bypass the prefilter (which would leave `idx_skills_search_v2`
+  vestigial), R-4 was re-scoped so the split applies to the **query only**, via a
+  new `tokenize_query()`; every document field (`title`/`tags`/`body`/`skill_id`)
+  and R-2's `df` stay on the unsplit `tokenize()` (`[a-z0-9]+`), byte-identical to
+  `to_tsvector` lexemes. Because `score()` matches by **exact** token membership,
+  query-side splitting can only **widen** the candidate set — so R-5's
+  over-approximation and R-6's byte-identical parity hold **by construction**, not
+  by prefix-lexeme luck. No SQL tokenizer (OQ-5 stands), no bypass of R-5's
+  recorded fallback (untaken), no ADR (OQ-3 stands).
+  Code: `scoring.py` gains `tokenize_query()` (query-side, position-aware,
+  whole-token-retaining) and `_query_tokens()` (de-duplicates under the flag);
+  `tokenize()` and `compute_stats()` stay unsplit, so **`df` is flag-independent**
+  under #2. `skill_store.search()` builds the prefilter from `tokenize_query`.
+  Tests re-wired: `test_scoring.py` (**none** of the 8 exact-score assertions move
+  now — the doc-side 7.0 → 27.0 inflation is gone; the split is exercised by new
+  query-side tests), `test_prefilter.py`, `test_evaluation.py`.
+  **R-8 re-measured through `PostgresSkillStore.search()` on real PostgreSQL 16:**
+  V0 fidelity **19/38** (unchanged); shipped #2 candidate (all four flags) **24/38**
+  combined top-1 grade 2 (V3 — the three backend-neutral fixes without `skill_id` —
+  is 23/38, so R-1's slug adds the 24th); combined MRR **0.842**, stratum-B MRR
+  **0.900**, stratum-C MRR **0.778** / top-1 **10/18**; stratum-A identifier-owner
+  recovery **0/3 → 3/3** intact; null result **0 missing**, abstention unchanged
+  **4/38**. **Full suite 300 passed** on real PostgreSQL 16 with
+  `test_parity_candidate` **green and `idx_skills_search_v2` in service** — the
+  blocker is cleared. **Two honest downgrades, published not smoothed:** (1) the
+  pre-registered **top-1 sign test lost significance** — offline doc-side (9,1)
+  p = 0.0117 → re-measured **(7,2) p = 0.1797**, directional only; the **primary**
+  nDCG@10 paired bootstrap CI **[+0.022, +0.111]** still excludes zero, so the
+  gain stands but the top-1 win count is not significant on its own. (2) There are
+  **two** top-1 regressions, not one: OQ-4's accepted **Q63** (`D18` → `D13`) plus
+  **Q62** (`D17` → `D18`), both in-window re-orderings of the same class; Q62 was
+  outside OQ-4's original acceptance and is disclosed under R-8 and named for the
+  delivery release note. **Q45's mechanism was corrected**: `D15` is top-1 in all
+  three configs, so Q45 is the R-4 query-only recall cost (`D12`
+  `KubePodNotReady` no longer matches a bare plain-word query), **not** an R-1 slug
+  regression. R-5 measured on the real backend for the first time (the prior daemon
+  wedge cleared): `idx_skills_search` **155,648 B** → `idx_skills_search_v2`
+  **163,840 B** (+8,192 B, one page); end-to-end search latency **p50 19.077 ms /
+  p95 24.849 ms**, inside the 10.0 s gateway timeout. Amendments recorded by dated
+  supersede-by-quotation in R-4, R-5, R-8, R-9, OQ-2, OQ-4, the Impact risk line
+  and Stage-0 verify-(b); `plan.md`'s R-4 design section and Risks table carry
+  matching notes. **Cost, published:** query-only splitting forgoes plain-word →
+  CamelCase-title recall (`score("pod not ready", title="KubePodNotReady")` stays
+  **0.0**, not the doc-side 9.0) — the exact class that broke parity — so the
+  candidate is 24/38 rather than the memo's 27/38; the trade is deliberate,
+  **parity by construction over 2 top-1 points.** Status remains **`approved`** —
+  *not* delivered. **R-9 (flag removal + living-doc updates) and the delivery
+  boundary (commit/push, live index migration, deployment, VERSION bump,
+  status → delivered) remain separate, held authorizations.**
+- 2026-10-03 (2): **delivered as v0.46.0.** The two authorizations the entry above
+  held separate — R-9 and the delivery boundary — are both now executed. **R-9 (flags
+  removed, fixes unconditional):** the four measurement flags (`SCORE_SKILL_ID`,
+  `USE_IDF`, `USE_LENGTH_NORM`, `SPLIT_CAMEL_CASE`) are gone from `services/scoring.py`;
+  R-1..R-4 always apply, and the module docstring and comments are rewritten so the
+  shipped weighting (`title ×3, tags ×2, body ×1`, `skill_id` scored at tag weight,
+  `BODY_OCCURRENCE_CAP = 5`, sublinear length norm) and the byte-identical parity
+  rationale read as load-bearing documentation, not flag-gated experiment notes; the
+  fidelity-gate test's replacement asserts the shipped behaviour directly. **Living-doc
+  sweep:** `products/skills-hub/README.md`'s endpoint summary now names `skill_id` a
+  **scored field**, not only a tie-break; **SPEC-014 R-3** is annotated by dated inline
+  note (its `delivered` "fixed weighting" criterion is now inaccurate) with the
+  relationship stated in both specs, while the **delivered 2026-08-15 release note is not
+  edited** (it stands as the record of what shipped then); `docs/guides/skills-guide.md`
+  is updated in the **three** places R-9 named — the "never register the same files twice"
+  rationale R-7 made false (warning kept on ingestion/storage/sync cost, its 32-of-63
+  figure reframed as history), the `skill_id`-as-retrieval-surface authoring advice R-1/R-4
+  enable, and the search prose checked against the shipped prefilter widening; R-2's
+  **bounded staleness** is documented for operators (a newly ingested document is
+  searchable immediately but does not rebalance token weights until the next sync,
+  `SKILLS_SYNC_INTERVAL_SECONDS`, default **300**); and no published prose implies `score`
+  is comparable across query shapes (R-4's retention makes it query-shape dependent —
+  exact identifier **3.0**, equivalent three-word phrase **9.0**, plain word against an
+  identifier-only title **0.0**). **Delivery boundary:** `VERSION` 0.45.0 → **0.46.0**
+  across the 19-file lockstep (+ 8 regenerated `uv.lock`), `make validate-version` green;
+  `CHANGELOG.md`'s `## Unreleased` closed into `## 0.46.0 — 2026-10-03`; the delivery
+  release note `2026-10-03-spec-066-skill-retrieval-ranking-fidelity.md` written,
+  disclosing **both** in-window re-orderings (**Q62 + Q63**), the top-1 sign-test downgrade
+  to directional-only, and abstention **unchanged at 4/38**; `spec.md` status →
+  **`delivered`** (+ delivered date/version); and the `docs/specs/README.md` row, the
+  delivery-roadmap Exploration Backlog row, and the retrieval **memo + eval-set**
+  delivered-header pointers updated, the eval-set gaining a new **§10** that records R-8's
+  shipped-path re-measurement without rewriting §8's offline numbers. **Cross-product
+  (R-9), verified not assumed:** `products/tool-gateway/tests/test_skills_connector.py`
+  passes unchanged (**33**; `_MATCH_KEYS` still drops `score`, so only ordering and
+  excerpts are agent-visible), `shared/platform-ops/e2e/skills-demo.sh`'s
+  `q=KubePodNotReady` top match verified offline (decisive at **30.966**), and **no**
+  `shared/shared-contracts` JSON schema changed (`score` is a published field, not a
+  validated-contract field, so **no contract version bump**). **Verification:** skills-hub
+  suite **291 passed**; the **full root `make verify` is green** — all eight product suites
+  (agent-platform 1538, audit-service 140, execution-runtime 79, identity-broker 61,
+  incident-service 138, platform-gateway 394, skills-hub 291, tool-gateway 431), the four
+  overlay renders, the dashboard / policy / version / secret-vocabulary / password-policy
+  validators, the secret-delivery demo, the portal SPA vitest suite and production build,
+  and the execution-failure crash-safety campaign (**792 passed, 2 deselected**, exit 0).
+  **Remaining operator step (not claimed here):** the live-cluster `idx_skills_search_v2`
+  migration + deployment and a live `skills-demo.sh` run; the retained `idx_skills_search`
+  is scheduled to drop in the following release.

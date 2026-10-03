@@ -566,7 +566,9 @@ class PostgresStoreAdapterTests(unittest.TestCase):
         )
         hits = _run(store.search("pod", 5))
         self.assertIn("to_tsquery", calls[0]["sql"])
-        self.assertEqual(calls[0]["params"]["query"], "pod")
+        # SPEC-066 R-5: each token ORs its exact and prefix form so a
+        # CamelCase-derived part reaches the single indexed lexeme it prefixes.
+        self.assertEqual(calls[0]["params"]["query"], "pod | pod:*")
         self.assertEqual([h.skill.skill_id for h in hits], ["a/hit"])
 
     def test_search_joins_multi_word_queries_with_or(self) -> None:
@@ -578,7 +580,14 @@ class PostgresStoreAdapterTests(unittest.TestCase):
         )
         hits = _run(store.search("kubernetes incident", 5))
         self.assertEqual(hits, [])
-        self.assertEqual(calls[0]["params"]["query"], "kubernetes | incident")
+        # SPEC-066 R-5: the OR-join is kept (never plainto_tsquery, which would
+        # AND the words and drop partial matches); each token now also ORs its
+        # prefix form so a CamelCase part reaches the lexeme it prefixes.
+        self.assertEqual(
+            calls[0]["params"]["query"],
+            "kubernetes | kubernetes:* | incident | incident:*",
+        )
+        self.assertNotIn("plainto_tsquery", calls[0]["sql"])
 
     def test_search_without_tokens_skips_the_query(self) -> None:
         calls: list[dict] = []
