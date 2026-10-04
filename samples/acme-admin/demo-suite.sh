@@ -2,12 +2,13 @@
 
 # The acme-admin demo suite (SPEC-059 R-8).
 #
-# Runs the four ladder demos in order, then the composition (SPEC-057) that
-# orders two of them into one runbook, and then asserts the claim this whole
-# slice makes: a mutation performed over the **HTTP** surface is visible over
-# the **HTML** surface, because both really address one store. That is the
-# cross-skill verification step — `LockUnlockUser` changes something, and
-# `CheckUserStatus` reads it back from a page a human would look at.
+# Runs the five ladder demos in order — the four single-skill rungs, then the
+# composition (SPEC-057) that orders two of them into one runbook — and then
+# asserts the claim this whole slice makes: a mutation performed over the
+# **HTTP** surface is visible over the **HTML** surface, because both really
+# address one store. That is the cross-skill verification step —
+# `LockUnlockUser` changes something, and `CheckUserStatus` reads it back
+# from a page a human would look at.
 #
 # The ladder, and what each rung's demo asserts:
 #
