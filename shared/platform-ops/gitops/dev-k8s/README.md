@@ -349,7 +349,7 @@ This builds all product images with a coordinated `IMAGE_TAG` (delegating to eac
 
 By default the generated tag carries the platform semver (root `VERSION` file) plus the overlay name for clarity:
 
-- clean build: `<semver>-dev-k8s-<gitsha>` (e.g. `0.3.0-dev-k8s-d2596c2`)
+- clean build: `<semver>-dev-k8s-<gitsha>` (e.g. `0.46.0-dev-k8s-d2596c2`)
 - dirty local build: `<semver>-dev-k8s-<gitsha>-dirty-<timestamp>`
 
 If you want extra traceability in local experiments, you can optionally add a profile suffix:
@@ -412,13 +412,17 @@ The overlay deploys `audit-service` backed by a `postgres` StatefulSet
   `postgres` service), `AUDIT_RETENTION_DAYS=30`, `AUDIT_MAX_EVENTS=100000`,
   `AUDIT_EVICTION_INTERVAL_SECONDS=3600`
 
-The three emitters point at the service with matching client ids:
+The seven emitters point at the service with matching client ids:
 
 - tool-gateway: `GATEWAY_AUDIT_SERVICE_URL=http://audit-service:8000`, `GATEWAY_AUDIT_CLIENT_ID=tool-gateway`
 - platform-gateway: `PLATFORM_GATEWAY_AUDIT_SERVICE_URL=http://audit-service:8000`, `PLATFORM_GATEWAY_AUDIT_CLIENT_ID=platform-gateway`
 - identity-service: `IDENTITY_AUDIT_SERVICE_URL=http://audit-service:8000`, `IDENTITY_AUDIT_CLIENT_ID=identity-broker`
+- agent-service: `AGENT_AUDIT_SERVICE_URL=http://audit-service:8000`, `AGENT_AUDIT_CLIENT_ID=agent-service`
+- skills-hub: `SKILLS_AUDIT_SERVICE_URL=http://audit-service:8000`, `SKILLS_AUDIT_CLIENT_ID=skills-hub`
+- incident-service: `INCIDENT_AUDIT_SERVICE_URL=http://audit-service:8000`, `INCIDENT_AUDIT_CLIENT_ID=incident-service`
+- execution-runtime: `EXECUTION_AUDIT_SERVICE_URL=http://audit-service:8000`, `EXECUTION_AUDIT_CLIENT_ID=execution-runtime`
 
-The shared ingest secret lives in four optional secrets and is provisioned
+The shared ingest secret lives in eight optional secrets and is provisioned
 by `sync-audit-secrets.sh` (one random secret shared across all parties):
 
 - `audit-service-runtime-secrets` — `AUDIT_INGEST_CLIENTS`
@@ -426,6 +430,10 @@ by `sync-audit-secrets.sh` (one random secret shared across all parties):
 - `tool-gateway-runtime-secrets` — `GATEWAY_AUDIT_CLIENT_SECRET`
 - `platform-gateway-runtime-secrets` — `PLATFORM_GATEWAY_AUDIT_CLIENT_SECRET`
 - `identity-service-runtime-secrets` — `IDENTITY_AUDIT_CLIENT_SECRET`
+- `incident-service-runtime-secrets` — `INCIDENT_AUDIT_CLIENT_SECRET`
+- `skills-hub-runtime-secrets` — `SKILLS_AUDIT_CLIENT_SECRET`
+- `agent-platform-runtime-secrets` — `AGENT_AUDIT_CLIENT_SECRET`
+- `execution-runtime-runtime-secrets` — `EXECUTION_AUDIT_CLIENT_SECRET`
 
 `make deploy` runs the script automatically; to skip (e.g. when secrets are
 injected by CI):

@@ -100,12 +100,20 @@ Semantics:
   `agent_service/services/kernel_middleware.py`; as shipped it is
   `k8s.list_pods`, `k8s.get_pod`, `k8s.get_events`, `k8s.get_pod_logs`,
   `skills.search`, `skills.get`, `skills.list`, `incidents.list`,
-  `incidents.get`, the read-class browser probes (`web.navigate`,
-  `web.snapshot`, `web.screenshot`, `web.fill_credential`, `web.extract`,
-  `web.wait_for`, `web.hover`, `web.scroll`, `web.switch_frame`) and
-  `http.get`. Every write-tier tool is absent by construction — including
-  `web.click`/`web.type`/`web.evaluate`, `http.post` and `k8s.delete_pod` —
-  and naming one cannot change that (see the invariant below).
+  `incidents.get`, `secrets.generate_password` and the read-class browser
+  probes (`web.navigate`, `web.snapshot`, `web.screenshot`,
+  `web.fill_credential`, `web.extract`, `web.wait_for`, `web.hover`,
+  `web.scroll`, `web.switch_frame`). Every write-tier tool is absent by
+  construction — including `web.click`/`web.type`/`web.evaluate`, `http.post`
+  and `k8s.delete_pod` — and naming one cannot change that (see the invariant
+  below). `http.get` is deliberately *not* in the built-in default: v0.39.1
+  (post-SPEC-061 hardening) made its HITL bypass opt-in, because outbound
+  network egress is a different risk class from in-cluster reads. An
+  environment that wants a read-tier `http.get` to park no card names it in
+  `AGENT_GATEWAY_TOOL_AUTO_ALLOW_EXTRA` (additive) or
+  `AGENT_GATEWAY_TOOL_AUTO_ALLOW` (replacement); the origin allowlist,
+  response-byte bound and loopback/link-local/multicast refusals still apply on
+  every call regardless.
 - **Empty string** → auto-approve nothing; every gateway tool parks for confirmation.
 - **Comma-separated dotted names** → replaces the default entirely. Names are
   normalized to AgentScope's sanitized form (`k8s.get_pod` → `k8s_get_pod`).

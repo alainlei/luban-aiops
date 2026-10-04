@@ -1,6 +1,6 @@
 # Live Walkthrough: Lock or Unlock an ACME Admin User
 
-Rung 3 of the four. You will ask the agent, in **Chat**, to lock an `acme-admin`
+Rung 3 of the five. You will ask the agent, in **Chat**, to lock an `acme-admin`
 account. It will make **one** `http.post`, and that call will park **exactly
 one** confirmation card — of kind **`action`** — which a **second identity**
 must approve before anything changes.

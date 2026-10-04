@@ -21,9 +21,9 @@ Working on the application code itself (build, test, run locally, deliberate
 boundaries) is [`app/README.md`](app/README.md). This file is the
 operator-facing document.
 
-## The samples: a four-rung ladder plus two approval models
+## The samples: a five-rung ladder plus two approval models
 
-Four samples form a progressive ladder on the card count:
+Five samples form a progressive ladder on the card count:
 
 | # | Sample | Surface | Effect | Cards | `approval_kind` |
 |---|---|---|---|---|---|
@@ -31,12 +31,14 @@ Four samples form a progressive ladder on the card count:
 | 2 | [user-status](user-status/) | bound browser flow | read | **0** | — |
 | 3 | [lock-unlock-user](lock-unlock-user/) | `http.post` | write | **1** | `action` |
 | 4 | [password-reset](password-reset/) | bound browser flow | write | **1** | `flow` |
+| 5 | [composition](composition/) | runbook (4 then 3) | write (derived) | **2** | `flow` + `action` |
 
 Read together they make a claim none of them makes alone: **the card count
 tracks the effect of a skill, not the surface it uses.** Rungs 1 and 3 both talk
 to the JSON API and differ; rungs 2 and 4 both drive a browser and differ. A
-reader who has seen all four stops inferring "browser means dangerous" and "API
-means safe".
+reader who has seen all five stops inferring "browser means dangerous" and "API
+means safe" — and sees at rung 5 that composing two mutating skills parks two
+cards, not one.
 
 Two more samples share the same console to contrast the *approval models* — where
 rung 4's bound flow comes from, and what the work costs before one exists:
@@ -61,7 +63,7 @@ arrow is always tutorial → platform. Deploy out-of-band, after `make deploy`:
 ```sh
 make deploy                # platform, with the browser-dev + mutating-dev profiles
 make deploy-sample-app     # build the image, apply deploy/, then ASSERT it works
-make deploy-samples        # install all five skill documents (four rungs + adhoc-password-reset)
+make deploy-samples        # install all six skill documents (five rungs + adhoc-password-reset)
 ```
 
 `make deploy-sample-app` runs [`deploy.sh`](deploy.sh), which is a deploy *and*
@@ -256,10 +258,10 @@ choosing the right tools is not an assertion.
 
 ```sh
 samples/acme-admin/health-check/demo/demo.sh          # rung 1 alone
-RUN_CHAT_LEG=true samples/acme-admin/demo-suite.sh    # all four, plus the cross-skill leg
+RUN_CHAT_LEG=true samples/acme-admin/demo-suite.sh    # all five, plus the cross-skill leg
 ```
 
-[`demo-suite.sh`](demo-suite.sh) runs the four in ladder order and then asserts
+[`demo-suite.sh`](demo-suite.sh) runs the five in ladder order and then asserts
 the claim the whole slice makes: it locks a user over **HTTP** with the same
 `http.post` call rung 3 makes, and reads `locked` back off the rendered console
 over a real browser session — one store, two surfaces. It also asserts that
@@ -282,7 +284,7 @@ kubectl -n dev-luban-aiops port-forward svc/platform-gateway 18083:8000 &   # ch
 The existing walkthroughs are the template. The shape they share:
 
 1. **Say which portal surface it uses, and which it does not.** The operational
-   samples — the four rungs plus `adhoc-password-reset` — live in **Chat**;
+   samples — the five rungs plus `adhoc-password-reset` — live in **Chat**;
    **Studio** is the skill-development workspace (SPEC-056), used only by
    `skill-graduation`, and each Chat walkthrough names it explicitly as unused,
    pointing at `samples/acme-admin/skill-graduation/WALKTHROUGH.md`.

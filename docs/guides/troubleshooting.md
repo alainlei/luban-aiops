@@ -595,7 +595,7 @@ kubectl -n dev-luban-aiops logs deployment/skills-hub --tail=50 | grep -i otel
 - Header missing or 401s in the logs: export the OpenObserve root credentials
   (luban-bootstrapper `openobserve/secrets/openobserve.env`) and re-run
   `shared/platform-ops/gitops/sync-otel-secrets.sh` (or `make deploy` with the
-  variables exported); it upserts the header into all six secrets and restarts
+  variables exported); it upserts the header into all seven secrets and restarts
   the workloads.
 - `OTEL_ENABLED=false`: set it to `true` in
   `dev-k8s/base/shared/runtime.env` and redeploy.

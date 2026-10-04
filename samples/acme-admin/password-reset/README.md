@@ -1,10 +1,10 @@
 # ACME Admin Password Reset (bound browser flow, one `flow` card)
 
-Rung 4 of the four-rung `acme-admin` ladder (SPEC-059 R-7). A bound browser
+Rung 4 of the five-rung `acme-admin` ladder (SPEC-059 R-7). A bound browser
 flow with exactly one write-tier interaction — the "Confirm reset" click —
 parking exactly one confirmation card, of kind **`flow`**.
 
-This is the top of the ladder and the one rung the shipped static target
+This is the last single-skill rung and the one rung the shipped static target
 could not honestly claim. A page that echoes its own query parameters reports
 success for a user who does not exist, so the walkthrough that used it had to
 warn the reader that the URL they had just been shown was a lie. This app
@@ -148,6 +148,7 @@ Overrides: `TARGET_USER` (default `alice`), `NEW_PASSWORD` (default
 | 2 | [`../user-status/`](../user-status/) | bound browser flow | read | 0 |
 | 3 | [`../lock-unlock-user/`](../lock-unlock-user/) | `http.post` | write | 1 (`action`) |
 | **4** | **`password-reset/` (this one)** | **bound browser flow** | **write** | **1 (`flow`)** |
+| 5 | [`../composition/`](../composition/) | runbook (4 then 3) | write (derived) | 2 (`flow` + `action`) |
 
 Rungs 2 and 4 drive the same browser against the same console and differ only
 in effect, which is the pair that breaks "browser means dangerous".

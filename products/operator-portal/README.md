@@ -68,9 +68,10 @@ Current browser baseline capabilities:
   Debug, Audit trail) with state preserved across switches; narrow
   screens collapse the sidebar into a hamburger-triggered off-canvas
   drawer
-- sectioned sidebar navigation: Chat stands alone; Control gathers
-  Incidents, Audit trail, and Permissions; Workspace gathers Tools, Skills,
-  and Settings & Debug; section headers hide automatically when every entry
+- sectioned sidebar navigation: Chat and (for studio roles) Studio stand
+  alone as top-level entries; Control gathers Incidents, Approvals, Audit
+  trail, and Permissions; Workspace gathers Documents, Tools, Skills, and
+  Settings & Debug; section headers hide automatically when every entry
   in the section is hidden (SPEC-019)
 - sidebar footer: a user card (initials avatar, username, icon-only
   Sign in / Sign out with tooltips; clicking the user opens a popup menu

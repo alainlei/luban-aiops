@@ -3,8 +3,9 @@
 ## Purpose
 
 `audit-service` is the durable home for the platform audit trail (SPEC-013).
-It ingests structured audit events from `tool-gateway`, `platform-gateway`,
-and `identity-service`, retains them in a retention-bounded store
+It ingests structured audit events from seven emitters (`tool-gateway`,
+`platform-gateway`, `identity-service`, `agent-service`, `skills-hub`,
+`incident-service`, and `execution-runtime`), retains them in a retention-bounded store
 (`AUDIT_STORE_BACKEND`: `memory` for tests/dev, `postgres` for deployed
 environments), and exposes a permission-scoped query API proxied to the
 portal through `platform-gateway` behind the `audit:read` policy action.

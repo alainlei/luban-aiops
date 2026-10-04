@@ -3,7 +3,7 @@
 Opt-in reference manifests for hosting a small LLM server inside the
 platform's Kubernetes cluster, served as the `luban` provider
 (SPEC-028 R-6). See the
-[Luban-Hosted Small Model Guide](../../../docs/guides/luban-llm-guide.md)
+[Luban-Hosted Small Model Guide](../../../../docs/guides/luban-llm-guide.md)
 for the full operator walkthrough.
 
 **These manifests are free-standing.** They are NOT referenced by the

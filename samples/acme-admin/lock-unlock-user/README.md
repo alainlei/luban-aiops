@@ -1,6 +1,6 @@
 # ACME Admin Lock / Unlock User (`http.post`, one `action` card)
 
-Rung 3 of the four-rung `acme-admin` ladder (SPEC-059 R-7). One write-tier
+Rung 3 of the five-rung `acme-admin` ladder (SPEC-059 R-7). One write-tier
 `http.post`, one confirmation card, of kind **`action`**.
 
 This is the rung that makes the card count non-zero, and it is paired with
@@ -125,6 +125,7 @@ that proves nothing.
 | 2 | [`../user-status/`](../user-status/) | bound browser flow | read | 0 |
 | **3** | **`lock-unlock-user/` (this one)** | **`http.post`** | **write** | **1 (`action`)** |
 | 4 | [`../password-reset/`](../password-reset/) | bound browser flow | write | 1 (`flow`) |
+| 5 | [`../composition/`](../composition/) | runbook (4 then 3) | write (derived) | 2 (`flow` + `action`) |
 
 Rungs 1 and 3 talk to the same JSON API and differ only in effect, which is
 the pair that breaks "API means safe". [`../demo-suite.sh`](../demo-suite.sh)

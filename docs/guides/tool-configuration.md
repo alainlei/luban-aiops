@@ -62,16 +62,29 @@ re-checked too).
 | `web.snapshot` | Enumerate the page's interactive elements with addressable refs (`[n] <tag> ...`); values are masked for password fields and filled credentials | none | read |
 | `web.screenshot` | Capture a bounded JPEG screenshot (base64), with `title`/`url` beside it | none | read |
 | `web.fill_credential` | Fill a ref's field from a platform-managed credential set; never echoes the value, never runs without a bound flow | `ref` (required), `credential_set` (required), `field` (required: `username`/`password`) | read |
+| `web.extract` | Extract structured data from DOM elements matching a CSS selector; a `<table>` yields headers and rows, other elements yield a list of text items | `selector` (required), `max_rows` (optional, default 100, cap 500) | read |
+| `web.wait_for` | Wait for an element matching a CSS selector to reach a state — useful for pages that load data asynchronously | `selector` (required), `state` (optional: `attached`/`detached`/`visible`/`hidden`, default `visible`), `timeout_ms` (optional, default 5000, cap 30000) | read |
+| `web.hover` | Hover over an element identified by a snapshot ref to reveal tooltips, dropdown menus, or popover actions | `ref` (required) | read |
+| `web.scroll` | Scroll the page by the given pixel offsets | `delta_x` (optional, default 0), `delta_y` (optional, default 300) | read |
+| `web.switch_frame` | Switch the browser context into an iframe; later operations target the frame's document, and a `web.navigate` resets to the main frame | `selector` (required) | read |
 | `web.click` | Click a snapshot ref inside a bound `write`-class flow; one HITL gate per flow, step budget enforced | `ref` (required) | write |
 | `web.type` | Type text into a snapshot ref inside a bound `write`-class flow | `ref` (required), `text` (required) | write |
+| `web.select` | Select an option from a `<select>` element by ref; write tier because the model-chosen value is the payload of the change | `ref` (required), `value` (required) | write |
+| `web.press_key` | Press a keyboard key (e.g. `Enter`, `Escape`, `Tab`); an optional ref is focused first, otherwise the key goes to the active page/frame | `key` (required), `ref` (optional) | write |
+| `web.upload_file` | Upload a file to an `<input type=file>` element by ref; the filename resolves against the configured upload directory (path traversal denied) | `ref` (required), `filename` (required) | write |
+| `web.evaluate` | Execute JavaScript in the page context; write tier because arbitrary JS can mutate the DOM and read back masked secrets, so it inherits the HITL gate | `expression` (required) | write |
 
-> **Browser checks are layered with the HITL model (SPEC-049).** Read-class
-> tools (`web.navigate`, `web.snapshot`, `web.screenshot`, `web.fill_credential`)
-> are auto-allowed; write-class tools (`web.click`, `web.type`) always park for
-> confirmation and only execute inside a bound flow whose `risk_class` is
-> `write`. The deviation guard refuses interactions when the flow is unbound,
-> denied, read-only, or past `GATEWAY_BROWSER_FLOW_MAX_STEPS` — it never runs
-> silently.
+> **Browser checks are layered with the HITL model (SPEC-049/SPEC-050).** The
+> nine read-class tools (`web.navigate`, `web.snapshot`, `web.screenshot`,
+> `web.fill_credential`, `web.extract`, `web.wait_for`, `web.hover`,
+> `web.scroll`, `web.switch_frame`) are auto-allowed. The six write-class tools
+> (`web.click`, `web.type`, `web.select`, `web.press_key`, `web.upload_file`,
+> `web.evaluate`) always park for confirmation. A write call runs either under a
+> bound, approved `write`-class flow — where the deviation guard refuses it if
+> the live origin drifts off the flow's target, the flow is denied or read-only,
+> or its `GATEWAY_BROWSER_FLOW_MAX_STEPS` budget is spent — or ad-hoc with no
+> flow bound, where it parks its own per-action card and the live origin is
+> still re-checked against the allowlist (SPEC-054 R-2). It never runs silently.
 
 > **Mutating tools are triple-gated (SPEC-021).** A `write`/`admin` tool registers only when
 > `GATEWAY_MUTATING_TOOLS_ENABLED=true`, invokes only for roles granted the deny-by-default

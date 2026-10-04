@@ -206,7 +206,7 @@ Current runtime environment knobs:
 - `AGENT_TOOL_DATA_SUMMARY_MAX_CHARS`
   - maximum character length for `data_summary` fields in tool trace events; defaults to `2000`; payloads exceeding the limit are truncated with a structured marker (SPEC-011)
 - `AGENT_TOOL_DATA_MAX_CHARS`
-  - serialized-size cap for the full `data` field on `tool_result` evidence frames (stream schema v5); defaults to `32000`; oversized payloads are omitted from the frame and remain in audit logs only (SPEC-020 live-check enhancement)
+  - serialized-size cap for the full `data` field on `tool_result` evidence frames (stream schema v6); defaults to `32000`; oversized payloads are omitted from the frame and remain in audit logs only (SPEC-020 live-check enhancement)
 - `OTEL_ENABLED`
   - master switch for the OTLP push pipeline (traces + metrics); defaults to `false`; when disabled, the `/metrics` surface is unaffected
 - `OTEL_EXPORTER_OTLP_ENDPOINT`

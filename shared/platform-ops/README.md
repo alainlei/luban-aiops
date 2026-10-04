@@ -33,7 +33,7 @@ Current implementation artifacts:
 - `gitops/dev-k8s/base/`
 - `gitops/runtime-profiles/`
 
-The current implementation provides a single development Kubernetes overlay under a durable `gitops/` root. The `dev-k8s` overlay deploys all platform services (agent-platform, tool-gateway, identity-broker, operator-portal, Redis) into the `dev-luban-aiops` namespace. Provider choice is modeled as a separate shared runtime profile layer so the active profile remains reviewable and Git-diffable. The source manifests are grouped by shared infrastructure and product ownership so the overlay stays maintainable as the workspace grows.
+The current implementation provides a single development Kubernetes overlay under a durable `gitops/` root. The `dev-k8s` overlay deploys the full platform — nine application workloads (operator-portal, platform-gateway, agent-platform, tool-gateway, execution-runtime, identity-broker, audit-service, skills-hub, incident-service) plus Redis and PostgreSQL — into the `dev-luban-aiops` namespace. Provider choice is modeled as a separate shared runtime profile layer so the active profile remains reviewable and Git-diffable. The source manifests are grouped by shared infrastructure and product ownership so the overlay stays maintainable as the workspace grows.
 
 ## Execution reliability operations (SPEC-063)
 

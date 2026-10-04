@@ -2,7 +2,7 @@
 
 ## Scope
 
-This repository contains the design and workspace structure for an enterprise-grade agentic AIOps platform.
+This repository contains the implementation, shared contracts, and deployment assets for the Luban enterprise-grade agentic AIOps platform.
 
 Security-sensitive areas include:
 

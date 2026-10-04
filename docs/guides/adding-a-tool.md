@@ -5,8 +5,9 @@ definition, error envelope, configuration, wiring, authorization, deployment,
 and tests. Written for contributors; the operator-facing activation checklists
 live in the [Tool and Connector Guide](tool-configuration.md).
 
-Every connector shipped so far (Kubernetes, Elastic, skills, incidents) was
-delivered through a spec, and a new tool changes the platform's action surface
+Every connector shipped so far (Kubernetes, Elastic, HTTP, skills, incidents,
+secrets, browser) was delivered through a spec, and a new tool changes the
+platform's action surface
 — so start with a spec per [`docs/specs/README.md`](../specs/README.md) unless
 you are extending an existing connector with a closely related tool.
 

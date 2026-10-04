@@ -1,6 +1,6 @@
 # Live Walkthrough: Reset a Password in the ACME Admin Console
 
-Rung 4 of the four, and the top of the ladder. You will ask the agent, in
+Rung 4 of the five, and the last single-skill rung. You will ask the agent, in
 **Chat**, to reset an `acme-admin` account's password *through the console's own
 UI*. It will bind a browser flow, sign in, open the pre-filled reset form, and
 make **one** write-tier click — which parks **exactly one** confirmation card,
@@ -357,7 +357,7 @@ platform-gateway port-forward on `18083`.
 
 ## Where to go next
 
-- Run [`../demo-suite.sh`](../demo-suite.sh) for all four rungs in order plus the
+- Run [`../demo-suite.sh`](../demo-suite.sh) for all five rungs in order plus the
   cross-skill verification, or `make e2e` for the whole verification path.
 - The other two `acme-admin` browser samples drive this *same* console under the
   two other approval models; together the three are the entry points to the

@@ -1,6 +1,6 @@
 # ACME Admin Service Health Check (`http.get`, zero cards)
 
-Rung 1 of the four-rung `acme-admin` ladder (SPEC-059 R-7). A read-only skill
+Rung 1 of the five-rung `acme-admin` ladder (SPEC-059 R-7). A read-only skill
 over the HTTP service-check surface that parks **zero** confirmation cards —
 the repository's first genuinely card-free sample.
 
@@ -103,8 +103,8 @@ RUN_CHAT_LEG=true sh samples/acme-admin/health-check/demo/demo.sh
 
 The chat leg additionally needs a platform-gateway port-forward on `18083`
 and a running agent. `make deploy-samples` with no `SAMPLE=` installs all
-six skill documents (two existing plus four ACME documents), which is what
-the suite wants: `SAMPLE=<one>` is declarative and *drops* the others.
+six skill documents (the five-rung ladder plus `adhoc-password-reset`), which is
+what the suite wants: `SAMPLE=<one>` is declarative and *drops* the others.
 
 ## Where this rung sits
 
@@ -114,10 +114,12 @@ the suite wants: `SAMPLE=<one>` is declarative and *drops* the others.
 | 2 | [`../user-status/`](../user-status/) | bound browser flow | read | 0 |
 | 3 | [`../lock-unlock-user/`](../lock-unlock-user/) | `http.post` | write | 1 (`action`) |
 | 4 | [`../password-reset/`](../password-reset/) | bound browser flow | write | 1 (`flow`) |
+| 5 | [`../composition/`](../composition/) | runbook (4 then 3) | write (derived) | 2 (`flow` + `action`) |
 
 Rungs 1 and 3 both talk to the same JSON API and differ only in effect; rungs
-2 and 4 both drive a browser and differ the same way. [`../demo-suite.sh`](../demo-suite.sh)
-runs all four in order and then asserts the claim none of them makes alone.
+2 and 4 both drive a browser and differ the same way; rung 5 composes rungs 3
+and 4 and shows their gates do not merge. [`../demo-suite.sh`](../demo-suite.sh)
+runs all five in order and then asserts the claim none of them makes alone.
 
 ## Adapting for your own target
 

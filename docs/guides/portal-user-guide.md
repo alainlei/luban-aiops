@@ -570,7 +570,7 @@ from the gateway.
 |---|---|---|---|---|---|---|---|---|---|
 | `platform-admin` | yes | yes | yes | yes | yes | yes | yes | full | yes |
 | `operator` | yes | yes | yes | no | yes | yes | yes | full | no |
-| `approver` | yes | yes | yes | yes | yes | yes | no | full | no |
+| `approver` | yes | yes | yes | yes | yes | yes | yes | full | no |
 | `developer` | yes | no | yes | no | no | no | no | full | no |
 | `read-only-observer` | yes (read-only tools) | no | no | no | no | no | no | read | no |
 | `auditor` | no | no | no | no | no | no | no | no | yes |

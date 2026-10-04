@@ -28,7 +28,7 @@ Current implementation status (SPEC-015):
 - manual intake (`POST /api/v1/incidents`) authenticated by the platform-caller registry; `reported_by` records the operator name relayed via `X-Reported-By`
 - triage: `triaging` → one agent-platform `/api/v2/chat` turn under the operator's delegated bearer in session `incident-<id>` → fenced `triage-report` JSON block extracted and validated → `triaged` (report stored, connectors dispatched) or `triage_failed` (raw agent text preserved); re-triage is latest-wins, and because agent sessions are single-owner, re-triage by a second operator falls back to `incident-<id>--<operator>` with the incident tracking the session actually used; report attribution (`session_id`/`generated_at`/`generated_by`) is server-minted, never taken from agent output
 - `IncidentStore` protocol with two backends: `InMemoryIncidentStore` (dev/tests) and `PostgresIncidentStore` (psycopg v3; `incidents`, `triage_reports`, `connector_dispatches` tables), selected via `INCIDENT_STORE_BACKEND`
-- query auth via the static Basic registry `INCIDENT_QUERY_CLIENTS` plus projected workload tokens (`INCIDENT_WORKLOAD_*`, SPEC-014 R-3 vocabulary)
+- query auth via the static Basic registry `INCIDENT_QUERY_CLIENTS` (SPEC-014 R-3 vocabulary) plus projected workload tokens (`INCIDENT_WORKLOAD_*`, SPEC-009 vocabulary)
 
 API surface:
 

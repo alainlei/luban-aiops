@@ -1,6 +1,6 @@
 # Live Walkthrough: ACME Admin User Status Check
 
-Rung 2 of the four. You will ask the agent, in **Chat**, to read a user's
+Rung 2 of the five. You will ask the agent, in **Chat**, to read a user's
 account status off the `acme-admin` console — and it will open a headless
 browser, sign in with a platform-managed credential, and read the rendered
 table. **No confirmation card appears**, at any point.

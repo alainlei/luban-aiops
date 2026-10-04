@@ -10,15 +10,16 @@ with `make deploy-samples`; the platform never hard-wires a specific sample.
 
 ### ACME Admin
 
-All six samples drive **one** application — `acme-admin`, a stateful FastAPI
+All seven samples drive **one** application — `acme-admin`, a stateful FastAPI
 console with a real JSON store — so each can prove its writes actually landed
-rather than trusting a rendered URL. Four form a progressive ladder on the *card
+rather than trusting a rendered URL. Five form a progressive ladder on the *card
 count*; the other two share the same target to contrast the *approval models*.
 
-**The four-rung ladder.** Read together these make a claim none of them makes
+**The five-rung ladder.** Read together these make a claim none of them makes
 alone: **the card count tracks the *effect* of a skill, not the surface it
 uses.** Rungs 1 and 3 both talk to the JSON API and differ; rungs 2 and 4 both
-drive a browser and differ.
+drive a browser and differ; rung 5 composes rungs 3 and 4 and shows that
+ordering two mutating skills does not merge their gates.
 
 | Sample | Description |
 |---|---|
@@ -26,6 +27,7 @@ drive a browser and differ.
 | [acme-admin/user-status](acme-admin/user-status/) | Read a user's status off the rendered console through a **bound read-class browser flow** — still **0 cards**, which is the observation this rung exists to produce |
 | [acme-admin/lock-unlock-user](acme-admin/lock-unlock-user/) | Lock or unlock an account with one `http.post` — **1 card**, `approval_kind: action`, decided by a second identity |
 | [acme-admin/password-reset](acme-admin/password-reset/) | Reset a password through the console UI — **1 card**, `approval_kind: flow`, headed by the skill's authored `flow_intent` |
+| [acme-admin/composition](acme-admin/composition/) | A `kind: composition` runbook ordering rung 4 then rung 3 into one account recovery — **2 cards** (a `flow` and an `action`), one per mutating sub-skill, because ordering never merges gates (SPEC-057, ADR-0011) |
 
 **The two approval-model samples** take the same console password reset and show
 where rung 4's bound flow comes from — and what the work costs before one
@@ -48,11 +50,12 @@ samples/acme-admin/
 ├── deploy/                # kustomization, deployment, service, networkpolicy
 ├── deploy.sh              # build + apply + ASSERT (make deploy-sample-app)
 ├── demo-lib.sh            # shared plumbing the demos source
-├── demo-suite.sh          # the four rungs in ladder order + the cross-skill leg
+├── demo-suite.sh          # the five rungs in ladder order + the cross-skill leg
 ├── health-check/          # ┐
-├── user-status/           # │ the four ladder rungs: the usual
+├── user-status/           # │ the five ladder rungs: the usual
 ├── lock-unlock-user/      # │ per-sample layout — README,
-├── password-reset/        # ┘ WALKTHROUGH, skill/, demo/
+├── password-reset/        # │ WALKTHROUGH, skill/, demo/
+├── composition/           # ┘ (rung 5 — the composition runbook)
 ├── adhoc-password-reset/  # ┐ the two approval-model samples
 └── skill-graduation/      # ┘ (graduation ships no skill/)
 ```
@@ -61,7 +64,7 @@ Deploy it out-of-band, after the platform:
 
 ```sh
 make deploy-sample-app     # build the image, apply deploy/, then assert it works
-make deploy-samples        # install the five skill documents
+make deploy-samples        # install the six skill documents
 make undeploy-sample-app   # remove it again
 ```
 
@@ -100,7 +103,7 @@ artifact the demo *produces*, and `deploy-samples.sh` discovers samples by
 installer (and `SAMPLE=<that-sample>` exits non-zero saying so). A category may
 also hold more than samples: `acme-admin/` carries the application, its deploy
 manifests and the shared demo plumbing its samples all use, because they are one
-suite against one store rather than six independent stories.
+suite against one store rather than seven independent stories.
 
 Infrastructure shared with the platform or other samples (browser target pages,
 NetworkPolicy, credential sets) lives in the platform's GitOps directory and is
@@ -112,12 +115,12 @@ platform, never the reverse. Sample skills need no GitOps wiring at all:
 
 Platform skills (under `shared/platform-ops/skills/`) are built-in runbooks
 shipped with the platform — SRE alert handlers, Kubernetes troubleshooting
-guides, and the like — ingested from the base overlay's ConfigMap mounts and
-the platform git source. Sample skills are separate: they install out-of-band
-via `make deploy-samples` into a dedicated `samples` source, so a tutorial can
-be added or removed without touching platform GitOps. Samples are also richer:
-they bundle the skill with the demo script (and any sample-specific target)
-needed to run the pattern end-to-end.
+guides, and the like — ingested from the `platform-skills` git source alone; the
+base overlay generates no skill ConfigMaps. Sample skills are separate: they
+install out-of-band via `make deploy-samples` into a dedicated `samples` source,
+so a tutorial can be added or removed without touching platform GitOps. Samples
+are also richer: they bundle the skill with the demo script (and any
+sample-specific target) needed to run the pattern end-to-end.
 
 ## Installing samples into a cluster
 

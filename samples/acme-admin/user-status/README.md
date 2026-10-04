@@ -1,6 +1,6 @@
 # ACME Admin User Status Check (browser flow, zero cards)
 
-Rung 2 of the four-rung `acme-admin` ladder (SPEC-059 R-7). A read-only skill
+Rung 2 of the five-rung `acme-admin` ladder (SPEC-059 R-7). A read-only skill
 that opens a browser, signs into a console, reads a rendered table — and
 still parks **zero** confirmation cards.
 
@@ -122,6 +122,7 @@ running agent.
 | **2** | **`user-status/` (this one)** | **bound browser flow** | **read** | **0** |
 | 3 | [`../lock-unlock-user/`](../lock-unlock-user/) | `http.post` | write | 1 (`action`) |
 | 4 | [`../password-reset/`](../password-reset/) | bound browser flow | write | 1 (`flow`) |
+| 5 | [`../composition/`](../composition/) | runbook (4 then 3) | write (derived) | 2 (`flow` + `action`) |
 
 This is also the suite's **verification** skill: `LockUnlockUser` mutates over
 HTTP and reports the API's revision, and re-running this skill reads the

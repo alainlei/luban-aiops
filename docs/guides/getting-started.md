@@ -61,7 +61,7 @@ shared/platform-ops/gitops/sync-runtime-secret.sh default
 make build
 ```
 
-This builds all product images with a coordinated image tag (e.g. `0.3.0-dev-k8s-<gitsha>`) and
+This builds all product images with a coordinated image tag (e.g. `0.46.0-dev-k8s-<gitsha>`) and
 writes the tag to `shared/platform-ops/gitops/dev-k8s/.images.env`.
 
 For kind clusters, auto-load images:
@@ -84,10 +84,12 @@ This single command:
 4. Provisions token delegation secrets (shared credential between platform-gateway and
    identity-service)
 5. Reconciles the portal's Keycloak OIDC client
-6. Provisions audit, skills, incident, and OTel push secrets (`sync-audit-secrets.sh`,
-   `sync-skills-secrets.sh`, `sync-incident-secrets.sh`, `sync-otel-secrets.sh`), creating
-   the `skills` and `incidents` Postgres databases idempotently, and ensures the
-   `sessions` database for the agent-platform session store exists
+6. Provisions audit, execution, skills, incident, browser-credential, and OTel push
+   secrets (`sync-audit-secrets.sh`, `sync-execution-signing-secret.sh`,
+   `sync-execution-handoff-secret.sh`, `sync-skills-secrets.sh`,
+   `sync-incident-secrets.sh`, `sync-browser-credentials.sh`, `sync-otel-secrets.sh`),
+   creating the `skills` and `incidents` Postgres databases idempotently, and ensures
+   the `sessions` database for the agent-platform session store exists
    (`sync-sessions-db.sh`, no secrets involved)
 
 > **Important:** Never deploy with raw `kubectl apply -k` — it resets image tags to the
@@ -106,19 +108,28 @@ SKIP_DELEGATION_SECRETS=true make deploy
 kubectl -n dev-luban-aiops get pods,svc
 ```
 
-All pods should be `Running` with `READY 1/1`:
+All eleven platform workloads should be `Running`. Every pod is `READY 1/1` except
+`tool-gateway`, which is `2/2` in the dev-k8s environment because the `browser-dev`
+runtime profile (SPEC-049 R-7) ships a chromium headless-shell sidecar next to it:
 
 ```
 NAME                              READY   STATUS
 web-ui-...                        1/1     Running
 platform-gateway-...              1/1     Running
-tool-gateway-...                  1/1     Running
+tool-gateway-...                  2/2     Running
 agent-service-...                 1/1     Running
+execution-runtime-...             1/1     Running
 identity-service-...              1/1     Running
+audit-service-...                 1/1     Running
 skills-hub-...                    1/1     Running
 incident-service-...              1/1     Running
 redis-...                         1/1     Running
+postgres-0                        1/1     Running
 ```
+
+Eleven platform workloads in total. (The `acme-admin-...` sample pod appears only after
+the separate `make deploy-sample-app` step in the Skills Demo Tour below — it is not
+part of `make deploy`.)
 
 ## Step 7: Access the Portal
 
@@ -188,6 +199,11 @@ The following secrets must be provisioned before the platform is fully operation
 | OIDC client secret | `identity-service-runtime-secrets` | Confidential OIDC client | Manual (if required by your IdP) |
 | Skills query | `skills-hub-runtime-secrets` + `tool-gateway-runtime-secrets` | Grounded guidance retrieval | `sync-skills-secrets.sh` (automatic with `make deploy`) |
 | Incident intake and query | `incident-service-runtime-secrets` + `platform-gateway-runtime-secrets` + `tool-gateway-runtime-secrets` | Alertmanager webhook token, incident query credentials, audit ingest credential | `sync-incident-secrets.sh` (automatic with `make deploy`) |
+| Audit ingest | `audit-service-runtime-secrets` | Authenticated audit-event ingest and query | `sync-audit-secrets.sh` (automatic with `make deploy`) |
+| Execution signing | `execution-signing-secret` | Signs execution requests handed from agent-service to execution-runtime | `sync-execution-signing-secret.sh` (automatic with `make deploy`) |
+| Execution handoff | `execution-handoff-secret` | Bearer token authenticating the mutating-execution handoff | `sync-execution-handoff-secret.sh` (automatic with `make deploy`) |
+| Browser credentials | `tool-gateway-browser-credentials` | Stored web credentials for browser tools (`web.fill_credential`) | `sync-browser-credentials.sh` (automatic with `make deploy`) |
+| OTel push | the seven `*-runtime-secrets` | `OTEL_EXPORTER_OTLP_HEADERS` for OTLP ingest auth | `sync-otel-secrets.sh` (automatic with `make deploy`) |
 
 ## Skills Demo Tour (SPEC-014)
 

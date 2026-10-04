@@ -5,7 +5,7 @@ authorization model for operators who need to understand how the pieces connect.
 
 ## Service Topology
 
-The platform consists of ten workloads deployed to a single Kubernetes namespace
+The platform consists of eleven workloads deployed to a single Kubernetes namespace
 (`dev-luban-aiops` by default):
 
 | Service | Image | Role |
@@ -14,7 +14,7 @@ The platform consists of ten workloads deployed to a single Kubernetes namespace
 | **platform-gateway** | `luban-aiops/platform-gateway` | Portal-facing edge: JWT verification, action policy, chat/session proxying, token delegation, audit query proxy |
 | **agent-service** | `luban-aiops/agent-service` | AgentScope runtime kernel: LLM orchestration, session management, tool trace emission |
 | **execution-runtime** | `luban-aiops/execution-runtime` | Isolated worker executing approved mutating calls: authenticated handoff, envelope re-verification, signed receipts (SPEC-038) |
-| **tool-gateway** | `luban-aiops/tool-gateway` | Tool execution framework: connector dispatch (Kubernetes, Elastic, skills-hub, incidents, browser web-checks), policy enforcement, output redaction |
+| **tool-gateway** | `luban-aiops/tool-gateway` | Tool execution framework: connector dispatch (Kubernetes, Elastic, HTTP, skills-hub, incidents, secrets, browser web-checks), policy enforcement, output redaction |
 | **identity-service** | `luban-aiops/identity-service` | Enterprise identity: Keycloak OIDC login, JWT issuance, token exchange for delegation |
 | **audit-service** | `luban-aiops/audit-service` | Durable audit trail: authenticated ingest, retention-bounded store, query API (SPEC-013) |
 | **skills-hub** | `luban-aiops/skills-hub` | Federated skill ingestion and ranked retrieval for grounded guidance (SPEC-014) |
@@ -106,8 +106,8 @@ Browser → web-ui → platform-gateway → agent-service → tool-gateway → c
    token.
 5. **tool-gateway** verifies the delegated token, evaluates tool policy (`tools:list`,
    `tools:invoke`), dispatches to the appropriate connector (Kubernetes, Elastic,
-   skills-hub, incidents, or — for browser web-checks, SPEC-049 — a sidecar
-   browser over CDP), redacts credential-shaped output, and returns the result
+   HTTP, skills-hub, incidents, secrets, or — for browser web-checks, SPEC-049 —
+   a sidecar browser over CDP), redacts credential-shaped output, and returns the result
    with evidence
    metadata. For procedure or remediation questions the agent consults the read-only
    `skills.search` / `skills.get` / `skills.list` tools for team-owned guidance and
@@ -282,22 +282,31 @@ business action).
 
 ### Default Policy Bundle
 
-The platform ships with twelve allow rules at priority 100. Everything else is denied:
+The platform ships with eighteen allow rules at priority 100 plus one tier-2
+`require-approval` rule at priority 200 (`require-approval-tools-mutate`). Everything
+else is denied:
 
 | Rule | Roles | Actions |
 |---|---|---|
-| `allow-operators-chat` | admin, approver, operator, developer | `chat`, `session:create`, `session:read`, `session:list`, `session:delete` |
-| `allow-observer-read-and-chat` | read-only-observer | `chat`, `session:create`, `session:read`, `session:list`, `session:delete` |
-| `allow-chat-confirm` | admin, approver, operator, developer | `chat:confirm` |
-| `allow-operators-tools` | admin, operator, developer, read-only-observer | `tools:invoke` |
-| `allow-operators-tools-mutate` | admin, operator | `tools:mutate` |
-| `allow-operators-tools-list` | admin, operator, developer, read-only-observer | `tools:list` |
+| `allow-operators-chat` | platform-admin, approver, operator, developer | `chat`, `session:create`, `session:read`, `session:list`, `session:delete`, `session:update`, `models:list` |
+| `allow-observer-read-and-chat` | read-only-observer | `chat`, `session:create`, `session:read`, `session:list`, `session:delete`, `session:update`, `models:list` |
+| `allow-chat-confirm` | platform-admin, approver, operator, developer | `chat:confirm` |
+| `allow-operators-tools` | platform-admin, approver, operator, developer, read-only-observer | `tools:invoke` |
+| `allow-operators-tools-mutate` | platform-admin, approver, operator | `tools:mutate` |
+| `allow-operators-secrets-deliver` | platform-admin, approver, operator | `secrets:deliver` |
+| `allow-operators-tools-list` | platform-admin, approver, operator, developer, read-only-observer | `tools:list` |
 | `allow-auditors-audit-read` | auditor, platform-admin | `audit:read` |
-| `allow-operators-incident-read` | admin, approver, operator, developer, read-only-observer | `incident:read` |
-| `allow-operators-incident-create` | admin, approver, operator, developer | `incident:create` |
-| `allow-operators-incident-triage` | admin, approver, operator, developer | `incident:triage` |
-| `allow-all-policy-read` | admin, approver, operator, developer, read-only-observer | `policy:read` |
-| `allow-all-skills-read` | admin, approver, operator, developer, read-only-observer | `skills:read` |
+| `allow-operators-incident-read` | platform-admin, approver, operator, developer, read-only-observer | `incident:read` |
+| `allow-operators-incident-create` | platform-admin, approver, operator, developer | `incident:create` |
+| `allow-operators-incident-triage` | platform-admin, approver, operator, developer | `incident:triage` |
+| `allow-all-policy-read` | platform-admin, approver, operator, developer, read-only-observer | `policy:read` |
+| `allow-all-skills-read` | platform-admin, approver, operator, developer, read-only-observer | `skills:read` |
+| `allow-approvers-approvals-list` | approver, platform-admin | `approvals:list` |
+| `allow-operators-documents` | platform-admin, approver, operator | `documents:create`, `documents:read` |
+| `allow-operators-skill-draft` | platform-admin, approver, operator | `session:skill_draft` |
+| `allow-operators-incident-skill-draft` | platform-admin, approver, operator | `incident:skill_draft` |
+| `allow-operators-skill-graduate` | platform-admin, approver, operator | `session:skill_graduate` |
+| `require-approval-tools-mutate` *(priority 200, tier_2)* | platform-admin, approver, operator, developer | `tools:mutate` → parked for approval by an approver or platform-admin distinct from the requester |
 
 > **Note:** The live matrix these rules produce is served by platform-gateway at
 > `GET /api/v1/policy/matrix` (SPEC-019) and rendered in the portal's Permissions view.

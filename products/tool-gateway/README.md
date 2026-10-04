@@ -62,9 +62,10 @@ tool-gateway becomes the MCP *client* of external servers (an ingestion connecto
 *beneath* the gateway, reusing the `BaseTool` / `ToolRegistry` seam) while Luban
 retains policy, approval, redaction, evidence, and audit; the kernel never becomes
 an independent MCP client. This is inbound consumption, **not** external exposure
-of tool-gateway or Luban workflows (that separate concern stays parked as
-SPEC-066). The memo authorizes no implementation, pilot, ADR, or spec — each
-target pilot is separately approved.
+of tool-gateway or Luban workflows (that separate concern stays parked and
+de-numbered — the `SPEC-066` slot it was once earmarked for was taken by
+skill-retrieval-ranking-fidelity). The memo authorizes no implementation,
+pilot, ADR, or spec — each target pilot is separately approved.
 
 Current implementation artifacts:
 
@@ -88,7 +89,7 @@ Current implementation status:
 - ships an Elastic observability connector (`elastic.search_logs`, `elastic.get_service_health`, `elastic.get_active_alerts`) using the `elasticsearch` Python client; lazy-initialized, feature-gated by `GATEWAY_ELASTIC_ENABLED` (SPEC-011)
 - ships a skills connector (`skills.search`, `skills.get`, `skills.list`) against the `skills-hub` service with Basic-auth httpx transport, 10s timeout, and structured error mapping (404 → `SKILL_NOT_FOUND`, unreachable → `TOOL_EXECUTION_ERROR`); registered only when `GATEWAY_SKILLS_SERVICE_URL` is set (SPEC-014)
 - ships an incidents connector (`incidents.list`, `incidents.get`) against the `incident-service` service with the same Basic-auth httpx transport and error-mapping pattern (404 → `INCIDENT_NOT_FOUND`, unreachable → `TOOL_EXECUTION_ERROR`); registered only when `GATEWAY_INCIDENTS_SERVICE_URL` is set; read-only by design — no mutating incident tool exists (SPEC-015)
-- ships a browser connector (`web.navigate`, `web.snapshot`, `web.screenshot`, `web.fill_credential` read-tier; `web.click`, `web.type` write-tier) for bounded web-application checks against a sidecar browser over CDP (Playwright `connect_over_cdp`; the gateway image ships the Playwright library only — no browser binary); off-by-default via `GATEWAY_BROWSER_ENABLED`, navigation deny-by-default via `GATEWAY_BROWSER_ALLOW_ORIGINS`, per-chat-session browser contexts (keyed by a trusted chat-session correlation handle, subject fallback) with idle TTL and cap eviction, skill-bound flows (`web_target`/`risk_class`) with a deviation guard and one HITL gate per write-class flow, and platform-managed credential sets that never surface in results (SPEC-049)
+- ships a browser connector (nine read-tier tools — `web.navigate`, `web.snapshot`, `web.screenshot`, `web.fill_credential`, `web.extract`, `web.wait_for`, `web.hover`, `web.scroll`, `web.switch_frame`; six write-tier tools — `web.click`, `web.type`, `web.select`, `web.press_key`, `web.upload_file`, `web.evaluate`) for bounded web-application checks against a sidecar browser over CDP (Playwright `connect_over_cdp`; the gateway image ships the Playwright library only — no browser binary); off-by-default via `GATEWAY_BROWSER_ENABLED`, navigation deny-by-default via `GATEWAY_BROWSER_ALLOW_ORIGINS`, per-chat-session browser contexts (keyed by a trusted chat-session correlation handle, subject fallback) with idle TTL and cap eviction, skill-bound flows (`web_target`/`risk_class`) with a deviation guard and one HITL gate per write-class flow, and platform-managed credential sets that never surface in results (SPEC-049/SPEC-050)
 - exposes `GET /api/v2/tools` (tool discovery, gated by `tools:list`) and `POST /api/v2/tools/invoke` (tool execution gated by `tools:invoke` for read tools and additionally by `tools:mutate` for write/admin tools); both derive identity and authorization solely from the verified token — any identity in a request body is never trusted (the one body field the gateway reads is the optional `session_id` chat-session correlation handle, injected only by trusted internal callers and carrying no authority, SPEC-049)
 - redacts credential-shaped spans (JWTs, `Bearer`/`Basic` values, PEM private keys, key-list fields such as `token`/`password`/`api_key`) from every tool result at the single invoke choke point before both the response and the audit log; when the redacted fraction exceeds `GATEWAY_REDACTION_OVERFLOW_FRACTION` the output is withheld with a `REDACTION_OVERFLOW` error (fail-closed, SPEC-009)
 - forwards `tool_invoked` audit events (including policy-denied invocations, post-redaction) to `audit-service` via a fire-and-forget emitter when `GATEWAY_AUDIT_SERVICE_URL` is set; unreachability degrades to log-only auditing and never blocks the invoke path (SPEC-013)
@@ -114,7 +115,7 @@ Current runtime environment knobs (tool-scoped; the portal-facing `PLATFORM_GATE
 - `GATEWAY_K8S_ENABLED`
   - when `true`, registers the Kubernetes connector; defaults to `false`
 - `GATEWAY_MUTATING_TOOLS_ENABLED`
-  - risk-tier admission gate (SPEC-021): when `true`, write/admin risk tools (currently `k8s.delete_pod`, `web.click`, `web.type`) register; while `false` (default) they are absent from discovery and invoke fails closed with `TOOL_NOT_FOUND`
+  - risk-tier admission gate (SPEC-021): when `true`, write/admin risk tools (currently `k8s.delete_pod`, the six write-tier `web.*` interaction tools, `http.post`, and `secrets.deliver`) register; while `false` (default) they are absent from discovery and invoke fails closed with `TOOL_NOT_FOUND`
 - `GATEWAY_K8S_NAMESPACE`
   - default namespace for K8s tool operations; when unset, tools use the `namespace` parameter or fall back to `default`
 - `GATEWAY_REDACTION_ENABLED`

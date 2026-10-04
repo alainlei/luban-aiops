@@ -1,6 +1,6 @@
 # Live Walkthrough: ACME Admin Service Health Check
 
-Rung 1 of the four. You will ask the agent, in **Chat**, to check the health of
+Rung 1 of the five. You will ask the agent, in **Chat**, to check the health of
 the `acme-admin` service — and the point of the walkthrough is what does *not*
 happen: no confirmation card appears, at any point, for any reason.
 
