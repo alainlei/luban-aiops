@@ -115,6 +115,7 @@ fi
 
 for secret_name in \
   audit-service-runtime-secrets \
+  execution-runtime-runtime-secrets \
   identity-service-runtime-secrets \
   incident-service-runtime-secrets \
   platform-gateway-runtime-secrets \
@@ -129,6 +130,7 @@ done
 # state from stale local files. Missing files are simply skipped.
 for env_file in \
   "$BASE_DIR/audit-service/runtime-secrets.env" \
+  "$BASE_DIR/execution-runtime/runtime-secrets.env" \
   "$BASE_DIR/identity-broker/runtime-secrets.env" \
   "$BASE_DIR/incident-service/runtime-secrets.env" \
   "$BASE_DIR/platform-gateway/runtime-secrets.env" \
@@ -140,9 +142,9 @@ do
   fi
 done
 
-# --- restart all seven workloads ----------------------------------------------
+# --- restart all eight workloads ----------------------------------------------
 
-for deployment in agent-service audit-service identity-service \
+for deployment in agent-service audit-service execution-runtime identity-service \
   incident-service platform-gateway skills-hub tool-gateway
 do
   kubectl -n "$NAMESPACE" rollout restart "deployment/$deployment"
@@ -150,7 +152,7 @@ done
 
 echo ""
 echo "OTel ingest credentials provisioned. Waiting for rollout..."
-for deployment in agent-service audit-service identity-service \
+for deployment in agent-service audit-service execution-runtime identity-service \
   incident-service platform-gateway skills-hub tool-gateway
 do
   kubectl -n "$NAMESPACE" rollout status "deployment/$deployment" --timeout=120s
