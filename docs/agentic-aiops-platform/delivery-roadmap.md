@@ -35,7 +35,7 @@ As the platform gains more power, it must also gain stronger identity, policy, a
 
 ## Recommended Release Sequence
 
-The roadmap is designed as six stacked releases:
+The roadmap is designed as seven stacked releases:
 
 | Release | Theme | Primary User Value | Risk Level |
 |---|---|---|---|
@@ -45,6 +45,7 @@ The roadmap is designed as six stacked releases:
 | `R3` | Incident Triage and Collaboration | Faster and better triage | medium |
 | `R4` | Approval-Gated Bounded Actions | Safe operational action through approval | medium-high |
 | `R5` | Hardening and External Consumption | Broader adoption and stable reuse | medium |
+| `R6` | External System Integration via MCP Ingestion | Real external-system actions through the governed tool path | medium |
 
 ## Release Details
 
@@ -320,6 +321,92 @@ platform is production-ready for its *initial* user group; "wider
 enterprise adoption beyond the initial user group" via external API
 consumption is deferred behind that trigger rather than claimed now.
 
+## R6: External System Integration via MCP Ingestion
+
+### Theme
+
+Operators get real **read-only** actions against named external systems
+(ServiceNow first) through the existing governed tool path — policy,
+approval, redaction, evidence, and audit intact — starting with the
+outbound execution-credential model every ingestion pilot needs.
+
+### What It Delivers
+
+- The **outbound External Execution Identity credential model**: an additive
+  `scheme` on the gateway's `credential_set` (Basic-only today) plus a
+  connector-local token client, so a connector can authenticate to a modern
+  API (bearer / OAuth2 `client_credentials`).
+- The **first ingestion pilot**: a ServiceNow ITSM read-tier connector *beneath*
+  tool-gateway, reusing the SPEC-007 `BaseTool` / `ToolRegistry` seam; the
+  agent-platform kernel never becomes an MCP client.
+- Deny-by-default policy coverage, external-target audit attribution, and the
+  fail-closed / no-fabrication guardrail for the new surface.
+- Risk-ordered staging for the remaining named targets (Ansible → Windows),
+  each its own separately-approved spec.
+
+### Why It Comes Next
+
+- R5 closed at v0.45.0 and SPEC-066 shipped standalone at v0.46.0. The
+  MCP-ingestion backlog row's promotion trigger fired 2026-09-30 when operations
+  named three concrete external targets, so R6 is the trigger-gated candidate the
+  backlog promotes.
+- It builds on the trust machinery R4/R5 hardened (policy-as-code, signed
+  execution, durable audit, crash-safe execution) rather than adding new
+  authority: read tier first, with writes staying behind the existing HITL /
+  signed-execution path.
+
+### Integration Points
+
+- `tool-gateway` ↔ external target (ServiceNow REST/OAuth) — the new outbound
+  execution credential.
+- `tool-gateway` registry ↔ `agent-platform` kernel — the unchanged signed-tool
+  path (SPEC-037); no new kernel seam.
+- policy bundle ↔ ServiceNow tool names — deny-by-default until named.
+- audit ↔ external-target attribution — requester + acting-service identity +
+  target + tool + outcome.
+- Explicitly **not** `identity-broker`: the connector-local token client needs no
+  new broker grant, so R6 does not depend on the parked inbound machine-consumer
+  row below.
+
+### How Operations Teams Validate It
+
+- An operator asks the agent a ServiceNow question (e.g. "what's the status of
+  incident INC0000001?") and gets a grounded answer sourced from a real read-tier
+  ServiceNow call, with the tool call and its evidence visible in the portal and
+  attributed in audit.
+- No secret, token, or `client_secret` appears in any transcript, snapshot, log,
+  or audit record.
+- A simulated ServiceNow outage yields an honest "target unavailable" outcome,
+  never a fabricated result.
+
+### Release Completion Signal
+
+Operators can take real read-only actions against at least one named external
+system (ServiceNow) through the governed path, on an outbound credential model
+the next pilot reuses. Writes and the remaining targets are deferred to their own
+approved specs.
+
+### Status
+
+**Framed 2026-10-06; not opened for implementation.** R6 is recorded as the
+release theme the trigger-gated MCP-ingestion backlog row promotes. Its first
+slice is [SPEC-067 ServiceNow ITSM MCP-ingestion pilot](../specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md),
+**drafted 2026-10-06** with `plan.md` / `tasks.md` banner-marked provisional.
+**Six Open Questions block `approved`** — the largest being OQ-1 (ServiceNow's
+actual auth scheme, a Stage-0 fact that pins the R-1 credential shape) and OQ-5
+(dev-cluster validation feasibility). No implementation, pilot, ADR, adapter,
+deployment, or version bump is authorized; per the backlog discipline each target
+pilot still requires separate explicit approval.
+
+The theme's central scoping finding (recorded in the
+[machine-consumer credential memo](../workspace/machine-consumer-credential-model-spike.md)):
+the long-standing "`client_credentials` gap" label conflates two planes — the
+**outbound** External Execution Identity (this theme's real prerequisite, a
+tool-gateway credential-scheme extension, SPEC-067 R-1, needing no broker grant)
+and the **inbound** approved-machine-consumer grant (the parked
+stable-API-productization row below, trust-model-blocked). **R6 does not depend on
+the parked inbound row.**
+
 ## Release Stacking Logic
 
 ### Why This Sequence Works
@@ -330,6 +417,7 @@ consumption is deferred behind that trigger rather than claimed now.
 - `R3` adds incident workflow value
 - `R4` adds safe action capability
 - `R5` makes the platform ready for broader production use
+- `R6` extends the governed path to real external systems, read tier first
 
 This avoids introducing powerful execution features before the platform has earned user trust.
 
@@ -341,7 +429,7 @@ promotion; until then they stay here.
 
 | Candidate | Question to answer in a spike | Likely home |
 |---|---|---|
-| Independent MCP toolsets consumed by tool-gateway | Assessed 2026-09-23 in [the MCP toolset memo](../workspace/mcp-exposure-spike.md): retain native connectors; no implementation promotion; reopen on a concrete credential-local deployment need, recurring connector-release friction, named second consumer, or missing operational capability. **Reopen trigger met 2026-09-30** — operations named three concrete external targets with workflows (Ansible runbooks for task automation, ServiceNow ITSM ticket handling end to end, Windows UI automation for desktop-application / Windows-service health checks), satisfying the "missing operational capability" trigger. Re-assessed in [the MCP-ingestion memo](../workspace/mcp-ingestion-spike.md): build one generic ingestion connector *beneath* tool-gateway (the gateway is the MCP client; the kernel never is), reusing the `BaseTool` / `ToolRegistry` seam and preserving Luban policy, approval, redaction, evidence, and audit; onboard one separately-approved pilot at a time in risk order (ServiceNow → Ansible → Windows), admitting only each use case's required operations (a large catalog is not itself a use case). Still compares native extension vs existing-server adoption vs selective extraction. External access to Luban workflows remains a separate, unestablished product use case (the stable-API-productization row below); the memo authorizes no implementation, pilot, ADR, or spec. | candidate new release theme (R6, "external system integration via MCP ingestion"); first pilot likely its own spec once the machine-consumer credential gap (`client_credentials`) is scoped — trigger met and direction recorded, no spec assigned yet |
+| Independent MCP toolsets consumed by tool-gateway | Assessed 2026-09-23 in [the MCP toolset memo](../workspace/mcp-exposure-spike.md): retain native connectors; no implementation promotion; reopen on a concrete credential-local deployment need, recurring connector-release friction, named second consumer, or missing operational capability. **Reopen trigger met 2026-09-30** — operations named three concrete external targets with workflows (Ansible runbooks for task automation, ServiceNow ITSM ticket handling end to end, Windows UI automation for desktop-application / Windows-service health checks), satisfying the "missing operational capability" trigger. Re-assessed in [the MCP-ingestion memo](../workspace/mcp-ingestion-spike.md): build one generic ingestion connector *beneath* tool-gateway (the gateway is the MCP client; the kernel never is), reusing the `BaseTool` / `ToolRegistry` seam and preserving Luban policy, approval, redaction, evidence, and audit; onboard one separately-approved pilot at a time in risk order (ServiceNow → Ansible → Windows), admitting only each use case's required operations (a large catalog is not itself a use case). Still compares native extension vs existing-server adoption vs selective extraction. External access to Luban workflows remains a separate, unestablished product use case (the stable-API-productization row below); the memo authorizes no implementation, pilot, ADR, or spec. | **R6 theme framed 2026-10-06** ("external system integration via MCP ingestion"); first pilot promoted to [SPEC-067 ServiceNow ITSM MCP-ingestion pilot](../specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md) — `draft` 2026-10-06, six Open Questions block `approved`, no implementation authorized. The `client_credentials` gap is scoped in [the machine-consumer credential memo](../workspace/machine-consumer-credential-model-spike.md): R6's prerequisite is the **outbound** External Execution Identity (a tool-gateway credential-scheme extension, SPEC-067 R-1), **not** the parked inbound machine-consumer grant — so R6 does not depend on the stable-API-productization row below |
 | Stable API productization / external consumption | The one R5 theme deliverable ("stable API productization"; integration point `api-gateway` <-> external consumers; validation "use stable platform APIs from another internal application") never spiked or specified. **Parked 2026-09-30** on the operator's confirmation that **no second consumer exists** — the same finding the [MCP toolset memo](../workspace/mcp-exposure-spike.md) reached independently ("no second consumer and required operation set have been named"; external access to Luban workflows is "a separate, unestablished product use case"). This row is the home for that separate use case and is distinct from the MCP row: MCP = expose Luban's *tools* for reuse by other systems; this = expose Luban's *workflows/APIs* for a second application to consume. A speculative build is also the risky path — the platform's attribution/HITL model requires a human owner and a distinct human approver ([identity design](identity-and-authorization-design.md) principles 2 and 5), so external consumption of anything that drives an agent turn or mutates state collides with the trust model; only read-only consumption is tractable without first solving machine-consumer attribution. Unbuilt anchors a future spec would pick up: the empty `shared/shared-sdk` placeholder (service clients / auth helpers / typed event consumers); the identity design doc's named-but-unbuilt "approved machine consumers" client registration and `client_credentials` gap (only `authorization_code` + `refresh_token` are wired today); a published stability/deprecation contract for the `/api/v1/*` surface (versioned by convention only — the `/api/v2/*` namespace is the internal tool-gateway <-> agent-platform boundary, guarded from leaking into the public gateway); and external API reference docs. | own spec — **number assigned at drafting**, since the `SPEC-066` earmark this row carried was taken by [skill retrieval ranking fidelity](../specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md) on 2026-10-01; trigger-gated — promote when a named second internal application commits to a concrete workflow + operation set, read-only-first given the attribution/HITL constraint |
 | Crash-safe execution and outcome reconciliation | [SPEC-063](../specs/SPEC-063-crash-safe-execution/spec.md) scope approved 2026-09-23; [failure-first implementation plan](../specs/SPEC-063-crash-safe-execution/plan.md), [tasks](../specs/SPEC-063-crash-safe-execution/tasks.md), and accepted [ADR-0013](../adr/0013-durable-single-use-execution-claims.md) recorded. Durable single-use dispatch claims, explicit unknown outcomes, late-result preservation, and owner-scoped recovery without automatic mutation retries. All 26 criteria and 36 [failure scenarios](../specs/SPEC-063-crash-safe-execution/failure-test-matrix.md) are mapped; real-Postgres multiprocess crash tests and independent target counters are mandatory. Implementation, the historical 791-test campaign, and the separately authorized corrected five-path S6 acceptance/cleanup preceded delivery; the final full root `make verify` is green (real-Postgres campaign 791 passed, exit 0), with the daemon-wedge attempts (V1/V5/V6) and the V4 test-only fixture fix retained in the [closure evidence](../specs/SPEC-063-crash-safe-execution/tasks.md#delivery-closure-evidence). Delivered locally 2026-09-26 as 0.43.0; no shared rollout, registry push, or release tag is claimed. Queue/pool scaling and MCP remain deferred. | `SPEC-063` — delivered 2026-09-26 as 0.43.0 |
 | Semantic (vector) skill retrieval | Does a vector store measurably beat skills-hub's lexical `rank()` scoring (title/tag/body substring weighting) on our corpus? **Spiked 2026-09-30** in [the semantic skill retrieval memo](../workspace/semantic-skill-retrieval-spike.md) against the live corpus and audit trail. **Answered 2026-10-01 by measurement, and the answer is no — the row is closed.** The recommendation was *measure before building*; gate 1 of the memo has now been executed (a labeled **684-judgment** set over 38 queries × 18 documents, plus the published baseline), and the cheaper lexical step closed the measured gap — which by the memo's own pre-registered rule cancels everything below it. The premises of this row are corrected below. (1) No Elasticsearch server is deployed in dev — SPEC-011 ships a feature-gated Elastic observability *connector* (`GATEWAY_ELASTIC_ENABLED=false`), not a running store. (2) `pgvector` is **not installed and is not a zero-infrastructure change**: `postgres-0` runs stock `postgres:16-alpine` offering **0 of 61** available extensions matching `%vector%`, so `CREATE EXTENSION vector` fails today, and that StatefulSet's 1 Gi PVC also holds the `audit`, `incidents`, and `sessions` databases — an image swap touches all durable state. (3) The assumed *recall* defect is **not observed**: all 96 `skill_searched` audit events (63 distinct queries, 2026-09-02 → 09-22) returned ≥1 hit — zero-hit rate **0/96**, mean **4.72** of `limit=5`. **Ranking defects, however, are now measured** — see the [evaluation-set artifact](../workspace/semantic-skill-retrieval-eval-set.md) (2026-10-01), which re-ran the real scorer over a full corpus export. The corpus **was 18 distinct documents carried in 30 rows** (`md5(body)`: 12 byte-identical pairs) because the `platform-skills` git source and two ConfigMap-generated local sources ingested the *same files* under different `source_id`s, and `rank()` does no content de-duplication — so **32 of 63 queries (50.8%) returned fewer distinct documents than result slots**. **Resolved by configuration 2026-10-01**: the two local sources were dropped, leaving **18 rows / 18 distinct documents across 2 sources**, and re-running the real scorer over the re-exported corpus gives crowding **0 of 63**, **no query's top-1 changed**, and 28 pools widened by 88 candidates the duplicates had displaced. The product gap behind it remains open — `rank()` still de-duplicates nothing and `parse_sources` still accepts two sources covering the same files, so any overlapping registration reproduces 32-of-63 exactly. CamelCase titles tokenize to a single opaque token (`KubePodCrashLooping`), so for `pod keeps restarting CrashLoopBackOff` the exactly-right alert ranks **2nd** — it was 3rd before de-duplication, and the configuration fix moved it no further — still losing the top slot to an alphabetical `skill_id` tie-break against a scheduling-failures guide at the same 10.0. And zero-hit is not a recall proxy: `argocd health check` — the trail's second most frequent query, 7 occurrences — scores **20.0** on an unrelated ACME health-check document, with no ArgoCD runbook in the corpus at all. The traffic is demo/e2e rather than sustained operator triage, and 14 of the 63 queries already carry a target identifier, so the evidence is weak but real. Recommended order is **cost-first, and a cheaper step that closes the measured gap cancels everything below it**: the evaluation set is built, was regenerated 2026-10-01 against the de-duplicated 18-row corpus, and is **now labeled and measured** — 684 judgments over 38 queries × 18 documents, committed as a fixture pinning a `body_md5` per document so a catalog move forces re-grading rather than silently invalidating the numbers. The lexical fixes are **measured as sufficient**: combined top-1 correctness **0.500 → 0.711**, stratum-C (paraphrase) top-1 **0.333 → 0.611**, MRR/MRR(2)/nDCG@10 gains with bootstrap 95% CIs excluding zero, exact sign test **p = 0.0117**, and one mild re-ordering regression. The winning combination is four cheap changes needing no model, no dependency, and no image change: index `skill_id` (a **fifth defect** — `score()` reads `title`/`tags`/`body` and never the slug, so an operator typing an exact skill name gets zero signal from the one field guaranteed to carry it, and the shipped scorer puts the identifier's owner first for **0 of the 3** stratum-A queries where such an owner exists); IDF weighting and a sublinear body-length norm (a **fourth defect** — sample bodies average **6.8×** the runbook length and body matches supply **70–100%** of the winning score wherever the lexical top-1 is graded 0); and CamelCase splitting. The relevance-aware tie-break is **struck** from that list — measured, it is numerically identical to CamelCase splitting alone on every metric for every stratum, because IDF already breaks the tie on the merits and the alphabetical fallback never fires. Finishing de-duplication in the *product* (content-hash collapse in `rank()` and/or ingestion-time overlap rejection) remains open but is now a **guardrail against regression rather than a retrieval improvement**: with the dev corpus already clean, **0 of 63** pools contain a duplicate, so there is no crowding left to measure a fix against. The heavier lexical options (`ts_rank_cd` cover density, curated alias map) are **cancelled by the result** — never measured, and each more expensive than the fixes that already closed the gap. Cancelled for *this* row's ordering question, not refuted on their own merits: an alias map remains the natural instrument for a *vocabulary* gap, which is why the long-term-operator-memory row's Option C still names it. Only then would come a sidecar `skill_embedding` table over `real[]` with `ON DELETE CASCADE` and `model_id`/`dim`/`content_hash` provenance (promotable to `vector(n)` by ALTER, no data migration), with pgvector deferred to a **recorded scale trigger** (proposed >2,000 skills or search p95 >300 ms). Vectors must not enter the `Skill` contract or the search payload. agentscope 2.0.8's `embedding` module (`OllamaEmbeddingModel`, `DashScopeEmbeddingModel`) is the adopt-worthy surface; its `rag` stores are rejected — no pgvector store, and `MilvusLiteStore` is pod-local (the SPEC-064 offloader objection, `FileEmbeddingCache` likewise). An in-cluster Ollama already runs (`llm-hosting`, already `LUBAN_BASE_URL`) but answers `/api/embed` with **501** (embeddings not enabled) and holds only a chat model; skills-hub holds **no model credential** today, so an external embedder would add a secret, egress, spend, and a data-egress decision on skill body text. Gating posture: `SKILLS_SEMANTIC_ENABLED=false`, fail open to lexical, readiness must not gain a model dependency, new metric families must join `OTEL_MIRROR_FAMILIES`, and embedders stay out of the chat catalog (`_NON_CHAT_MARKERS`). The memo authorizes no implementation, embedding run, extension install, image swap, ADR, or spec. | **closed 2026-10-01** — null result for vectors, reached by the row's own pre-registered rule rather than by preference: a cheaper tokenizer fix closed the measured gap, and the recall defect that would justify a store is measured **absent** (**0** grade-2 documents outside the top 10 on any of 38 queries; `R@5(=2)` already **1.000** on real traffic). Reopen **only** on catalog growth past the recorded pgvector scale trigger (>2,000 skills or search p95 >300 ms), never on a library upgrade or on a ranking complaint the four measured lexical fixes do not already address; if anything is ever built it is the memo's sidecar `real[]` + in-process exact cosine, specified on its own. **This closure authorizes no implementation** — the four fixes (index `skill_id`, IDF weighting, sublinear length norm, CamelCase splitting) are measured as sufficient but promoting them needs its own spec, and any future measurement must reuse the committed label fixture and report **zero-relevant rate** and distinct-document variants, not zero-hit rate alone. Abstention is split into its own row below, because neither a lexical nor a dense retriever can fix it. **That spec now exists: [SPEC-066 skill retrieval ranking fidelity](../specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md), drafted 2026-10-01, `approved` 2026-10-02, and **delivered 2026-10-03 as v0.46.0** (R-4 shipped query-side-only so parity holds by construction; R-8 re-measured **24/38** combined top-1 on real PostgreSQL 16, owner recovery 0/3 → 3/3, nDCG@10 CI [+0.022, +0.111] excluding zero, top-1 sign test directional only at (7, 2) p = 0.1797, **two** disclosed in-window re-orderings Q62 + Q63; R-9 removed the four measurement flags and the additive `idx_skills_search_v2` migration shipped, +8 KiB).** It covers the four measured fixes plus what the measurement could not see — **0.711 is a memory-path upper bound** (the eval ran `rank()` over a corpus export, while the deployed Postgres backend ranks only rows its `to_tsvector` prefilter admitted); `skill_id` is in neither `_SEARCH_VECTOR` nor `idx_skills_search`, so slug-only matches return **zero rows** on Postgres today; CamelCase splitting breaks the prefilter's documented "mirror" (query side Python `tokenize()` vs document side `to_tsvector('simple', …)`, which agree only because *neither* splits CamelCase) and can **regress recall**; and IDF has no backend-independent corpus, because `rank()`'s two callers pass different pools. SPEC-066 therefore makes cross-backend parity (a prefilter + GIN migration, and an **enforced** parity harness — SPEC-014 claims one delivered but no such test exists) load-bearing, gates the merge on **re-measurement through the Postgres path** with a coded null-result outcome, and puts de-duplication in `rank()` rather than `parse_sources` (which never sees file content, correcting §4.4's framing). All six Open Questions were **resolved 2026-10-02** against the shipped code — four on the evidence alone and two as product decisions the operator made: **accept** the one measured re-ordering regression (`D18` falls to rank 2 of 5; `R@5(=2)` unaffected; reported through the Postgres path and named in the delivery release note) and **defer** sync-time overlap rejection (R-7 adds no overlap logic to `services/sync.py` — that file gains only R-2's statistics refresh; only `rank()` de-duplication ships). The row stays **closed** for vectors either way. |
