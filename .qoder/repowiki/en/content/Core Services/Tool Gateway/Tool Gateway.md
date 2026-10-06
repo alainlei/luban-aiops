@@ -14,30 +14,26 @@
 - [incidents_connector.py](file://products/tool-gateway/src/tool_gateway/tools/incidents_connector.py)
 - [skills_connector.py](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py)
 - [http_connector.py](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py)
+- [secrets_connector.py](file://products/tool-gateway/src/tool_gateway/tools/secrets_connector.py)
 - [url_redaction.py](file://products/tool-gateway/src/tool_gateway/tools/url_redaction.py)
 - [redaction.py](file://products/tool-gateway/src/tool_gateway/tools/redaction.py)
 - [audit_emitter.py](file://products/tool-gateway/src/tool_gateway/services/audit_emitter.py)
 - [policy_engine.py](file://products/tool-gateway/src/tool_gateway/services/policy_engine.py)
-- [secrets.py](file://products/tool-gateway/src/tool_gateway/api/routes/secrets.py)
 - [secret_delivery.py](file://products/tool-gateway/src/tool_gateway/tools/secret_delivery.py)
-- [secrets_connector.py](file://products/tool-gateway/src/tool_gateway/tools/secrets_connector.py)
 - [router.py](file://products/tool-gateway/src/tool_gateway/api/router.py)
-- [test_secret_delivery.py](file://products/tool-gateway/tests/test_secret_delivery.py)
 - [test_tool_registry.py](file://products/tool-gateway/tests/test_tool_registry.py)
 - [test_tool_invoke.py](file://products/tool-gateway/tests/test_tool_invoke.py)
 - [test_http_connector.py](file://products/tool-gateway/tests/test_http_connector.py)
 - [README.md](file://products/tool-gateway/README.md)
-- [mcp-ingestion-spike.md](file://docs/workspace/mcp-ingestion-spike.md)
-- [SPEC-062 spec.md](file://docs/specs/SPEC-062-secure-password-generation-and-delivery/spec.md)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Updated MCP integration strategy section to clarify inbound consumption direction vs outbound exposure
-- Added comprehensive documentation of the planned MCP ingestion connector architecture
-- Clarified that MCP implementation remains under assessment with no current implementation
-- Enhanced security considerations to emphasize Luban governance controls over MCP boundaries
-- Updated roadmap section to reflect ServiceNow → Ansible → Windows pilot sequencing
+- Updated connector inventory to include HTTP, secrets, and browser web-checks alongside existing Kubernetes, Elastic, skills-hub, and incidents connectors
+- Added comprehensive documentation for the new HTTP connector with bounded service check capabilities
+- Enhanced SecretsConnector documentation covering secure password generation and delivery mechanisms
+- Updated architecture diagrams to reflect the complete connector ecosystem
+- Expanded credential management section to cover shared credential set infrastructure across connectors
 
 ## Table of Contents
 1. Introduction
@@ -45,23 +41,20 @@
 3. Core Components
 4. Architecture Overview
 5. Detailed Component Analysis
-6. MCP Integration Strategy
-7. Dependency Analysis
-8. Performance Considerations
-9. Troubleshooting Guide
-10. Conclusion
+6. Dependency Analysis
+7. Performance Considerations
+8. Troubleshooting Guide
+9. Conclusion
 
 ## Introduction
-The Tool Gateway is a normalized access layer that exposes external systems through pluggable tool connectors. It centralizes authentication, policy enforcement, parameter validation, output redaction, audit emission, and structured error handling. Built-in connectors provide safe, bounded access to Kubernetes, Elasticsearch, browser automation (web-check flows), HTTP services, incidents, skills repositories, and secure secret delivery mechanisms. The gateway enforces risk-tier admission for mutating actions and integrates with the platform's audit and policy systems to ensure consistent governance across all tool invocations.
-
-**Updated** The platform now includes a complete implementation of SPEC-062 secure password generation and delivery system, featuring cryptographically strong password generation, secure one-time delivery mechanisms, and active destruction capabilities for held deliveries through the new DELETE endpoint. Additionally, the MCP integration strategy has been refined to focus on inbound consumption where tool-gateway acts as an MCP client beneath Luban's governance controls.
+The Tool Gateway is a normalized access layer that exposes external systems through pluggable tool connectors. It centralizes authentication, policy enforcement, parameter validation, output redaction, audit emission, and structured error handling. The platform now provides comprehensive connectivity through seven built-in connectors: Kubernetes, Elasticsearch, browser automation (web-check flows), HTTP services, incidents, skills repositories, and secure secret delivery mechanisms. Each connector implements standardized security controls including origin allowlisting, credential set management, parameter validation, and structured error responses. The gateway enforces risk-tier admission for mutating actions and integrates with the platform's audit and policy systems to ensure consistent governance across all tool invocations.
 
 ## Project Structure
 The Tool Gateway service is organized into:
 - Application entrypoint and lifecycle management
 - API routing and request orchestration
 - Tool registry and base abstractions
-- Connector implementations per system
+- Seven connector implementations per system
 - Policy engine and token verification
 - Audit emission and observability
 - Configuration and runtime settings
@@ -92,6 +85,7 @@ O --> P["InMemory/Redis Backend"]
 - [audit_emitter.py:67-98](file://products/tool-gateway/src/tool_gateway/services/audit_emitter.py#L67-L98)
 - [redaction.py:126-151](file://products/tool-gateway/src/tool_gateway/tools/redaction.py#L126-L151)
 - [http_connector.py:350-359](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L350-L359)
+- [secrets_connector.py:379-387](file://products/tool-gateway/src/tool_gateway/tools/secrets_connector.py#L379-L387)
 - [secret_delivery.py:50-91](file://products/tool-gateway/src/tool_gateway/tools/secret_delivery.py#L50-L91)
 
 **Section sources**
@@ -107,8 +101,6 @@ O --> P["InMemory/Redis Backend"]
 - URL Redaction: Specialized URL secret masking for query parameters and userinfo components.
 - AuditEmitter: Fire-and-forget durable audit events to the audit service; non-blocking and failure-tolerant.
 - Config: Centralized environment-driven configuration for connectors, policy, auth, and feature flags.
-
-**Updated** Added URL Redaction module for coordinated secret masking across HTTP and browser connectors. Also documented the complete SecretsConnector implementation for SPEC-062 secure password generation and delivery, including the new discard capability for active destruction of held deliveries.
 
 **Section sources**
 - [registry.py:18-89](file://products/tool-gateway/src/tool_gateway/tools/registry.py#L18-L89)
@@ -129,8 +121,6 @@ The invocation path enforces security and safety at every stage:
 - Output redaction before response and audit emission.
 - Durable audit trail via fire-and-forget emission.
 
-**Updated** HTTP connector follows the same security model as browser connector with origin allowlists and credential set references. The SecretsConnector provides complete secure password generation and delivery capabilities with active destruction support through the new DELETE endpoint.
-
 ```mermaid
 sequenceDiagram
 participant Client as "Caller"
@@ -142,8 +132,6 @@ participant HttpConn as "HttpConnector"
 participant UrlRedact as "URL Redaction"
 participant Redact as "Redaction"
 participant Audit as "AuditEmitter"
-participant SecretsRoute as "Secrets Route"
-participant Buffer as "SecretDeliveryBuffer"
 Client->>Gateway : POST /api/v2/tools/invoke
 Gateway->>Service : resolve_request_identity + enforce_policy
 Service->>Policy : evaluate("tools : invoke")
@@ -160,11 +148,6 @@ HttpConn-->>Registry : ToolResult
 else secrets.generate_password/secrets.deliver
 Registry->>SecretsConn : execute(parameters, identity)
 SecretsConn-->>Registry : ToolResult
-else delivery management
-Client->>SecretsRoute : DELETE /api/v2/secrets/delivery/{id}
-SecretsRoute->>Buffer : discard(delivery_id, owner_sub)
-Buffer-->>SecretsRoute : bool
-SecretsRoute-->>Client : 204 No Content
 end
 Registry-->>Service : ToolResult
 Service->>Redact : redact_result(result)
@@ -182,7 +165,6 @@ end
 - [url_redaction.py:49-91](file://products/tool-gateway/src/tool_gateway/tools/url_redaction.py#L49-L91)
 - [redaction.py:126-151](file://products/tool-gateway/src/tool_gateway/tools/redaction.py#L126-L151)
 - [audit_emitter.py:67-98](file://products/tool-gateway/src/tool_gateway/services/audit_emitter.py#L67-L98)
-- [secrets.py:122-170](file://products/tool-gateway/src/tool_gateway/api/routes/secrets.py#L122-L170)
 
 ## Detailed Component Analysis
 
@@ -245,7 +227,7 @@ ToolRegistry --> BaseTool : "dispatches"
 - [test_tool_registry.py:56-172](file://products/tool-gateway/tests/test_tool_registry.py#L56-L172)
 
 ### HTTP Connector
-**New** The HTTP connector provides bounded HTTP service check capabilities with two tools: `http.get` (read tier) and `http.post` (write tier). It implements strict security controls including origin allowlisting, redirect following with allowlist validation, body size limits, and credential set-based authentication.
+The HTTP connector provides bounded HTTP service check capabilities with two tools: `http.get` (read tier) and `http.post` (write tier). It implements strict security controls including origin allowlisting, redirect following with allowlist validation, body size limits, and credential set-based authentication.
 
 Key features:
 - **Origin Allowlist**: Deny-by-default with configurable allowed origins
@@ -284,7 +266,7 @@ MaskSecrets --> ReturnResult["Return ToolResult"]
 - [test_http_connector.py:1-789](file://products/tool-gateway/tests/test_http_connector.py#L1-L789)
 
 ### Secrets Connector and Secure Delivery System
-**Complete Implementation** The SecretsConnector provides secure password generation and delivery capabilities as specified in SPEC-062. This connector introduces two tool primitives with comprehensive security controls and active destruction capabilities.
+The SecretsConnector provides secure password generation and delivery capabilities as specified in SPEC-062. This connector introduces two tool primitives with comprehensive security controls and active destruction capabilities.
 
 **Key Features:**
 - **`secrets.generate_password`**: A read-tier CSPRNG tool that generates cryptographically strong passwords using Python's `secrets` module, bound to a centralized password policy
@@ -317,17 +299,14 @@ ValidateOwner --> |Invalid| Return204
 
 **Diagram sources**
 - [secrets_connector.py:403-620](file://products/tool-gateway/src/tool_gateway/tools/secrets_connector.py#L403-L620)
-- [secrets.py:57-170](file://products/tool-gateway/src/tool_gateway/api/routes/secrets.py#L57-L170)
 - [secret_delivery.py:50-91](file://products/tool-gateway/src/tool_gateway/tools/secret_delivery.py#L50-L91)
 
 **Section sources**
-- [secrets_connector.py:1-620](file://products/tool-gateway/src/tool_gateway/tools/secrets_connector.py#L1-L620)
-- [secrets.py:1-170](file://products/tool-gateway/src/tool_gateway/api/routes/secrets.py#L1-L170)
+- [secrets_connector.py:1-664](file://products/tool-gateway/src/tool_gateway/tools/secrets_connector.py#L1-L664)
 - [secret_delivery.py:1-369](file://products/tool-gateway/src/tool_gateway/tools/secret_delivery.py#L1-L369)
-- [test_secret_delivery.py:270-332](file://products/tool-gateway/tests/test_secret_delivery.py#L270-L332)
 
 ### Secret Delivery Buffer
-**Enhanced** The SecretDeliveryBuffer provides single-use, owner-scoped, TTL-bounded secret storage with both redemption and active destruction capabilities. It supports both in-memory and Redis backends for different deployment scenarios.
+The SecretDeliveryBuffer provides single-use, owner-scoped, TTL-bounded secret storage with both redemption and active destruction capabilities. It supports both in-memory and Redis backends for different deployment scenarios.
 
 **Key Capabilities:**
 - **Single-Use Redemption**: Values can be redeemed exactly once by the authorized owner
@@ -362,7 +341,7 @@ DeleteOnly --> SuccessTrue
 - [secret_delivery.py:50-369](file://products/tool-gateway/src/tool_gateway/tools/secret_delivery.py#L50-L369)
 
 ### URL Redaction Module
-**New** The URL redaction module provides coordinated secret masking for URLs across HTTP and browser connectors. It masks secret-bearing query parameters and userinfo components while preserving URL structure and non-secret values.
+The URL redaction module provides coordinated secret masking for URLs across HTTP and browser connectors. It masks secret-bearing query parameters and userinfo components while preserving URL structure and non-secret values.
 
 Features:
 - **Secret Parameter Detection**: Case-insensitive matching of known secret parameter names
@@ -449,7 +428,6 @@ Query --> ConnErr["Return ELASTIC_CONNECTION_ERROR"]
 - Interaction guards prevent off-origin navigation and enforce step budgets; read captures re-check live origin.
 - Credential sets resolved from secret-mounted files; screenshots mask password-tier values.
 - Write-tier tools include web.click, web.type, web.select, web.press_key, web.upload_file, web.evaluate; read-tier includes web.navigate, web.snapshot, web.screenshot, web.fill_credential, web.extract, web.wait_for, web.hover, web.scroll, web.switch_frame.
-- **Updated** Now uses shared URL redaction module for consistent secret masking across all URL outputs.
 
 ```mermaid
 sequenceDiagram
@@ -500,33 +478,11 @@ Browser-->>Caller : ToolResult(evidence URL masked)
 **Section sources**
 - [skills_connector.py:71-419](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py#L71-L419)
 
-### API Endpoints
-**Updated** The Tool Gateway exposes several API endpoints for tool invocation and secret delivery management:
-
-**Tool Invocation Endpoint:**
-- `POST /api/v2/tools/invoke`: Invokes registered tools with parameter validation and policy enforcement
-
-**Secret Delivery Endpoints:**
-- `GET /api/v2/secrets/delivery/{delivery_id}`: Redeems a stashed secret once for the generating identity
-- `DELETE /api/v2/secrets/delivery/{delivery_id}`: Actively destroys a stashed secret without revealing it (new in SPEC-062 enhancement)
-
-**Security Characteristics:**
-- All endpoints require authentication via bearer tokens
-- Secret delivery endpoints use owner-scoped access control
-- Oracle-free responses prevent information leakage about delivery states
-- Active destruction ensures immediate cleanup of held deliveries
-
-**Section sources**
-- [secrets.py:57-170](file://products/tool-gateway/src/tool_gateway/api/routes/secrets.py#L57-L170)
-- [router.py:1-9](file://products/tool-gateway/src/tool_gateway/api/router.py#L1-L9)
-
 ### Invocation Lifecycle and Error Handling
 - Identity resolution supports bearer tokens and synthetic dev identity when configured.
 - Policy enforcement denies without identity or matching allow rules; mutating tools additionally require tools:mutate.
 - Registry.invoke catches exceptions and returns TOOL_EXECUTION_ERROR with evidence.
 - Redaction applies deterministic masking and fails closed on overflow; audit events emitted for all outcomes.
-
-**Updated** HTTP connector follows the same error handling pattern with specific HTTP-related error codes. The SecretsConnector integrates with the existing policy and audit systems for secure password operations, including the new active destruction capability through the DELETE endpoint.
 
 ```mermaid
 flowchart TD
@@ -562,7 +518,7 @@ Emit --> Resp["JSONResponse"]
 - Sensitive query parameters masked in reported URLs for evidence.
 - Screenshots mask password-tier values to avoid leaking secrets.
 - All connector credentials are passed via configuration and never exposed in results or audit payloads.
-- **Updated** HTTP connector uses the same credential set mechanism as browser connector, supporting rotation without restart. The SecretsConnector follows the same pattern for secure password handling, with the new DELETE endpoint providing active destruction capabilities for held deliveries.
+- HTTP connector uses the same credential set mechanism as browser connector, supporting rotation without restart.
 
 **Section sources**
 - [browser_connector.py:123-148](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L123-L148)
@@ -575,69 +531,19 @@ Emit --> Resp["JSONResponse"]
 - PolicyEngine loads bundled rules, computes content fingerprint, and evaluates actions with deny-by-default semantics.
 - AuditEmitter emits durable events asynchronously; failures do not degrade the tool path.
 - GatewayService records metrics for policy decisions, redaction spans, and token verification outcomes.
-- **Updated** The SecretsConnector integrates with the existing audit and policy systems, introducing a new `secret_delivered` audit event type and `secrets:deliver` policy action for email delivery operations. The new DELETE endpoint provides active destruction capabilities without additional audit overhead.
+- The SecretsConnector integrates with the existing audit and policy systems, introducing a new `secret_delivered` audit event type and `secrets:deliver` policy action for email delivery operations.
 
 **Section sources**
 - [policy_engine.py:254-355](file://products/tool-gateway/src/tool_gateway/services/policy_engine.py#L254-L355)
 - [audit_emitter.py:29-98](file://products/tool-gateway/src/tool_gateway/services/audit_emitter.py#L29-L98)
 - [gateway_service.py:32-59](file://products/tool-gateway/src/tool_gateway/services/gateway_service.py#L32-L59)
 
-## MCP Integration Strategy
-
-### Current Status and Direction
-**Assessment Phase** The MCP integration strategy is currently under assessment and planning. No MCP implementation exists in the codebase yet. The direction has been clarified to focus on **inbound consumption** where tool-gateway acts as an MCP client beneath Luban's governance controls, rather than outbound exposure of tool-gateway or Luban workflows.
-
-### Planned Architecture
-The proposed MCP ingestion connector would sit beneath tool-gateway as another `BaseTool` implementation, reusing the existing `ToolRegistry` seam alongside native connectors like `k8s.*`, `elastic.*`, `skills.*`, `incidents.*`, `web.*`, and `http.*`.
-
-```mermaid
-flowchart TD
-Operator["Operator"] --> AgentPlatform["Agent Platform<br/>Policy/HITL"]
-AgentPlatform --> ExecutionRuntime["Execution Runtime<br/>Signed Execution"]
-ExecutionRuntime --> ToolGateway["Tool Gateway<br/>Admission/Dispatch/Redaction/Audit"]
-ToolGateway --> NativeConnector["Native Connector<br/>(K8s, Elastic, etc.)"]
-ToolGateway --> MCPIngestion["MCP Ingestion Connector<br/>(Planned)"]
-MCPIngestion --> ExternalServer["External MCP Server"]
-ExternalServer --> TargetSystem["Target System"]
-```
-
-**Diagram sources**
-- [mcp-ingestion-spike.md:55-81](file://docs/workspace/mcp-ingestion-spike.md#L55-L81)
-
-### Key Design Principles
-- **Explicit Admission Control**: Operator-owned allowlist with fail-closed behavior for missing tools, incompatible schemas, and unknown arguments
-- **Local Risk Classification**: Luban assigns `read`/`write`/`admin` tiers independently of remote server hints
-- **Canonical Mapping**: Deterministic translation to Luban tool names and result envelopes with type/size validation
-- **Credential Boundaries**: Never forward `aud=tool-gateway` delegated tokens upstream; each server gets independent credentials
-- **Uncertain Outcome Handling**: No blind retry or automatic fallback after potentially-dispatched mutations
-- **Attribution Preservation**: Retain Luban's verified user/service attribution with explicit remote-execution correlation
-
-### Pilot Sequencing
-The strategy recommends staged pilots in risk order:
-
-| Target | Risk Tier | Blast Radius | Topology | Order |
-|---|---|---|---|---|
-| **ServiceNow** | read → write | System of record (tickets); reversible, auditable | Remote HTTP MCP server (SaaS/self-hosted) + egress | **1st** |
-| **Ansible** | write/admin | Live infrastructure; broad credentials; bundled multi-step | Control node near infra (sidecar or remote) | **2nd** |
-| **Windows UI** | read → write | Native apps/services; state-changing UI clicks | **Windows host/VM outside the cluster** | **3rd** |
-
-### Governance Controls
-Luban retains full governance over MCP-backed tools:
-- Policy enforcement through existing `tools:invoke` and `tools:mutate` actions
-- HITL confirmation for mutating flows (one gate per flow)
-- Signed execution requests through isolated execution-runtime worker
-- Redaction choke point for all tool results
-- Durable audit trails via existing audit emitter
-
-**Section sources**
-- [mcp-ingestion-spike.md:1-229](file://docs/workspace/mcp-ingestion-spike.md#L1-L229)
-- [README.md:53-67](file://products/tool-gateway/README.md#L53-L67)
-
 ## Dependency Analysis
 - Application wiring: app creates registry and optional browser connector; lifespan starts/stops browser pool.
 - Connectors depend on external clients (kubernetes, elasticsearch, httpx) and register tools conditionally based on configuration.
 - GatewayService depends on policy engine, token verifier, redaction, and audit emitter.
-- **Updated** HTTP connector integrates with URL redaction module and shares credential set infrastructure with browser connector. The SecretsConnector depends on password policy validation and secure delivery buffer backends, with the new DELETE endpoint providing active destruction capabilities.
+- HTTP connector integrates with URL redaction module and shares credential set infrastructure with browser connector.
+- SecretsConnector depends on password policy validation and secure delivery buffer backends.
 
 ```mermaid
 graph LR
@@ -674,7 +580,8 @@ GS --> RD["Redaction"]
 - Parameter bounds: Time ranges, result limits, and log tail sizes are clamped to prevent resource exhaustion.
 - Redaction overhead: Redaction runs once per result; overflow detection prevents excessive processing.
 - Observability: Metrics recorded for policy decisions, redaction spans, token verification, and audit emissions.
-- **Updated** HTTP connector uses connection-per-request pattern with timeout limits and response size caps to prevent resource exhaustion. The SecretsConnector uses efficient CSPRNG generation and minimal memory footprint for ephemeral delivery handles, with the new DELETE endpoint providing fast, idempotent destruction operations.
+- HTTP connector uses connection-per-request pattern with timeout limits and response size caps to prevent resource exhaustion.
+- SecretsConnector uses efficient CSPRNG generation and minimal memory footprint for ephemeral delivery handles.
 
 ## Troubleshooting Guide
 Common issues and diagnostics:
@@ -684,7 +591,8 @@ Common issues and diagnostics:
 - Upstream connectivity: Connectors return structured errors (e.g., K8S_NOT_CONFIGURED, ELASTIC_NOT_CONFIGURED, UPSTREAM_ERROR); check configuration and network reachability.
 - Browser flow deviations: Off-origin navigation or stale flow provenance triggers specific denial codes; navigate back to bound target or re-bind flow.
 - Redaction overflow: If too much of the result appears sensitive, outputs are withheld; tighten parameters or reduce payload size.
-- **Updated** HTTP connector issues: Origin allowlist denials, redirect loops, credential set resolution failures, and URL secret masking problems. SecretsConnector issues include password policy violations, delivery handle expiration, email delivery configuration problems, and active destruction failures. The new DELETE endpoint may fail due to authentication issues, invalid delivery IDs, or backend connectivity problems.
+- HTTP connector issues: Origin allowlist denials, redirect loops, credential set resolution failures, and URL secret masking problems.
+- SecretsConnector issues: Password policy violations, delivery handle expiration, email delivery configuration problems, and active destruction failures.
 
 **Section sources**
 - [gateway_service.py:61-156](file://products/tool-gateway/src/tool_gateway/services/gateway_service.py#L61-L156)
@@ -696,8 +604,8 @@ Common issues and diagnostics:
 - [test_tool_invoke.py:184-549](file://products/tool-gateway/tests/test_tool_invoke.py#L184-L549)
 
 ## Conclusion
-The Tool Gateway provides a secure, extensible, and observable framework for invoking external tools through standardized connectors. It enforces risk-tier admission, policy-based authorization, robust parameter validation, deterministic output redaction, and durable auditing. Built-in connectors cover Kubernetes, Elasticsearch, browser automation, HTTP services, incidents, skills repositories, and secure secret delivery, while the registry and base abstractions make it straightforward to add custom connectors with consistent behavior and governance.
+The Tool Gateway provides a secure, extensible, and observable framework for invoking external tools through standardized connectors. It enforces risk-tier admission, policy-based authorization, robust parameter validation, deterministic output redaction, and durable auditing. The platform now includes seven comprehensive built-in connectors covering Kubernetes, Elasticsearch, browser automation, HTTP services, incidents, skills repositories, and secure secret delivery, while the registry and base abstractions make it straightforward to add custom connectors with consistent behavior and governance.
 
-**Updated** The addition of HTTP connector capabilities extends the platform's ability to perform bounded HTTP service checks with the same security guarantees as other connectors, including origin allowlisting, credential set management, and URL secret masking. The complete implementation of SPEC-062 secure password generation and delivery system provides cryptographically strong password generation, secure one-time delivery mechanisms, and active destruction capabilities through the new DELETE endpoint. 
+The addition of HTTP connector capabilities extends the platform's ability to perform bounded HTTP service checks with the same security guarantees as other connectors, including origin allowlisting, credential set management, and URL secret masking. The complete implementation of SPEC-062 secure password generation and delivery system provides cryptographically strong password generation, secure one-time delivery mechanisms, and active destruction capabilities through the new DELETE endpoint. 
 
-The MCP integration strategy represents a significant architectural evolution toward inbound consumption where tool-gateway becomes an MCP client beneath Luban's governance controls. While no implementation exists yet, the assessment phase has established clear design principles emphasizing operator-controlled admission, local risk classification, and preservation of Luban's security boundaries. The planned ServiceNow → Ansible → Windows pilot sequence ensures careful validation of governance controls before expanding to higher-risk targets. This approach maintains the platform's commitment to bounded autonomy while enabling integration with external operational systems through standardized protocols.
+This comprehensive connector ecosystem ensures that the Tool Gateway serves as a unified, secure boundary between the platform and external systems, maintaining consistent security policies, audit trails, and operational visibility across all tool invocations while providing flexible integration patterns for diverse operational requirements.

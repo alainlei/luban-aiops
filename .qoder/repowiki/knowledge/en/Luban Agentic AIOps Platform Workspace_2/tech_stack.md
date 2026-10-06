@@ -1,0 +1,1 @@
+Python services managed with `uv` on a shared Amazon Linux 2023 base image (`shared/base-images/base-uv`); container builds use Dockerfiles per product; Kubernetes deployment uses Kustomize overlays under `shared/platform-ops/gitops`; the operator portal is a Vite/Ts SPA served by nginx; end-to-end demos run against a kind-based dev cluster.

@@ -3,6 +3,8 @@
 <cite>
 **Referenced Files in This Document**
 - [README.md](file://README.md)
+- [CHANGELOG.md](file://CHANGELOG.md)
+- [VERSION](file://VERSION)
 - [delivery-roadmap.md](file://docs/agentic-aiops-platform/delivery-roadmap.md)
 - [part-1-decision-matrix.md](file://docs/agentic-aiops-platform/part-1-decision-matrix.md)
 - [part-2-reference-architecture.md](file://docs/agentic-aiops-platform/part-2-reference-architecture.md)
@@ -11,13 +13,17 @@
 - [agent-platform README.md](file://products/agent-platform/README.md)
 - [platform-gateway README.md](file://products/platform-gateway/README.md)
 - [tool-gateway README.md](file://products/tool-gateway/README.md)
+- [policy-center README.md](file://products/policy-center/README.md)
+- [python-container-strategy.md](file://docs/workspace/python-container-strategy.md)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Updated the "Spec-Driven Development Workflow and Releases" section to reflect current delivered releases (0 through 3) based on repository state
-- Enhanced release descriptions with specific capabilities delivered in each release
-- Updated conclusion to accurately reflect the current platform maturity and delivery trajectory
+- Updated platform version to v0.46.0 reflecting the latest skill-retrieval ranking fidelity improvements
+- Enhanced release narrative to cover the complete delivery sequence through SPEC-066, including the four measured lexical fixes for skill retrieval
+- Corrected base image references to accurately reflect the shared `luban-aiops/base-uv` Docker image used across all products
+- Clarified policy-center as a design-stage stub while documenting that action-authorization is currently enforced within tool-gateway
+- Updated current state section to reflect the nine implemented and deployable products
 
 ## Table of Contents
 1. Introduction
@@ -66,11 +72,13 @@ IS["incident-service"]
 AUD["audit-service"]
 ER["execution-runtime"]
 OP["operator-portal"]
+PC["policy-center (design-stage stub)"]
 end
 subgraph "Shared"
 SC["shared-contracts"]
 SDK["shared-sdk"]
 OPS["platform-ops"]
+BI["base-uv image"]
 end
 subgraph "Docs"
 ADR["ADR"]
@@ -95,6 +103,7 @@ OPS --> IS
 OPS --> AUD
 OPS --> ER
 OPS --> OP
+OPS --> PC
 SPEC --> AP
 SPEC --> PG
 SPEC --> TG
@@ -104,11 +113,21 @@ SPEC --> IS
 SPEC --> AUD
 SPEC --> ER
 SPEC --> OP
+SPEC --> PC
+BI --> AP
+BI --> PG
+BI --> TG
+BI --> IB
+BI --> SH
+BI --> IS
+BI --> AUD
+BI --> ER
 ```
 
 **Diagram sources**
 - [README.md:15-55](file://README.md#L15-L55)
 - [architecture-overview.md:8-24](file://docs/guides/architecture-overview.md#L8-L24)
+- [python-container-strategy.md:198-205](file://docs/workspace/python-container-strategy.md#L198-L205)
 
 **Section sources**
 - [README.md:15-55](file://README.md#L15-L55)
@@ -120,11 +139,11 @@ The platform's core components are implemented as distinct products with clear r
 
 - Platform Gateway (platform-gateway): Portal-facing edge service that verifies portal bearer tokens, applies deny-by-default action policies, proxies chat and session traffic to agent-platform, exchanges tokens for short-lived delegated tokens via identity-broker, relays auth/runtime endpoints, proxies audit queries and incidents surfaces, and forwards policy/session/chat lifecycle audit events.
 
-- Tool Gateway (tool-gateway): Standardized tool and connector access layer providing normalized MCP-compatible tool exposure, connector dispatch (Kubernetes, Elastic, skills-hub, incidents, browser web-checks), tool policy enforcement, output redaction, and structured evidence envelopes. It does not own approval logic or portal routes; those remain in platform-gateway.
+- Tool Gateway (tool-gateway): Standardized tool and connector access layer providing normalized MCP-compatible tool exposure, connector dispatch (Kubernetes, Elastic, skills-hub, incidents, browser web-checks), tool policy enforcement, output redaction, and structured evidence envelopes. Action-authorization is currently enforced here via deny-by-default policy evaluation against the shared role→action policy bundle.
 
 - Identity Broker (identity-broker): Enterprise identity service handling SSO, token issuance, group normalization, and identity propagation.
 
-- Skills Hub (skills-hub): Federated skill ingestion and retrieval for grounded guidance, validating Markdown skills against shared contracts and serving ranked search results.
+- Skills Hub (skills-hub): Federated skill ingestion and retrieval for grounded guidance, validating Markdown skills against shared contracts and serving ranked search results with improved lexical scoring including IDF weighting and CamelCase splitting.
 
 - Incident Service (incident-service): Incident intake from Alertmanager webhooks and manual reports, fingerprint deduplication, agent-driven triage producing schema-validated reports, and connector dispatch for outcomes.
 
@@ -134,13 +153,16 @@ The platform's core components are implemented as distinct products with clear r
 
 - Operator Portal (operator-portal): Web portal for operators, approvers, and auditors, providing chat, approvals, incidents, skills, audit views, and document management.
 
-These components preserve clear ownership boundaries and rely on shared contracts for stable integration.
+- Policy Center (policy-center): Design-stage stub defining the future control authority for authorization, policy evaluation, and approval routing. Currently not implemented as a running service; the action-authorization slice is evaluated inside tool-gateway.
+
+These components preserve clear ownership boundaries and rely on shared contracts for stable integration. All backend services build on the shared `luban-aiops/base-uv:al2023` Docker image, which provides Amazon Linux 2023 minimal with pinned uv and non-root user configuration.
 
 **Section sources**
 - [agent-platform README.md:1-280](file://products/agent-platform/README.md#L1-L280)
 - [platform-gateway README.md:1-88](file://products/platform-gateway/README.md#L1-L88)
-- [tool-gateway README.md:1-167](file://products/tool-gateway/README.md#L1-L167)
-- [architecture-overview.md:8-24](file://docs/guides/architecture-overview.md#L8-L24)
+- [tool-gateway README.md:1-199](file://products/tool-gateway/README.md#L1-L199)
+- [policy-center README.md:1-47](file://products/policy-center/README.md#L1-L47)
+- [python-container-strategy.md:198-205](file://docs/workspace/python-container-strategy.md#L198-L205)
 
 ## Architecture Overview
 The platform follows a layered architecture built around a control plane and an execution plane. The control plane handles user interaction, session orchestration, planning, policy enforcement, approval routing, knowledge retrieval, audit, and service exposure through the API gateway. The execution plane provides isolated tool execution, MCP client/server interaction, access to on-prem and environment-specific systems, controlled runbook execution, and secure handling of short-lived credentials.
@@ -161,11 +183,12 @@ subgraph "Control Plane"
 UI["Operator Portal"]
 GW["Platform Gateway"]
 AS["Agent Platform"]
-POL["Policy Enforcement"]
+POL["Policy Enforcement (in tool-gateway)"]
 AUTH["Identity Broker"]
 SKILLS["Skills Hub"]
 AUDIT["Audit Service"]
 INCIDENTS["Incident Service"]
+PC["Policy Center (design-stage)"]
 end
 subgraph "Execution Plane"
 TG["Tool Gateway"]
@@ -173,6 +196,9 @@ ER["Execution Runtime"]
 K8S["Kubernetes API"]
 ELASTIC["Elastic Cluster"]
 EXT["External Systems"]
+end
+subgraph "Infrastructure"
+BASE["luban-aiops/base-uv"]
 end
 UI --> GW
 GW --> AUTH
@@ -188,11 +214,19 @@ TG --> ELASTIC
 TG --> EXT
 ER --> TG
 ER --> AUDIT
+BASE --> AS
+BASE --> GW
+BASE --> TG
+BASE --> AUTH
+BASE --> SKILLS
+BASE --> AUDIT
+BASE --> ER
 ```
 
 **Diagram sources**
 - [part-2-reference-architecture.md:81-110](file://docs/agentic-aiops-platform/part-2-reference-architecture.md#L81-L110)
 - [architecture-overview.md:28-82](file://docs/guides/architecture-overview.md#L28-L82)
+- [python-container-strategy.md:198-205](file://docs/workspace/python-container-strategy.md#L198-L205)
 
 **Section sources**
 - [part-2-reference-architecture.md:19-80](file://docs/agentic-aiops-platform/part-2-reference-architecture.md#L19-L80)
@@ -252,7 +286,7 @@ Response --> End
 - [platform-gateway README.md:1-88](file://products/platform-gateway/README.md#L1-L88)
 
 ### Tool Gateway: Normalized Connector Access and Redaction
-The tool-gateway product provides standardized tool and connector access. It normalizes connectors, exposes MCP-compatible tools, enforces tool policy, redacts credential-shaped output, and emits audit events. Connectors include Kubernetes, Elastic, skills-hub, incidents, and browser web-checks. It does not own approval logic or portal routes; those remain in platform-gateway.
+The tool-gateway product provides standardized tool and connector access. It normalizes connectors, exposes MCP-compatible tools, enforces tool policy, redacts credential-shaped output, and emits audit events. Connectors include Kubernetes, Elastic, skills-hub, incidents, and browser web-checks. Action-authorization is enforced here via deny-by-default policy evaluation against the shared role→action policy bundle. The policy-center product remains a design-stage stub; when it becomes a service, this module will lift behind a `/policy/evaluate` endpoint returning the same decision object.
 
 ```mermaid
 sequenceDiagram
@@ -274,18 +308,21 @@ Gateway-->>Agent : Tool result + evidence envelope
 - [architecture-overview.md:104-117](file://docs/guides/architecture-overview.md#L104-L117)
 
 **Section sources**
-- [tool-gateway README.md:1-167](file://products/tool-gateway/README.md#L1-L167)
+- [tool-gateway README.md:1-199](file://products/tool-gateway/README.md#L1-L199)
+- [policy-center README.md:20-34](file://products/policy-center/README.md#L20-L34)
 
 ### Spec-Driven Development Workflow and Releases
 The platform uses a spec-driven development workflow where every change that crosses product boundaries, affects trust, changes identity/policy/approval/audit behavior, or spans multiple focused pull requests is captured in a reviewable spec. Specs define requirements, technical plans, and task lists, and they are frozen after delivery. The spec index tracks status and links delivered specs to releases.
 
-Current delivered releases:
+Current platform state: **v0.46.0** (delivered 2026-10-03). All nine build products — `operator-portal`, `agent-platform`, `platform-gateway`, `tool-gateway`, `identity-broker`, `skills-hub`, `audit-service`, `incident-service`, and `execution-runtime` — are implemented, tested, and deployable to the `dev-k8s` overlay (eleven workloads in total, including Redis and PostgreSQL).
+
+Delivered release sequence:
 - **Release 0**: Platform foundation - established the usable portal and runtime baseline with core infrastructure
 - **Release 1**: Read-only operations copilot - delivered grounded answers, read-only tool execution, broker-mediated identity, and pre-production hardening including tool-output redaction and workload-identity service tokens
 - **Release 2**: Skills and grounded guidance - introduced Git-based skill ingestion, validation, indexed retrieval, and cited answers through the skills-hub product
 - **Release 3**: Incident triage and collaboration - added alert/manual intake, canonical incident model, agent triage with validated reports, connector dispatch, and the Incidents panel
-
-Future releases continue stacking value themes: approval-gated bounded actions, hardening and external consumption, and ongoing enhancements such as browser web-check tools, skill composition, and audit reporting.
+- **Release 4+**: Approval-gated bounded actions, hardening, and external consumption (planned)
+- **SPEC-066** (v0.46.0): Skill-retrieval ranking fidelity - four measured lexical fixes including score the `skill_id` slug, corpus-derived IDF weighting, sublinear body-length normalization, and query-side-only CamelCase splitting, plus enforced cross-backend parity and de-duplication guardrail
 
 ```mermaid
 flowchart TD
@@ -310,6 +347,8 @@ Delivered --> Release["Ship Release Slice"]
 **Section sources**
 - [specs/README.md:1-175](file://docs/specs/README.md#L1-L175)
 - [delivery-roadmap.md:49-195](file://docs/agentic-aiops-platform/delivery-roadmap.md#L49-L195)
+- [CHANGELOG.md:14-37](file://CHANGELOG.md#L14-L37)
+- [README.md:83-87](file://README.md#L83-L87)
 
 ## Dependency Analysis
 The platform maintains clear dependency boundaries between products and shared modules:
@@ -319,6 +358,7 @@ The platform maintains clear dependency boundaries between products and shared m
 - Execution runtime depends on tool gateway for approved actions and audit service for receipts
 - Audit service ingests events from all gateways and services
 - Identity broker provides token issuance and delegation used by gateways
+- All backend services build on the shared `luban-aiops/base-uv:al2023` Docker image
 
 ```mermaid
 graph LR
@@ -339,11 +379,19 @@ ER --> AUD
 PG --> AUD
 IB --> AUD
 IS --> AUD
+BASE["luban-aiops/base-uv"] --> AS
+BASE --> PG
+BASE --> TG
+BASE --> IB
+BASE --> SH
+BASE --> AUD
+BASE --> ER
 ```
 
 **Diagram sources**
 - [architecture-overview.md:28-82](file://docs/guides/architecture-overview.md#L28-L82)
 - [README.md:24-55](file://README.md#L24-L55)
+- [python-container-strategy.md:198-205](file://docs/workspace/python-container-strategy.md#L198-L205)
 
 **Section sources**
 - [README.md:24-55](file://README.md#L24-L55)
@@ -357,6 +405,7 @@ Performance characteristics are shaped by the separation of concerns and isolati
 - Model catalog discovery runs periodically with fail-soft fallbacks to keep chat responsive
 - Audit event emission is fire-and-forget and degrades to log-only when unreachable
 - Browser connectors cap screenshots and step budgets to limit resource usage
+- Skill retrieval uses efficient lexical scoring with corpus-derived IDF weighting and sublinear body-length normalization
 
 [No sources needed since this section provides general guidance]
 
@@ -368,6 +417,7 @@ Common troubleshooting areas include:
 - Audit gaps: Ensure audit service URLs and client credentials are configured; confirm fire-and-forget emitter behavior
 - Session issues: Validate session store backend, Postgres connectivity, and evidence store reachability
 - Model selection errors: Confirm model catalog entries, provider keys, and discovery settings
+- Base image issues: Ensure `luban-aiops/base-uv:al2023` is available locally via `make base-images`
 
 When investigating, correlate requests using x-request-id and inspect service metrics and logs. Use the policy matrix view to understand why a request was denied and review audit trails for decision provenance.
 
@@ -375,8 +425,13 @@ When investigating, correlate requests using x-request-id and inspect service me
 - [platform-gateway README.md:64-88](file://products/platform-gateway/README.md#L64-L88)
 - [tool-gateway README.md:65-152](file://products/tool-gateway/README.md#L65-L152)
 - [agent-platform README.md:120-262](file://products/agent-platform/README.md#L120-L262)
+- [python-container-strategy.md:198-205](file://docs/workspace/python-container-strategy.md#L198-L205)
 
 ## Conclusion
-Luban AIOPS provides an enterprise-grade agentic AIOps workspace that separates identity, policy, and execution while preserving clear ownership boundaries. Its modular product-oriented architecture enables automated incident triage, guided operational procedures, and secure tool execution with comprehensive audit trails. The top-level structure organizes capabilities under products/, shared contracts and operations under shared/, and design and delivery documentation under docs/. The spec-driven development workflow drives incremental capability delivery through self-contained releases, starting with platform foundation (Release 0), read-only operations (Release 1), skills and grounded guidance (Release 2), and incident triage and collaboration (Release 3). This approach fits modern AIOps practices by treating automation as auditable, approval-gated workflows with strong governance, making it easier for operations teams to adopt, verify, and trust automated assistance.
+Luban AIOPS provides an enterprise-grade agentic AIOps workspace that separates identity, policy, and execution while preserving clear ownership boundaries. Its modular product-oriented architecture enables automated incident triage, guided operational procedures, and secure tool execution with comprehensive audit trails. The top-level structure organizes capabilities under products/, shared contracts and operations under shared/, and design and delivery documentation under docs/. 
+
+The platform is currently at **v0.46.0**, representing significant maturity with nine fully implemented and deployable products. The spec-driven development workflow drives incremental capability delivery through self-contained releases, starting with platform foundation (Release 0), read-only operations (Release 1), skills and grounded guidance (Release 2), incident triage and collaboration (Release 3), and continuing with skill-retrieval ranking fidelity improvements (SPEC-066). All backend services build on the shared `luban-aiops/base-uv:al2023` base image, ensuring consistent Python environments and security posture.
+
+The policy-center remains a design-stage stub, with action-authorization currently enforced within tool-gateway, demonstrating the platform's commitment to gradual evolution while maintaining operational safety. This approach fits modern AIOps practices by treating automation as auditable, approval-gated workflows with strong governance, making it easier for operations teams to adopt, verify, and trust automated assistance.
 
 [No sources needed since this section summarizes without analyzing specific files]

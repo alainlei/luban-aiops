@@ -18,7 +18,23 @@
 - [request_context.py](file://products/audit-service/src/audit_service/core/request_context.py)
 - [audit-event.schema.json](file://shared/shared-contracts/schemas/audit-event.schema.json)
 - [audit-summary.schema.json](file://shared/shared-contracts/schemas/audit-summary.schema.json)
+- [audit_emitter.py (agent-platform)](file://products/agent-platform/src/agent_service/services/audit_emitter.py)
+- [audit_emitter.py (platform-gateway)](file://products/platform-gateway/src/platform_gateway/services/audit_emitter.py)
+- [audit_emitter.py (execution-runtime)](file://products/execution-runtime/src/execution_runtime/services/audit_emitter.py)
+- [audit_emitter.py (identity-broker)](file://products/identity-broker/src/identity_service/services/audit_emitter.py)
+- [audit_emitter.py (skills-hub)](file://products/skills-hub/src/skills_hub/services/audit_emitter.py)
+- [audit_emitter.py (tool-gateway)](file://products/tool-gateway/src/tool_gateway/services/audit_emitter.py)
+- [audit_emitter.py (incident-service)](file://products/incident-service/src/incident_service/services/audit_emitter.py)
+- [constants.ts](file://products/operator-portal/web-ui/app/src/views/audit/constants.ts)
+- [test_module_parity.py](file://products/tool-gateway/tests/test_module_parity.py)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated the "Integration with Other Platform Services" section to reflect seven emitter services instead of three
+- Added detailed documentation of all seven audit emitters and their implementation patterns
+- Updated architecture diagrams to show the expanded emitter ecosystem
+- Enhanced the emitter service enumeration with specific service names and roles
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -33,7 +49,7 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-The Audit Service provides durable, queryable, and retention-managed audit event logging for the platform. It accepts batches of audit events from other services, persists them with idempotency guarantees, enforces retention policies, and exposes read APIs for querying, summarizing, and exporting audit data. The service is designed for compliance and operational visibility, with strict envelope schemas, deterministic aggregation, and bounded exports suitable for reporting.
+The Audit Service provides durable, queryable, and retention-managed audit event logging for the platform. It accepts batches of audit events from seven emitting platform services, persists them with idempotency guarantees, enforces retention policies, and exposes read APIs for querying, summarizing, and exporting audit data. The service is designed for compliance and operational visibility, with strict envelope schemas, deterministic aggregation, and bounded exports suitable for reporting.
 
 Key capabilities:
 - Ingestion pipeline with authentication, validation, and idempotent storage
@@ -104,7 +120,7 @@ end
 - [config.py:60-111](file://products/audit-service/src/audit_service/core/config.py#L60-L111)
 
 ## Architecture Overview
-The Audit Service follows a clear separation between HTTP endpoints, storage abstraction, and background tasks. Events are emitted by platform services and ingested via an authenticated endpoint. The store implementation is selected at runtime based on configuration. Queries and summaries operate over envelope columns only, ensuring consistent behavior across backends. Retention runs periodically to enforce time-based and count-based policies without blocking ingestion.
+The Audit Service follows a clear separation between HTTP endpoints, storage abstraction, and background tasks. Events are emitted by seven platform services using fire-and-forget emitters and ingested via an authenticated endpoint. The store implementation is selected at runtime based on configuration. Queries and summaries operate over envelope columns only, ensuring consistent behavior across backends. Retention runs periodically to enforce time-based and count-based policies without blocking ingestion.
 
 ```mermaid
 sequenceDiagram
@@ -504,7 +520,7 @@ Common issues and diagnostics:
 - [audit_store.py:535-543](file://products/audit-service/src/audit_service/services/audit_store.py#L535-L543)
 
 ## Conclusion
-The Audit Service delivers a robust, compliant audit trail with durable storage, strict schemas, and controlled access. Its design emphasizes idempotency, deterministic aggregation, and bounded exports suitable for compliance reporting. Retention policies ensure data lifecycle management while maintaining performance under load. Integration points with platform services enable comprehensive visibility across tool invocations, policy decisions, sessions, documents, skills, and execution flows.
+The Audit Service delivers a robust, compliant audit trail with durable storage, strict schemas, and controlled access. Its design emphasizes idempotency, deterministic aggregation, and bounded exports suitable for compliance reporting. Retention policies ensure data lifecycle management while maintaining performance under load. Integration points with seven platform services enable comprehensive visibility across tool invocations, policy decisions, sessions, documents, skills, executions, incidents, and identity operations.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -522,11 +538,57 @@ The Audit Service delivers a robust, compliant audit trail with durable storage,
 - [retention.py:45-76](file://products/audit-service/src/audit_service/services/retention.py#L45-L76)
 
 ### Integration with Other Platform Services
-- Emitting services mint event_id and occurred_at and forward post-redaction events to the audit service.
-- Supported event types include tool invocations, policy decisions, token exchanges, session lifecycle, chat interactions, confirmations, incidents, skills, executions, documents, and skill graduation.
-- The shared schema defines the canonical envelope contract used across services.
+The Audit Service receives events from seven emitting platform services, each implementing a fire-and-forget audit emitter pattern:
+
+**Emitter Services:**
+1. **Agent Platform** (`agent-service`): Emits agent execution, document operations, skill graduation, and chat interaction events
+2. **Execution Runtime** (`execution-runtime`): Emits execution lifecycle events for tool invocations and job completion
+3. **Identity Broker** (`identity-service`): Emits token exchange and identity-related audit events
+4. **Incident Service** (`incident-service`): Emits incident triage events through a specialized connector
+5. **Platform Gateway** (`platform-gateway`): Emits policy decisions and gateway routing events
+6. **Skills Hub** (`skills-hub`): Emits skill search, retrieval, and synchronization events
+7. **Tool Gateway** (`tool-gateway`): Emits tool invocation and execution events
+
+**Emitter Implementation Pattern:**
+All emitters follow a consistent fire-and-forget pattern:
+- Non-blocking delivery via daemon threads
+- Short timeout (2 seconds) for HTTP requests
+- Graceful failure handling with metrics tracking
+- Optional no-op when audit service URL is not configured
+- Standardized event envelope construction
+
+**Special Cases:**
+- Incident service uses a specialized `AuditConnector` class for async HTTP delivery
+- All other services use the standard fire-and-forget emitter pattern
+- The audit service itself does not emit events into its own store
+
+```mermaid
+graph TB
+subgraph "Seven Emitting Services"
+A["agent-service"] --> E["Audit Service"]
+B["execution-runtime"] --> E
+C["identity-service"] --> E
+D["incident-service"] --> E
+F["platform-gateway"] --> E
+G["skills-hub"] --> E
+H["tool-gateway"] --> E
+E["Audit Service"] --> I["AuditStore"]
+I --> J["PostgreSQL"]
+end
+```
+
+**Diagram sources**
+- [audit_emitter.py (agent-platform):1-99](file://products/agent-platform/src/agent_service/services/audit_emitter.py#L1-L99)
+- [audit_emitter.py (platform-gateway):1-99](file://products/platform-gateway/src/platform_gateway/services/audit_emitter.py#L1-L99)
+- [audit_emitter.py (execution-runtime):1-99](file://products/execution-runtime/src/execution_runtime/services/audit_emitter.py#L1-L99)
+- [audit_emitter.py (identity-broker):1-99](file://products/identity-broker/src/identity_service/services/audit_emitter.py#L1-L99)
+- [audit_emitter.py (skills-hub):1-99](file://products/skills-hub/src/skills_hub/services/audit_emitter.py#L1-L99)
+- [audit_emitter.py (tool-gateway):1-99](file://products/tool-gateway/src/tool_gateway/services/audit_emitter.py#L1-L99)
+- [audit_emitter.py (incident-service):1-95](file://products/incident-service/src/incident_service/services/audit_emitter.py#L1-L95)
 
 **Section sources**
+- [constants.ts:40-48](file://products/operator-portal/web-ui/app/src/views/audit/constants.ts#L40-L48)
+- [test_module_parity.py:155-162](file://products/tool-gateway/tests/test_module_parity.py#L155-L162)
 - [audit-event.schema.json:1-94](file://shared/shared-contracts/schemas/audit-event.schema.json#L1-L94)
 
 ### Monitoring and Telemetry

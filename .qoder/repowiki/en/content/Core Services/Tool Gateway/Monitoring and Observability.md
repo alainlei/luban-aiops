@@ -10,7 +10,16 @@
 - [base.py](file://products/tool-gateway/src/tool_gateway/tools/base.py)
 - [registry.py](file://products/tool-gateway/src/tool_gateway/tools/registry.py)
 - [observability-conventions.md](file://shared/shared-contracts/observability-conventions.md)
+- [sync-otel-secrets.sh](file://shared/platform-ops/gitops/sync-otel-secrets.sh)
+- [telemetry.py](file://products/execution-runtime/src/execution_runtime/core/telemetry.py)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated OTLP telemetry provisioning section to document the critical execution-runtime service inclusion fix
+- Added troubleshooting guidance for 401 authentication errors in telemetry collection
+- Enhanced deployment configuration section with proper service coverage requirements
+- Updated architecture diagrams to reflect complete service mesh observability
 
 ## Table of Contents
 1. Introduction
@@ -26,6 +35,8 @@
 
 ## Introduction
 This document explains the monitoring and observability features implemented in the Tool Gateway. It covers metrics collection for tool invocations, error rates, and performance indicators; distributed tracing integration across service boundaries; audit event emission for compliance and debugging; and guidance for dashboards, alerting, log aggregation, structured logging, and troubleshooting. It also provides examples of how specialized tools can emit custom metrics and traces.
+
+**Updated** Added comprehensive coverage of OTLP telemetry provisioning and authentication mechanisms that ensure all platform services can successfully export telemetry data.
 
 ## Project Structure
 The Tool Gateway implements a two-surface observability model aligned with platform conventions:
@@ -114,7 +125,7 @@ Note over GW,OTEL : If tracing active, logs include trace/span ids
 ## Detailed Component Analysis
 
 ### Structured Logging and Audit Trail
-- configure_logging sets the root logger to INFO so JSON audit events survive Uvicorn’s default WARNING level.
+- configure_logging sets the root logger to INFO so JSON audit events survive Uvicorn's default WARNING level.
 - log_event emits a single-line JSON record with an event name and fields; these records form the audit trail and are forwarded to OTLP logs when tracing is enabled.
 - The OTLP log bridge attaches a LoggingHandler to the root logger, mirroring structured logs into the OTLP log pipeline while keeping stdout as source of truth.
 
@@ -166,7 +177,7 @@ Resp --> |GET /metrics| Export["generate_latest()"]
 - Gated by OTEL_ENABLED; when disabled, no providers are initialized and there is zero overhead.
 - Initializes TracerProvider and MeterProvider once, configures BatchSpanProcessor and PeriodicExportingMetricReader with OTLP HTTP exporters, and instruments FastAPI and HTTPX clients.
 - Bridges structured logs to OTLP logs so they join traces via W3C trace context.
-- current_trace_id returns the active span’s trace_id when available, enabling correlation with x-request-id.
+- current_trace_id returns the active span's trace_id when available, enabling correlation with x-request-id.
 
 ```mermaid
 sequenceDiagram
@@ -186,6 +197,45 @@ Note over App,Exp : Fail-open : setup errors logged, not raised
 **Section sources**
 - [telemetry.py:28-133](file://products/tool-gateway/src/tool_gateway/core/telemetry.py#L28-L133)
 - [observability-conventions.md:47-57](file://shared/shared-contracts/observability-conventions.md#L47-L57)
+
+### OTLP Telemetry Provisioning and Authentication
+**Updated** Critical fix applied to ensure all platform services can authenticate with the OTLP backend.
+
+The OTLP telemetry system requires proper authentication headers provisioned to each service's runtime secrets. The `sync-otel-secrets.sh` script now properly includes the execution-runtime service in all synchronization loops, resolving previous 401 authentication errors that prevented telemetry collection.
+
+**Provisioning Process:**
+- Computes Basic auth header from OpenObserve root credentials
+- Merges OTLP headers cluster-side using `kubectl patch` (preserving other keys)
+- Mirrors headers to local env files for consistency
+- Restarts all eight workloads including agent-service, audit-service, execution-runtime, identity-service, incident-service, platform-gateway, skills-hub, and tool-gateway
+
+**Service Coverage:**
+All seven runtime-secrets Secrets now carry the authentication header:
+- audit-service-runtime-secrets
+- execution-runtime-runtime-secrets  
+- identity-service-runtime-secrets
+- incident-service-runtime-secrets
+- platform-gateway-runtime-secrets
+- skills-hub-runtime-secrets
+- tool-gateway-runtime-secrets
+
+```mermaid
+flowchart TD
+Start(["Run sync-otel-secrets.sh"]) --> Compute["Compute Authorization header<br/>from OpenObserve credentials"]
+Compute --> MergeSecrets["Merge headers into all runtime-secrets<br/>using kubectl patch"]
+MergeSecrets --> MirrorEnv["Mirror headers to local env files"]
+MirrorEnv --> Restart["Restart all 8 deployments"]
+Restart --> Verify["Verify rollout status"]
+Verify --> Success["Authenticated telemetry push"]
+```
+
+**Diagram sources**
+- [sync-otel-secrets.sh:54-90](file://shared/platform-ops/gitops/sync-otel-secrets.sh#L54-L90)
+- [sync-otel-secrets.sh:116-163](file://shared/platform-ops/gitops/sync-otel-secrets.sh#L116-L163)
+
+**Section sources**
+- [sync-otel-secrets.sh:1-164](file://shared/platform-ops/gitops/sync-otel-secrets.sh#L1-L164)
+- [telemetry.py:7-12](file://products/execution-runtime/src/execution_runtime/core/telemetry.py#L7-L12)
 
 ### Audit Event Emission
 - build_audit_event constructs an envelope matching the shared audit-event schema, including event_id, occurred_at, event_type, service, request_id, outcome, details, and optional identity/session fields.
@@ -313,14 +363,15 @@ REG["registry.py"] --> BASE["tools/base.py"]
 - Audit emission is fire-and-forget with a short timeout; it never blocks tool execution paths.
 - Tool implementations should measure their own duration and populate evidence.duration_ms for accurate per-tool performance analysis.
 
-[No sources needed since this section provides general guidance]
-
 ## Troubleshooting Guide
 - No logs visible: ensure configure_logging() is called at startup and LOG_LEVEL allows INFO.
 - Missing OTel signals: verify OTEL_ENABLED and OTEL_EXPORTER_OTLP_ENDPOINT; check that authentication headers are provisioned and reachable.
+- **401 Unauthorized errors**: Run `shared/platform-ops/gitops/sync-otel-secrets.sh` to provision OTLP headers for all services including execution-runtime. Ensure OO_ROOT_USER_EMAIL and OO_ROOT_USER_PASSWORD are exported.
 - High cardinality alerts: review label usage against conventions; use templated handlers instead of raw URLs.
 - Audit gaps: confirm GATEWAY_AUDIT_SERVICE_URL is set; inspect audit_emits_total{result} and warnings for delivery failures.
 - Slow endpoints: analyze http_request_duration_seconds per handler; correlate with tool execution evidence.duration_ms.
+
+**Updated** Added specific troubleshooting steps for 401 authentication errors that were caused by missing execution-runtime service in the OTLP header synchronization process.
 
 **Section sources**
 - [observability.py:9-19](file://products/tool-gateway/src/tool_gateway/core/observability.py#L9-L19)
@@ -328,11 +379,12 @@ REG["registry.py"] --> BASE["tools/base.py"]
 - [metrics.py:62-89](file://products/tool-gateway/src/tool_gateway/core/metrics.py#L62-L89)
 - [audit_emitter.py:67-98](file://products/tool-gateway/src/tool_gateway/services/audit_emitter.py#L67-L98)
 - [observability-conventions.md:18-45](file://shared/shared-contracts/observability-conventions.md#L18-L45)
+- [sync-otel-secrets.sh:47-52](file://shared/platform-ops/gitops/sync-otel-secrets.sh#L47-L52)
 
 ## Conclusion
 The Tool Gateway provides a robust, standards-aligned observability foundation: always-on Prometheus metrics, opt-in OpenTelemetry tracing and log bridging, structured audit trails, and fire-and-forget audit delivery. These components enable reliable dashboards, alerting, and cross-service tracing while preserving performance and fail-open guarantees.
 
-[No sources needed since this section summarizes without analyzing specific files]
+**Updated** The recent fix to the OTLP telemetry provisioning ensures all platform services, including execution-runtime, can successfully authenticate and export telemetry data, eliminating previous 401 authentication errors that prevented comprehensive observability across the service mesh.
 
 ## Appendices
 
@@ -350,8 +402,7 @@ The Tool Gateway provides a robust, standards-aligned observability foundation: 
   - Latency SLO breaches per handler
   - Policy denials spikes
   - Audit emit errors increasing beyond thresholds
-
-[No sources needed since this section provides general guidance]
+  - OTLP export failures indicating authentication issues
 
 ### Log Aggregation Strategy
 - Aggregate single-line JSON logs from stdout at INFO level.
@@ -372,3 +423,27 @@ The Tool Gateway provides a robust, standards-aligned observability foundation: 
 - [base.py:108-123](file://products/tool-gateway/src/tool_gateway/tools/base.py#L108-L123)
 - [telemetry.py:69-117](file://products/tool-gateway/src/tool_gateway/core/telemetry.py#L69-L117)
 - [observability-conventions.md:18-45](file://shared/shared-contracts/observability-conventions.md#L18-L45)
+
+### Deployment Configuration Requirements
+**Updated** Complete service coverage is required for effective observability across the platform.
+
+**Required Services for OTLP Telemetry:**
+All eight platform services must be included in OTLP header synchronization:
+- agent-service
+- audit-service
+- execution-runtime (critical fix applied)
+- identity-service
+- incident-service
+- platform-gateway
+- skills-hub
+- tool-gateway
+
+**Verification Steps:**
+1. Run `shared/platform-ops/gitops/sync-otel-secrets.sh` with proper credentials
+2. Verify all runtime-secrets contain OTEL_EXPORTER_OTLP_HEADERS
+3. Check pod logs for successful OTLP authentication
+4. Monitor for absence of 401 Unauthorized errors
+5. Confirm traces, metrics, and logs flow to the configured backend
+
+**Section sources**
+- [sync-otel-secrets.sh:116-163](file://shared/platform-ops/gitops/sync-otel-secrets.sh#L116-L163)

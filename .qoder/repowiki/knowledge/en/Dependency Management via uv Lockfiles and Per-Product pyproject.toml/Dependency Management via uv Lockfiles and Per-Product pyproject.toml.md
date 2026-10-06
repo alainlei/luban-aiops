@@ -6,57 +6,57 @@ scope:
     - '**'
 source_files:
     - mk/python.mk
+    - mk/defaults.mk
     - Makefile
     - products/agent-platform/pyproject.toml
     - products/agent-platform/uv.lock
+    - products/audit-service/pyproject.toml
+    - products/execution-runtime/pyproject.toml
+    - products/identity-broker/pyproject.toml
+    - products/incident-service/pyproject.toml
     - products/platform-gateway/pyproject.toml
+    - products/skills-hub/pyproject.toml
     - products/tool-gateway/pyproject.toml
     - products/operator-portal/web-ui/app/package.json
     - shared/base-images/base-uv/Dockerfile
-    - .python-version
+    - docs/agentic-aiops-platform/release-notes/2026-08-28-dependency-hygiene.md
 ---
 
 ## Approach
 
-The Luban workspace is a Python monorepo whose dependency management is built on **uv** (the fast Python package manager) with one `pyproject.toml` + `uv.lock` pair per product under `products/<name>/`. There is no shared `requirements.txt`, no `setup.py`, no Poetry, no pipenv, and no vendored third-party source trees. The only non-Python dependency surface is the operator portal SPA (`products/operator-portal/web-ui/app/package.json`) managed by npm/Vite.
+The Luban AIOps Platform is a Python monorepo (plus one operator-portal SPA) that manages third-party dependencies with **uv** as the package manager, using per-product `pyproject.toml` + `uv.lock` pairs. The root Makefile orchestrates dependency operations across all products; there is no workspace-level lockfile.
 
-## Key files
+## Key Files
 
-- Per-product manifests: `products/*/pyproject.toml` — declare runtime dependencies, `[dependency-groups].dev`, entry points, and build backend.
-- Per-product lockfiles: `products/*/uv.lock` — pinned versions, hashes, and wheel/sdist URLs from PyPI.
-- Shared Makefile targets: `mk/python.mk` (`sync`, `test`) and root `Makefile` (`make sync`, `make test`) orchestrate resolution across all nine Python products.
-- Root `.python-version` pins the interpreter for the workspace.
-- Portal frontend manifest: `products/operator-portal/web-ui/app/package.json` (npm).
-- Base image definition: `shared/base-images/base-uv/Dockerfile` plus `mk/defaults.mk` variables `BASE_UV_*` pin the uv binary version baked into images.
+- `mk/python.mk` — shared `sync` / `test` targets that invoke `uv sync --frozen` and `uv run pytest`, enforcing deterministic installs.
+- `mk/defaults.mk` — pins `BASE_UV_UV_VERSION = 0.12.1` and `BASE_UV_PYTHON_VERSION = 3.12`; these are consumed by the shared base image `shared/base-images/base-uv/Dockerfile` so runtime images use the same uv binary.
+- Root `Makefile` — `make sync` iterates over `PYTHON_PRODUCTS` (`agent-platform audit-service execution-runtime identity-broker incident-service platform-gateway skills-hub tool-gateway`) and delegates to each product's `make sync`.
+- Per-product `products/<name>/pyproject.toml` — declares runtime `dependencies` and `[dependency-groups] dev` for test-only packages.
+- Per-product `products/<name>/uv.lock` — frozen resolution snapshot committed alongside the manifest.
+- `products/operator-portal/web-ui/app/package.json` — the only non-Python dependency manifest (React 19, antd 6, Vite 8, Vitest 4).
+- `docs/agentic-aiops-platform/release-notes/2026-08-28-dependency-hygiene.md` — documents the adopted policy: "latest stable only" with a single recorded exception for OpenTelemetry instrumentation on its permanent `0.xb` channel.
 
-## Architecture and conventions
+## Architecture and Conventions
 
-1. **Per-product isolation.** Each of the eight Python services (`agent-platform`, `audit-service`, `execution-runtime`, `identity-broker`, `incident-service`, `platform-gateway`, `skills-hub`, `tool-gateway`) declares its own `dependencies` list in its `pyproject.toml`. There are no cross-package references between them; they communicate over HTTP/gRPC contracts defined in `shared/shared-contracts/`.
+1. **Per-product isolation.** Each of the eight Python services owns its own `pyproject.toml` and `uv.lock`. There is no shared `requirements.txt` or workspace-level resolver. Cross-cutting orchestration lives in the root `Makefile` and `mk/*.mk` fragments.
 
-2. **Semver-ranged constraints.** Dependencies use upper-bounded ranges (e.g. `fastapi>=0.115,<1.0`, `pydantic>=2.8,<3.0`, `agentscope>=2.0.4,<3.0`). This allows patch/minor updates while blocking breaking major releases. Dev-only tooling lives under `[dependency-groups].dev` (pytest, fakeredis, jsonschema) and is not installed at runtime.
+2. **Frozen installs in CI and local runs.** `mk/python.mk` uses `uv sync --frozen` for both `sync` and `test`, meaning the lockfile is authoritative — the resolver cannot drift versions at install time. The root `verify` gate chains `make test` across all products, so any lockfile drift fails verification.
 
-3. **Frozen installs in CI and dev.** `mk/python.mk` runs `uv sync --frozen`, which refuses to resolve or update anything — the lockfile is authoritative. The root `Makefile` exposes `make sync` and `make test` that iterate over `PYTHON_PRODUCTS := agent-platform audit-service execution-runtime identity-broker incident-service platform-gateway skills-hub tool-gateway` and invoke each product's Makefile.
+3. **Reproducible base image.** `mk/defaults.mk` pins `BASE_UV_UV_VERSION` and `BASE_UV_PYTHON_VERSION`; `make base-images` builds `shared/base-images/base-uv` with those exact versions, ensuring every product Docker image gets the same uv binary.
 
-4. **Build backend pinned.** Every `pyproject.toml` sets:
-   ```
-   [build-system]
-   requires = ["uv_build>=0.8.14,<0.9.0"]
-   build-backend = "uv_build"
-   ```
-   The base Docker image (`shared/base-images/base-uv`) is built with `--build-arg UV_VERSION=$(BASE_UV_UV_VERSION)` so the same uv binary used locally resolves the same lockfile in production containers.
+4. **Version ranges in manifests, pinning in lockfiles.** Runtime dependencies in `pyproject.toml` use broad upper bounds (e.g. `agentscope>=2.0.4,<3.0`, `fastapi>=0.115,<1.0`, `pydantic>=2.8,<3.0`, `redis>=6.2,<7.0`). Exact resolved versions live only in `uv.lock`. The release notes document deliberate cap decisions (e.g. keeping `redis <7.0` because the deployed server is 7.2 and client majors 7/8 were API-removal releases; parking Elasticsearch `<9.0` since no ES server is deployed).
 
-5. **No private registry or vendoring.** All packages resolve from `https://pypi.org/simple` as recorded in every `uv.lock` entry (`source = { registry = "https://pypi.org/simple" }`). No `uv.toml`, `pyproject.toml` `[tool.uv.sources]`, `PIP_INDEX_URL`, `UV_INDEX_URL`, `GOPRIVATE`, or custom registries appear anywhere in the repo. There is no `vendor/` directory and no vendored third-party code.
+5. **Dev vs runtime separation.** Test-only packages go under `[dependency-groups] dev` (e.g. `fakeredis`, `pytest`), not the runtime `dependencies` list.
 
-6. **Frontend dependencies separate.** The operator portal SPA uses npm (`package.json`), Vite, Vitest, TypeScript, React/Ant Design. It is excluded from the Python `sync`/`test` loop and has its own `make -C products/operator-portal web-build` / `portal-test` gate in the root Makefile.
+6. **Operator portal uses npm/Vitest instead of uv.** Its dependencies are declared in `package.json` with caret ranges; the root `Makefile` calls `make -C products/operator-portal test` and `web-build` separately (see `portal-test` target). Node version is pinned via `engines.node = ">=22.22.2"`.
 
-7. **Version lockstep enforced externally.** The root `VERSION` file is the single source of truth for the platform release; `make validate-version` (via `shared/shared-contracts/scripts/validate_version.py`) asserts that every product's `pyproject.toml` `version` field matches it. This is a product-version invariant, not a dependency-version constraint, but it keeps the nine service packages coordinated.
+7. **No vendoring, no private registry configuration visible in the repo.** Dependencies are fetched from PyPI/npm registries; no `--index-url`, `PIP_INDEX_URL`, `UV_INDEX_URL`, `GOPRIVATE`, or `.npmrc` files are present in the tree shown.
 
-## Conventions and constraints
+## Conventions and Constraints
 
-- **Observed convention:** Runtime dependencies use `<major>` upper bounds (e.g. `<3.0`, `<1.0`, `<9.0`) to allow safe upgrades without manual review of breaking changes.
-- **Observed convention:** Common observability stack (`opentelemetry-*`, `prometheus-client`, `pydantic`, `fastapi`, `uvicorn[standard]`) is declared identically across gateway-like services.
-- **Enforced rule:** Dependency resolution must be frozen — `mk/python.mk` calls `uv sync --frozen`; any drift between `pyproject.toml` and `uv.lock` fails the build.
-- **Enforced rule:** The Python interpreter version is pinned at the workspace root (`.python-version`) and propagated to the base image via `BASE_UV_PYTHON_VERSION`.
-- **Enforced rule:** The uv binary version used to build images is pinned via `BASE_UV_UV_VERSION` in `mk/defaults.mk` and passed as a Docker build arg to `shared/base-images/base-uv/Dockerfile`.
-- **Enforced rule:** Product versions must match the root `VERSION` file — enforced by `make validate-version`.
-- **Constraint:** No private PyPI index, no `uv.toml` configuration, no `pip.conf`, no `requirements.txt`, no vendored packages — the repository relies exclusively on public PyPI.
+- **Adopted policy:** "latest stable only" — no alpha, beta, RC, or dev builds. The sole documented exception is the OpenTelemetry instrumentation packages, which stay on their permanent `0.xb` pre-release channel paired with the locked SDK version (source: `docs/agentic-aiops-platform/release-notes/2026-08-28-dependency-hygiene.md`).
+- **Lockfiles are frozen:** `uv sync --frozen` is used everywhere in `mk/python.mk`, so installing outside the lockfile is rejected by design.
+- **Base uv binary is pinned centrally:** `BASE_UV_UV_VERSION` in `mk/defaults.mk` is the single source of truth for the uv version baked into `shared/base-images/base-uv`.
+- **Python floor:** `requires-python = ">=3.11"` in each `pyproject.toml`; the base image uses Python 3.12.
+- **Node floor:** `engines.node = ">=22.22.2"` in `products/operator-portal/web-ui/app/package.json`, matching jsdom 30's engine requirement.
+- **Verification gate enforces consistency:** `make verify` runs `make test` (which does frozen `uv sync`), overlay rendering, dashboard validation, policy validation, version validation, secret-vocabulary validation, password-policy validation, portal tests, and execution failure tests — any dependency-related breakage surfaces here.

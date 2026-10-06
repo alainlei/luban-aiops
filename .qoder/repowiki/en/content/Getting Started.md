@@ -4,13 +4,21 @@
 **Referenced Files in This Document**
 - [README.md](file://README.md)
 - [Makefile](file://Makefile)
+- [VERSION](file://VERSION)
+- [mk/image.mk](file://mk/image.mk)
 - [getting-started.md](file://docs/guides/getting-started.md)
 - [configuration-reference.md](file://docs/guides/configuration-reference.md)
 - [troubleshooting.md](file://docs/guides/troubleshooting.md)
 - [dev-k8s README.md](file://shared/platform-ops/gitops/dev-k8s/README.md)
 - [deploy.sh](file://shared/platform-ops/gitops/dev-k8s/deploy.sh)
-- [reconcile-portal-oidc-client.sh](file://shared/platform-ops/gitops/dev-k8s/reconcile-portal-oidc-client.sh)
-- [verify-runtime-profile.sh](file://shared/platform-ops/gitops/verify-runtime-profile.sh)
+- [kustomization.yaml](file://shared/platform-ops/gitops/dev-k8s/kustomization.yaml)
+- [tool-gateway-browser-sidecar.yaml](file://shared/platform-ops/gitops/runtime-profiles/browser-dev/tool-gateway-browser-sidecar.yaml)
+- [sync-execution-signing-secret.sh](file://shared/platform-ops/gitops/sync-execution-signing-secret.sh)
+- [sync-execution-handoff-secret.sh](file://shared/platform-ops/gitops/sync-execution-handoff-secret.sh)
+- [sync-browser-credentials.sh](file://shared/platform-ops/gitops/sync-browser-credentials.sh)
+- [sync-otel-secrets.sh](file://shared/platform-ops/gitops/sync-otel-secrets.sh)
+- [audit-service runtime-secrets.example.env](file://shared/platform-ops/gitops/dev-k8s/base/audit-service/runtime-secrets.example.env)
+- [identity-broker runtime-secrets.example.env](file://shared/platform-ops/gitops/dev-k8s/base/identity-broker/runtime-secrets.example.env)
 - [pyproject.toml](file://products/agent-platform/pyproject.toml)
 - [http_connector.py](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py)
 - [kernel_middleware.py](file://products/agent-platform/src/agent_service/services/kernel_middleware.py)
@@ -31,30 +39,34 @@
 
 ## Update Summary
 **Changes Made**
-- Updated HTTP Service-Check Tools section to document the new security posture where http.get now requires operator confirmation by default
-- Added comprehensive information about the AGENT_GATEWAY_TOOL_AUTO_ALLOW_EXTRA environment variable for maintaining card-free http.get behavior in development environments
-- Enhanced security model documentation with details about the hardened default configuration
-- Updated troubleshooting guidance to include HTTP tool confirmation issues and migration steps
-- Added deployment notes for upgrading clusters that need to maintain existing http.get behavior
+- Updated coordinated image tagging system documentation to reflect the 0.46.0-dev-k8s-<gitsha> format and .images.env state file
+- Expanded secret provisioning section to include execution signing/handoff secrets, browser credentials, and seven OTel push secrets
+- Added tool-gateway chromium headless-shell sidecar documentation showing 2/2 pod configuration
+- Updated deployment workflow to document eleven platform workloads and their coordinated rollout
+- Enhanced troubleshooting guidance for new secret provisioning failures and browser sidecar issues
+- Updated Makefile command documentation to reflect the complete build and deploy pipeline
 
 ## Table of Contents
 1. Introduction
 2. Project Structure
 3. Core Components
 4. Architecture Overview
-5. HTTP Service-Check Tools
-6. ACME Admin Sample Application
-7. Detailed Component Analysis
-8. Dependency Analysis
-9. Performance Considerations
-10. Troubleshooting Guide
-11. Conclusion
-12. Appendices
+5. Coordinated Image Tagging System
+6. Secret Provisioning and Security
+7. Tool-Gateway Browser Sidecar
+8. HTTP Service-Check Tools
+9. ACME Admin Sample Application
+10. Detailed Component Analysis
+11. Dependency Analysis
+12. Performance Considerations
+13. Troubleshooting Guide
+14. Conclusion
+15. Appendices
 
 ## Introduction
-This guide helps you set up the Luban AIOps platform locally and deploy it to a Kubernetes cluster using the dev-k8s overlay. It covers prerequisites, environment setup, building images, deploying with Make targets, first-time configuration (OIDC identity provider, operator accounts), and verifying service health. The platform includes HTTP service-check tools (`http.get`, `http.post`) with enhanced security controls and an ACME Admin sample application for quick platform exploration and skill demonstrations.
+This guide helps you set up the Luban AIOps platform locally and deploy it to a Kubernetes cluster using the dev-k8s overlay. It covers prerequisites, environment setup, building images with coordinated tagging, deploying with Make targets, first-time configuration (OIDC identity provider, operator accounts), and verifying service health. The platform includes HTTP service-check tools (`http.get`, `http.post`) with enhanced security controls and an ACME Admin sample application for quick platform exploration and skill demonstrations.
 
-**Updated** The HTTP tools now implement a hardened security posture where `http.get` requires operator confirmation by default, providing defense-in-depth for outbound egress operations.
+**Updated** The platform now uses a coordinated image tagging system with the format `0.46.0-dev-k8s-<gitsha>` and provisions comprehensive secrets including execution signing/handoff tokens, browser credentials, and OTel push authentication for all eleven platform workloads.
 
 ## Project Structure
 The repository is organized into product-oriented services under products/, shared contracts and operations under shared/, samples under samples/, and documentation under docs/. The dev-k8s overlay in shared/platform-ops/gitops/dev-k8s defines the development deployment for all platform services and dependencies.
@@ -64,12 +76,13 @@ graph TB
 subgraph "Local Machine"
 DEV["Developer"]
 MK["make (root Makefile)"]
+IMG[".images.env"]
 end
 subgraph "Kubernetes Cluster"
 NS["Namespace: dev-luban-aiops"]
 WEB["web-ui"]
 PGW["platform-gateway"]
-TGW["tool-gateway"]
+TGW["tool-gateway + browser sidecar"]
 AGS["agent-service"]
 IDB["identity-service"]
 AUD["audit-service"]
@@ -81,7 +94,8 @@ RDS["redis"]
 PGR["postgres"]
 end
 DEV --> MK
-MK --> NS
+MK --> IMG
+IMG --> NS
 NS --> WEB
 NS --> PGW
 NS --> TGW
@@ -98,7 +112,7 @@ NS --> PGR
 
 **Diagram sources**
 - [dev-k8s README.md:5-29](file://shared/platform-ops/gitops/dev-k8s/README.md#L5-L29)
-- [Makefile:14-17](file://Makefile#L14-L17)
+- [Makefile:40-113](file://Makefile#L40-L113)
 - [acme-admin deploy.sh:46-58](file://samples/acme-admin/deploy.sh#L46-L58)
 
 **Section sources**
@@ -110,7 +124,7 @@ NS --> PGR
 - Agent runtime and orchestration: agent-platform
 - Identity broker (SSO, OIDC, role mapping): identity-broker
 - Platform gateway (portal-facing edge, token verification, proxying): platform-gateway
-- Tool gateway (normalized tool access, connectors): tool-gateway
+- Tool gateway (normalized tool access, connectors, browser automation): tool-gateway
 - Audit service (durable audit trail): audit-service
 - Skills hub (skill ingestion and retrieval): skills-hub
 - Incident service (intake, triage, collaboration): incident-service
@@ -118,7 +132,7 @@ NS --> PGR
 - ACME Admin sample application (sample admin console for skill demonstrations): samples/acme-admin
 - In-cluster dependencies: redis, postgres
 
-These components are deployed together by the dev-k8s overlay and coordinated via the root Makefile.
+These components are deployed together by the dev-k8s overlay and coordinated via the root Makefile with unified image tagging.
 
 **Section sources**
 - [README.md:24-45](file://README.md#L24-L45)
@@ -126,7 +140,7 @@ These components are deployed together by the dev-k8s overlay and coordinated vi
 - [acme-admin README.md:1-16](file://samples/acme-admin/README.md#L1-L16)
 
 ## Architecture Overview
-The typical request flow starts at the portal web UI, which proxies API calls to the platform gateway. The gateway authenticates users via the identity broker, then relays chat and session requests to the agent service. For tool execution, the agent service calls the tool gateway, which may invoke Kubernetes or other connectors. The HTTP tools now implement enhanced security controls requiring operator confirmation by default, while the ACME Admin sample provides a real target for demonstrating skill workflows.
+The typical request flow starts at the portal web UI, which proxies API calls to the platform gateway. The gateway authenticates users via the identity broker, then relays chat and session requests to the agent service. For tool execution, the agent service calls the tool gateway, which may invoke Kubernetes or other connectors. The tool-gateway runs as a 2/2 pod with a chromium headless-shell sidecar for browser automation. The HTTP tools implement enhanced security controls requiring operator confirmation by default, while the ACME Admin sample provides a real target for demonstrating skill workflows.
 
 ```mermaid
 sequenceDiagram
@@ -136,6 +150,7 @@ participant G as "platform-gateway"
 participant I as "identity-service"
 participant A as "agent-service"
 participant T as "tool-gateway"
+participant B as "browser sidecar"
 participant H as "HTTP Target"
 participant K as "Kubernetes / External Tools"
 U->>W : Open portal
@@ -144,7 +159,9 @@ G->>I : Verify JWT / exchange delegated token
 I-->>G : Delegated token
 G->>A : Chat/session relay
 A->>T : Invoke tool
-alt HTTP tool call with confirmation required
+alt Browser automation
+T->>B : CDP connection (ws : //localhost : 9222)
+B-->>T : Page snapshot/control
 T->>H : http.get/post to allowlisted origin
 H-->>T : Response with status/body
 T-->>A : Confirmation request (parked)
@@ -163,7 +180,152 @@ G-->>U : Response in portal
 **Diagram sources**
 - [dev-k8s README.md:151-166](file://shared/platform-ops/gitops/dev-k8s/README.md#L151-L166)
 - [configuration-reference.md:33-88](file://docs/guides/configuration-reference.md#L33-L88)
-- [http_connector.py:389-491](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L389-L491)
+- [tool-gateway-browser-sidecar.yaml:1-67](file://shared/platform-ops/gitops/runtime-profiles/browser-dev/tool-gateway-browser-sidecar.yaml#L1-L67)
+
+## Coordinated Image Tagging System
+
+### Overview
+The platform uses a coordinated image tagging system that ensures all eleven workloads run the same version simultaneously. The tag format follows the pattern `0.46.0-dev-k8s-<gitsha>` where:
+- `0.46.0` comes from the VERSION file
+- `dev-k8s` is the standard prefix for development deployments
+- `<gitsha>` is the short git commit hash
+- Dirty builds append `-dirty-<timestamp>` for uncommitted changes
+
+### Build Process
+The coordinated build process creates a single IMAGE_TAG used across all products:
+
+```bash
+# Build all images with coordinated tag
+make build
+
+# The IMAGE_TAG is computed as:
+# <semver>-<prefix>[-<profile>]-<gitsha>
+# Example: 0.46.0-dev-k8s-a1b2c3d
+```
+
+### State Management
+The build process writes `.images.env` containing all image references:
+```bash
+IMAGE_TAG=0.46.0-dev-k8s-a1b2c3d
+AGENT_SERVICE_IMAGE=luban-aiops/agent-service:0.46.0-dev-k8s-a1b2c3d
+PLATFORM_GATEWAY_IMAGE=luban-aiops/platform-gateway:0.46.0-dev-k8s-a1b2c3d
+TOOL_GATEWAY_IMAGE=luban-aiops/tool-gateway:0.46.0-dev-k8s-a1b2c3d
+IDENTITY_SERVICE_IMAGE=luban-aiops/identity-service:0.46.0-dev-k8s-a1b2c3d
+AUDIT_SERVICE_IMAGE=luban-aiops/audit-service:0.46.0-dev-k8s-a1b2c3d
+SKILLS_HUB_IMAGE=luban-aiops/skills-hub:0.46.0-dev-k8s-a1b2c3d
+INCIDENT_SERVICE_IMAGE=luban-aiops/incident-service:0.46.0-dev-k8s-a1b2c3d
+EXECUTION_RUNTIME_IMAGE=luban-aiops/execution-runtime:0.46.0-dev-k8s-a1b2c3d
+WEB_UI_IMAGE=luban-aiops/web-ui:0.46.0-dev-k8s-a1b2c3d
+```
+
+### Kind Integration
+For local development with kind clusters, images can be automatically loaded:
+```bash
+AUTO_LOAD_KIND=true KIND_CLUSTER_NAME=my-kind make build
+```
+
+**Section sources**
+- [Makefile:40-128](file://Makefile#L40-L128)
+- [mk/image.mk:24-48](file://mk/image.mk#L24-L48)
+- [VERSION:1-2](file://VERSION#L1-L2)
+
+## Secret Provisioning and Security
+
+### Comprehensive Secret Management
+The deployment process provisions multiple categories of secrets for security and functionality:
+
+#### Token Delegation Secrets (SPEC-008)
+- `platform-gateway-runtime-secrets`: Contains `PLATFORM_GATEWAY_SERVICE_CLIENT_SECRET`
+- Enables secure service-to-service communication between platform-gateway and identity-service
+
+#### Durable Audit Trail Secrets (SPEC-013)
+- `audit-service-runtime-secrets`: Contains `AUDIT_INGEST_CLIENTS` registry
+- `identity-broker-runtime-secrets`: Contains `IDENTITY_AUDIT_CLIENT_SECRET`
+- Enables authenticated audit event ingestion from all services
+
+#### Execution Security Secrets (SPEC-037 & SPEC-038)
+- `execution-signing-secret`: Contains `AGENT_EXECUTION_SIGNING_KEY` for HMAC signing
+- `execution-handoff-secret`: Contains `EXECUTION_HANDOFF_TOKEN` for internal handoff authentication
+- Ensures approved mutating executions are cryptographically signed and authenticated
+
+#### Browser Credentials (SPEC-049)
+- `tool-gateway-browser-credentials`: Contains credential sets for browser automation
+- Generated with random passwords for development, supports custom credential files
+- Mounted as read-only volume in tool-gateway pods
+
+#### OTel Push Secrets (SPEC-005)
+- Seven runtime secrets receive `OTEL_EXPORTER_OTLP_HEADERS` for OpenObserve authentication
+- Applied to: agent-platform, audit-service, execution-runtime, identity-service, incident-service, platform-gateway, skills-hub, tool-gateway
+- Fail-open design: anonymous push attempts don't affect service operation
+
+### Secret Provisioning Flow
+```bash
+# Complete deployment with all secrets
+make deploy
+
+# Individual secret provisioning
+shared/platform-ops/gitops/sync-delegation-secrets.sh
+shared/platform-ops/gitops/sync-audit-secrets.sh
+shared/platform-ops/gitops/sync-execution-signing-secret.sh
+shared/platform-ops/gitops/sync-execution-handoff-secret.sh
+shared/platform-ops/gitops/sync-skills-secrets.sh
+shared/platform-ops/gitops/sync-incident-secrets.sh
+shared/platform-ops/gitops/sync-browser-credentials.sh
+shared/platform-ops/gitops/sync-otel-secrets.sh
+```
+
+**Section sources**
+- [deploy.sh:11-52](file://shared/platform-ops/gitops/dev-k8s/deploy.sh#L11-L52)
+- [sync-execution-signing-secret.sh:1-37](file://shared/platform-ops/gitops/sync-execution-signing-secret.sh#L1-L37)
+- [sync-execution-handoff-secret.sh:1-74](file://shared/platform-ops/gitops/sync-execution-handoff-secret.sh#L1-L74)
+- [sync-browser-credentials.sh:26-49](file://shared/platform-ops/gitops/sync-browser-credentials.sh#L26-L49)
+- [sync-otel-secrets.sh:92-163](file://shared/platform-ops/gitops/sync-otel-secrets.sh#L92-L163)
+- [configuration-reference.md:704-724](file://docs/guides/configuration-reference.md#L704-L724)
+
+## Tool-Gateway Browser Sidecar
+
+### Architecture
+The tool-gateway runs as a 2/2 pod with a chromium headless-shell sidecar for browser automation capabilities:
+
+- **Main container**: `luban-aiops/tool-gateway` - Handles tool execution, policy enforcement, and API endpoints
+- **Sidecar container**: `chromedp/headless-shell:stable` - Provides headless Chrome browser accessible via CDP
+
+### Security Design
+The sidecar architecture implements several security measures:
+- CDP endpoint bound to loopback only (`127.0.0.1:9222`) preventing off-pod access
+- Credential sets mounted as read-only volumes
+- Network isolation ensuring browser automation flows through the gateway's policy engine
+- Resource limits applied to prevent browser resource exhaustion
+
+### Configuration
+```yaml
+# tool-gateway-browser-sidecar.yaml
+containers:
+  - name: tool-gateway
+    volumeMounts:
+      - name: browser-credentials
+        mountPath: /etc/luban/browser-credentials
+        readOnly: true
+  - name: browser
+    image: chromedp/headless-shell:stable
+    command: ["/headless-shell/headless-shell"]
+    args:
+      - --no-sandbox
+      - --use-gl=angle
+      - --use-angle=swiftshader
+      - --remote-debugging-address=127.0.0.1
+      - --remote-debugging-port=9222
+```
+
+### Browser Automation Features
+- Web-based tool execution with screenshot capture
+- Form filling with credential masking
+- Multi-step browser workflows for complex operations
+- Origin allowlist enforcement for security
+
+**Section sources**
+- [tool-gateway-browser-sidecar.yaml:1-67](file://shared/platform-ops/gitops/runtime-profiles/browser-dev/tool-gateway-browser-sidecar.yaml#L1-L67)
+- [kustomization.yaml:17-22](file://shared/platform-ops/gitops/dev-k8s/kustomization.yaml#L17-L22)
 
 ## HTTP Service-Check Tools
 
@@ -347,20 +509,20 @@ Recommended local cluster: kind, with optional auto-loading of images via make b
    - Use select-runtime-profile.sh default to activate the default profile ConfigMap.
 3. Provision the LLM API key:
    - Copy the example secrets file, fill in your real key, and sync it into the cluster.
-4. Build images:
-   - Run make build to create coordinated images and write .images.env.
-   - For kind clusters, set AUTO_LOAD_KIND=true and KIND_CLUSTER_NAME to load images automatically.
-5. Deploy:
-   - Run make deploy to apply the overlay, patch image tags, wait for rollout, provision secrets, and reconcile the Keycloak client.
+4. Build images with coordinated tagging:
+   - Run make build to create coordinated images and write .images.env
+   - For kind clusters, set AUTO_LOAD_KIND=true and KIND_CLUSTER_NAME to load images automatically
+5. Deploy with comprehensive secret provisioning:
+   - Run make deploy to apply the overlay, patch image tags, wait for rollout, provision secrets, and reconcile the Keycloak client
 6. Configure HTTP tools (optional):
    - For card-free http.get in development, set `AGENT_GATEWAY_TOOL_AUTO_ALLOW_EXTRA=http.get`
    - Enable HTTP connector and add allowlisted origins
 7. Deploy sample application (optional):
-   - Run make deploy-sample-app to deploy the ACME Admin sample for skill demonstrations.
+   - Run make deploy-sample-app to deploy the ACME Admin sample for skill demonstrations
 8. Install sample skills (optional):
-   - Run make deploy-samples to install skill documents that demonstrate HTTP tools and browser flows.
+   - Run make deploy-samples to install skill documents that demonstrate HTTP tools and browser flows
 9. Verify pods and services:
-   - Check that all pods are Running and Ready.
+   - Check that all eleven platform workloads are Running and Ready
 
 **Section sources**
 - [getting-started.md:20-91](file://docs/guides/getting-started.md#L20-L91)
@@ -393,6 +555,8 @@ Key behaviors:
   - Check platform-gateway metrics for successful token exchanges.
 - Verify ACME Admin sample (if deployed):
   - kubectl -n dev-luban-aiops exec deployment/acme-admin -- curl http://localhost:8080/healthz
+- Check tool-gateway browser sidecar:
+  - kubectl -n dev-luban-aiops get pods -l app=tool-gateway (should show 2/2 READY)
 
 **Section sources**
 - [dev-k8s README.md:728-761](file://shared/platform-ops/gitops/dev-k8s/README.md#L728-L761)
@@ -422,7 +586,7 @@ Additional useful targets:
   - Use select-runtime-profile.sh to switch active profiles.
   - Verify overlays render correctly with verify-runtime-profile.sh.
 - Secrets provisioning:
-  - Token delegation, audit, skills, incidents, OTel headers, and browser credentials are provisioned during make deploy or via dedicated sync scripts.
+  - Token delegation, audit, skills, incidents, execution signing/handoff, browser credentials, and OTel headers are provisioned during make deploy or via dedicated sync scripts.
 - Policy bundle management:
   - Edit the canonical policy file, validate, sync, and redeploy to enforce changes.
 - HTTP tool configuration:
@@ -442,6 +606,7 @@ The platform relies on several cross-service dependency chains:
 - Durable audit trail ingestion from multiple emitters to audit-service.
 - Skills and incidents retrieval chains with their own credential registries.
 - HTTP tool chain from tool-gateway to allowlisted external services with enhanced security controls.
+- Browser automation chain from tool-gateway to chromium headless-shell sidecar.
 
 ```mermaid
 graph LR
@@ -449,6 +614,7 @@ PGW["platform-gateway"] --> |Delegated token| IDB["identity-service"]
 AGS["agent-service"] --> |Tool invocation| TGW["tool-gateway"]
 TGW --> |Connectors| EXT["External systems / Kubernetes"]
 TGW --> |HTTP tools (confirmation required)| HTTP["HTTP Targets (allowlisted)"]
+TGW --> |CDP connection| BR["chromium headless-shell"]
 PGW --> |Audit events| AUD["audit-service"]
 TGW --> |Audit events| AUD
 IDB --> |Audit events| AUD
@@ -463,6 +629,7 @@ TGW --> |Sample app| ACM["acme-admin"]
 - [configuration-reference.md:170-212](file://docs/guides/configuration-reference.md#L170-L212)
 - [configuration-reference.md:214-280](file://docs/guides/configuration-reference.md#L214-L280)
 - [http_connector.py:389-491](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L389-L491)
+- [tool-gateway-browser-sidecar.yaml:1-67](file://shared/platform-ops/gitops/runtime-profiles/browser-dev/tool-gateway-browser-sidecar.yaml#L1-L67)
 
 **Section sources**
 - [configuration-reference.md:33-88](file://docs/guides/configuration-reference.md#L33-88)
@@ -478,6 +645,8 @@ TGW --> |Sample app| ACM["acme-admin"]
 - HTTP tool performance: Configure appropriate timeout values and response size limits based on expected workloads.
 - ACME Admin sample: Single replica deployment with in-memory storage; restarts reset state for demo purposes.
 - **Confirmation overhead**: The new confirmation requirement adds latency for HTTP tool calls; consider using AGENT_GATEWAY_TOOL_AUTO_ALLOW_EXTRA for high-volume development scenarios.
+- **Browser sidecar resources**: The chromium headless-shell sidecar consumes additional CPU and memory; monitor resource usage and adjust limits as needed.
+- **Coordinated rollouts**: All eleven workloads roll out together with the coordinated image tag, ensuring version consistency across the platform.
 
 ## Troubleshooting Guide
 Common symptoms and resolutions:
@@ -513,8 +682,18 @@ Common symptoms and resolutions:
   - Verify GATEWAY_BROWSER_ALLOW_ORIGINS includes http://acme-admin:8080; check that credential sets are mounted in tool-gateway.
 - Demo state appears corrupted:
   - Use the header-gated reset endpoint: curl -X POST -H 'X-Luban-Demo-Reset: 1' http://localhost:8080/internal/reset-demo
+- **Tool-gateway shows 1/2 READY**:
+  - Check browser sidecar logs: kubectl -n dev-luban-aiops logs deployment/tool-gateway -c browser
+  - Verify chromium-headless-shell image pulls successfully
+  - Check CDP endpoint connectivity: kubectl -n dev-luban-aiops exec deployment/tool-gateway -c tool-gateway -- curl http://localhost:9222/json/version
+- **Execution signing/handoff failures**:
+  - Verify execution-signing-secret and execution-handoff-secret exist: kubectl -n dev-luban-aiops get secret execution-signing-secret execution-handoff-secret
+  - Re-run sync-execution-signing-secret.sh and sync-execution-handoff-secret.sh if secrets are missing
+- **OTel push not working**:
+  - Check OTEL_EXPORTER_OTLP_HEADERS in runtime secrets: kubectl -n dev-luban-aiops get secret -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.data.OTEL_EXPORTER_OTLP_HEADERS}{"\n"}{end}'
+  - Re-run sync-otel-secrets.sh with proper OpenObserve credentials
 
-**Updated** The most common issue after upgrading to v0.39.1+ is unexpected confirmation cards for http.get calls. This is intentional security hardening. Review the migration notes above to configure your environment appropriately.
+**Updated** The most common issue after upgrading to v0.39.1+ is unexpected confirmation cards for http.get calls. This is intentional security hardening. Review the migration notes above to configure your environment appropriately. Additionally, ensure all eleven platform workloads have the coordinated image tag and that browser sidecar resources are adequate for your workload.
 
 **Section sources**
 - [troubleshooting.md:32-67](file://docs/guides/troubleshooting.md#L32-L67)
@@ -529,9 +708,9 @@ Common symptoms and resolutions:
 - [acme-admin deploy.sh:135-163](file://samples/acme-admin/deploy.sh#L135-L163)
 
 ## Conclusion
-You now have the essentials to set up the Luban AIOps platform locally, deploy it using the dev-k8s overlay, configure OIDC identity, create operator accounts, and verify service health. The platform includes powerful HTTP service-check tools with enhanced security controls requiring operator confirmation by default, and an ACME Admin sample application with comprehensive endpoints and skill demonstrations for thorough platform exploration. Use the root Makefile targets to streamline your development workflow, and refer to the configuration reference and troubleshooting guide for deeper insights and issue resolution.
+You now have the essentials to set up the Luban AIOps platform locally, deploy it using the dev-k8s overlay, configure OIDC identity, create operator accounts, and verify service health. The platform includes powerful HTTP service-check tools with enhanced security controls requiring operator confirmation by default, an ACME Admin sample application with comprehensive endpoints and skill demonstrations, and a coordinated image tagging system ensuring version consistency across all eleven workloads. The tool-gateway's chromium headless-shell sidecar enables sophisticated browser automation capabilities, while comprehensive secret provisioning ensures secure operation of all platform components. Use the root Makefile targets to streamline your development workflow, and refer to the configuration reference and troubleshooting guide for deeper insights and issue resolution.
 
-**Updated** The enhanced security posture in v0.39.1+ provides defense-in-depth for HTTP tool usage, requiring operator confirmation even for read operations. Development environments can opt back into card-free behavior using the AGENT_GATEWAY_TOOL_AUTO_ALLOW_EXTRA environment variable while maintaining the hardened default for production deployments.
+**Updated** The coordinated image tagging system (0.46.0-dev-k8s-<gitsha>) ensures all platform workloads run consistently, while expanded secret provisioning covers execution signing/handoff security, browser credentials, and OTel push authentication. The tool-gateway's 2/2 pod architecture with chromium headless-shell sidecar provides robust browser automation capabilities for complex operational workflows.
 
 ## Appendices
 
@@ -546,6 +725,7 @@ You now have the essentials to set up the Luban AIOps platform locally, deploy i
 - Verify overlays: shared/platform-ops/gitops/verify-runtime-profile.sh
 - Access portal: kubectl -n dev-luban-aiops port-forward service/web-ui 18080:8080
 - Access ACME Admin: kubectl -n dev-luban-aiops port-forward svc/acme-admin 8080:8080
+- Check coordinated images: cat shared/platform-ops/gitops/dev-k8s/.images.env
 
 **Section sources**
 - [getting-started.md:20-91](file://docs/guides/getting-started.md#L20-L91)
@@ -604,3 +784,28 @@ AGENT_GATEWAY_TOOL_AUTO_ALLOW_EXTRA=http.get
 **Section sources**
 - [egress-hardening release notes:108-116](file://docs/agentic-aiops-platform/release-notes/2026-09-20-post-web-checks-egress-hardening.md#L108-L116)
 - [runtime-config.env:23-30](file://shared/platform-ops/gitops/dev-k8s/base/agent-platform/runtime-config.env#L23-L30)
+
+### Coordinated Image Tagging Reference
+- **Tag format**: `<semver>-<prefix>[-<profile>]-<gitsha>`
+- **Example**: `0.46.0-dev-k8s-a1b2c3d`
+- **Dirty builds**: Append `-dirty-<timestamp>` for uncommitted changes
+- **State file**: `shared/platform-ops/gitops/dev-k8s/.images.env`
+- **Kind integration**: `AUTO_LOAD_KIND=true KIND_CLUSTER_NAME=<cluster-name> make build`
+
+**Section sources**
+- [Makefile:40-128](file://Makefile#L40-L128)
+- [mk/image.mk:24-48](file://mk/image.mk#L24-L48)
+
+### Secret Provisioning Reference
+- **Token delegation**: `sync-delegation-secrets.sh`
+- **Audit trail**: `sync-audit-secrets.sh`
+- **Execution signing**: `sync-execution-signing-secret.sh`
+- **Execution handoff**: `sync-execution-handoff-secret.sh`
+- **Skills query**: `sync-skills-secrets.sh`
+- **Incidents**: `sync-incident-secrets.sh`
+- **Browser credentials**: `sync-browser-credentials.sh`
+- **OTel push**: `sync-otel-secrets.sh`
+
+**Section sources**
+- [deploy.sh:11-52](file://shared/platform-ops/gitops/dev-k8s/deploy.sh#L11-L52)
+- [configuration-reference.md:704-724](file://docs/guides/configuration-reference.md#L704-L724)

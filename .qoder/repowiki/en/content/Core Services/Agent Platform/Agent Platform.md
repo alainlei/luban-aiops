@@ -18,15 +18,15 @@
 - [tests/test_runtime_settings.py](file://products/agent-platform/tests/test_runtime_settings.py)
 - [tests/test_runtime_kernel.py](file://products/agent-platform/tests/test_runtime_kernel.py)
 - [tests/test_kernel_middleware.py](file://products/agent-platform/tests/test_kernel_middleware.py)
+- [agent-stream-event.schema.json](file://shared/shared-contracts/schemas/agent-stream-event.schema.json)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Enhanced Optional Context Compression section with detailed implementation details from SPEC-064
-- Updated Kernel Configuration section with specific CompressContext tool integration
-- Added comprehensive troubleshooting guidance for compression-related issues
-- Updated Performance Considerations with compression-specific insights
-- Enhanced Security and Safety sections with compression tool governance details
+- Updated Stream Schema References section to reflect v5 to v6 transition with risk_level support
+- Enhanced Human-in-the-Loop Approvals section with risk_level details for pending calls
+- Updated Contract Stability section to document the additive nature of schema evolution
+- Added specific references to SPEC-021 bounded mutating actions and risk tier handling
 
 ## Table of Contents
 1. Introduction
@@ -386,6 +386,8 @@ Evict --> Budget
 - Bridge: The confirm endpoint claims the parked confirmation, persists outcome at claim time, and resumes the turn with the decision. Expired parks are interrupted to avoid wedging sessions.
 - Read-only mode: Automated diagnostic turns restrict toolkits to read-level tools to prevent accidental mutations.
 
+**Updated** The confirmation system now includes risk_level metadata for each pending call, enabling the portal to display mutating badges and provide enhanced visibility into the risk tier of operations requiring approval. This enhancement was introduced in SPEC-021 and corresponds to stream schema v6.
+
 ```mermaid
 sequenceDiagram
 participant Client as "Client"
@@ -395,8 +397,8 @@ participant Reg as "Confirmation Registry"
 Client->>API : GET /chat/stream
 API->>Kernel : stream_events(...)
 Kernel-->>API : ... tool_call ...
-Kernel-->>API : confirmation_request {pending_calls}
-Note over Kernel,API : Turn parked awaiting decision
+Kernel-->>API : confirmation_request {pending_calls, risk_level}
+Note over Kernel,API : Turn parked awaiting decision with risk awareness
 Client->>API : POST /chat/confirm {decision}
 API->>Reg : claim(confirm_id, ttl)
 Reg-->>API : PendingConfirmation
@@ -428,9 +430,38 @@ API-->>Client : SSE frames continue
 - Prose redaction: Streaming text is redacted for credentials; terminal events flush any held-back tail to avoid missing content in the UI.
 - SSE: The streaming endpoint yields data lines with normalized events.
 
+**Updated** The streaming schema has evolved from v5 to v6, adding optional risk_level support for pending calls in confirmation_request frames. This enables enhanced risk visualization in the portal while maintaining backward compatibility with older clients.
+
 **Section sources**
 - [api/v2/routes.py:559-663](file://products/agent-platform/src/agent_service/api/v2/routes.py#L559-L663)
 - [runtime_kernel.py:182-209](file://products/agent-platform/src/agent_service/runtime_kernel.py#L182-L209)
+
+### Stream Schema Evolution and Contract Stability
+**New** The Agent Platform maintains strict contract stability through its stream schema evolution. The `agent-stream-event.schema.json` follows semantic versioning principles where changes are additive and backward-compatible.
+
+Key evolution milestones include:
+- **Schema v5**: Added optional `data` field on `tool_result` frames for full tool payload transmission within size caps
+- **Schema v6**: Added optional `risk_level` field on pending calls in `confirmation_request` frames for risk-tier visibility
+- **Subsequent versions**: Continued additive evolution with flow_summary, approval_kind, secret_delivery, and other enhancements
+
+The schema maintains `additionalProperties: false` to ensure strict contract enforcement while allowing optional fields to be added incrementally. Clients that don't understand newer fields simply ignore them, maintaining interoperability across versions.
+
+```mermaid
+flowchart TD
+V5["Schema v5<br/>tool_result.data field"] --> V6["Schema v6<br/>confirmation_request.risk_level"]
+V6 --> V7["Schema v7<br/>message_end.model field"]
+V7 --> V8["Schema v8<br/>confirmation_request.action field"]
+V8 --> V9["Schema v9<br/>confirmation_request.flow_summary field"]
+V9 --> V10["Schema v10<br/>flow_summary.flow_intent field"]
+V10 --> V11["Schema v11<br/>approval_kind, display_hint, change_request"]
+V11 --> V12["Schema v12<br/>secret_delivery event type"]
+```
+
+**Diagram sources**
+- [agent-stream-event.schema.json:1-179](file://shared/shared-contracts/schemas/agent-stream-event.schema.json#L1-L179)
+
+**Section sources**
+- [agent-stream-event.schema.json:1-179](file://shared/shared-contracts/schemas/agent-stream-event.schema.json#L1-L179)
 
 ## Dependency Analysis
 - Application lifecycle: Uvicorn runs the FastAPI app created in app.py, which sets up logging, metrics, telemetry, and includes the v2 router.
@@ -479,6 +510,7 @@ Kernel --> Middleware["services/kernel_middleware.py"]
 - **Retention Policy Sweeps**: Operation document retention sweeps run opportunistically on writes with bounded limits (100 rows per sweep) to minimize performance impact while maintaining storage hygiene.
 - **Context Compression Benefits**: When enabled, CompressContext provides proactive context management that can improve long-running session performance by reducing context size before reaching threshold limits, potentially reducing LLM processing costs and improving response times for extended conversations.
 - **Compression Overhead**: The compression tool itself has minimal overhead since it reuses the existing `_compress_context_impl` mechanism and operates only on in-memory state.
+- **Risk Level Processing**: The addition of risk_level metadata in stream schema v6 adds negligible overhead as it's derived from existing tool metadata and processed only during confirmation frame generation.
 
 ## Troubleshooting Guide
 - Unknown model id: Requests specifying an unrecognized model id fail closed with 422; verify the model exists in the catalog or remove the field to use pinned/default.
@@ -493,6 +525,7 @@ Kernel --> Middleware["services/kernel_middleware.py"]
 - **Compression Tool Not Available**: If CompressContext doesn't appear in the toolkit despite being enabled, verify that the environment variable is properly set and that the kernel is built with the correct configuration. The tool is only registered when ContextConfig.compression_tool_enabled is true.
 - **Compression Configuration Conflicts**: Ensure that AGENTSCOPE_CONTEXT_TRIGGER_RATIO is greater than 0.2 when enabling compression. The startup validation enforces this constraint to maintain proper ordering between agent-driven and threshold-based compression.
 - **Performance Impact Assessment**: Monitor session duration and context size when enabling compression to assess its effectiveness. The feature should reduce context growth and improve long-running session performance.
+- **Stream Schema Compatibility**: If clients experience issues with stream events, verify they handle optional fields correctly. The schema evolution from v5 to v6 added optional risk_level fields that older clients should ignore gracefully.
 
 **Section sources**
 - [api/v2/routes.py:202-243](file://products/agent-platform/src/agent_service/api/v2/routes.py#L202-L243)
@@ -509,3 +542,5 @@ Kernel --> Middleware["services/kernel_middleware.py"]
 The Agent Platform provides a robust, observable, and durable orchestration layer for AIOPS workflows. It centralizes session lifecycle, supports dynamic model switching across multiple providers, enforces safety through HITL approvals and read-only modes, and captures rich evidence for transparency and replay. With pluggable persistence, streaming responses, and careful error handling, it scales to concurrent sessions while maintaining reliability and auditability. 
 
 **Updated** The addition of optional context compression through the CompressContext tool (SPEC-064) represents a significant advancement in agent autonomy while preserving the platform's security and governance principles. Delivered in v0.44.0 as an opt-in, default-off feature, it enables agents to proactively manage their working context without introducing new execution surfaces or compromising existing safety boundaries. The enhanced system prompt now ensures that operational requests are handled more intelligently by proactively searching for relevant skills before refusing requests due to lack of immediate knowledge, improving both user experience and operational efficiency. The addition of the operation document repository with retention policies provides durable operational documentation with automatic cleanup, while the clock-relative timestamp pattern ensures test stability across different deployment timelines. Together, these enhancements demonstrate the platform's commitment to balancing agent capability with operational safety and governance.
+
+The stream schema evolution from v5 to v6 and beyond showcases the platform's commitment to incremental, backward-compatible improvements. Each schema version adds optional fields that enhance functionality while maintaining compatibility with existing clients. The risk_level support in v6 enables enhanced risk visualization for confirmation workflows, demonstrating how the platform can evolve its capabilities while preserving contract stability and client interoperability.

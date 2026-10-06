@@ -15,7 +15,15 @@
 - [AuditView.tsx](file://products/operator-portal/web-ui/app/src/views/audit/AuditView.tsx)
 - [IncidentsView.tsx](file://products/operator-portal/web-ui/app/src/views/incidents/IncidentsView.tsx)
 - [SettingsView.tsx](file://products/operator-portal/web-ui/app/src/views/control/SettingsView.tsx)
+- [roles.ts](file://products/operator-portal/web-ui/app/src/roles.ts)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Added Studio navigation documentation as a new top-level view alongside Chat
+- Updated Approvals panel references to maintain consistency with current portal functionality
+- Enhanced navigation structure documentation to reflect dual workspace architecture
+- Updated role-based access control documentation for Studio permissions
 
 ## Table of Contents
 1. Introduction
@@ -30,8 +38,9 @@
 10. Appendices
 
 ## Introduction
-The Operator Portal is the React-based web interface for operators, approvers, and auditors. It provides:
+The Operator Portal is the React-based web interface for operators, approvers, auditors, and skill authors. It provides:
 - Chat sessions for agent interactions with streaming responses and human-in-the-loop confirmations
+- A dedicated Studio workspace for skill authoring and development
 - An approvals inbox for reviewing and deciding on pending actions
 - A durable audit trail view for compliance review
 - An incidents panel for alert triage and collaboration
@@ -45,20 +54,22 @@ It runs as a single-page application built with Vite, TypeScript, and Ant Design
 ## Project Structure
 At a high level:
 - The SPA entry mounts React under StrictMode, applies an Ant Design theme, and wraps the app with authentication context.
-- App.tsx owns navigation, role-gated menu items, and two workspace instances (operation and development).
+- App.tsx owns navigation, role-gated menu items, and maintains two workspace instances (operation and development) for separate Chat and Studio modes.
 - Feature modules are organized by capability: chat, stream transport, auth, views (approvals, audit, incidents, settings), and utilities.
 
 ```mermaid
 graph TB
 A["main.tsx<br/>React bootstrap"] --> B["App.tsx<br/>Shell + routing"]
 B --> C["AuthContext.tsx<br/>OIDC session"]
-B --> D["ChatView.tsx<br/>Chat workspace"]
-B --> E["ApprovalsView.tsx<br/>Inbox"]
-B --> F["AuditView.tsx<br/>Audit trail"]
-B --> G["IncidentsView.tsx<br/>Incidents"]
-B --> H["SettingsView.tsx<br/>Identity/Session/Platform"]
-D --> I["useChatStream.ts<br/>Turn state + SSE"]
-I --> J["transport.ts<br/>SSE open/consume"]
+B --> D["ChatView.tsx<br/>Chat workspace (operation)"]
+B --> E["ChatView.tsx<br/>Studio workspace (development)"]
+B --> F["ApprovalsView.tsx<br/>Inbox"]
+B --> G["AuditView.tsx<br/>Audit trail"]
+B --> H["IncidentsView.tsx<br/>Incidents"]
+B --> I["SettingsView.tsx<br/>Identity/Session/Platform"]
+D --> J["useChatStream.ts<br/>Turn state + SSE"]
+E --> J
+J --> K["transport.ts<br/>SSE open/consume"]
 ```
 
 **Diagram sources**
@@ -76,9 +87,11 @@ I --> J["transport.ts<br/>SSE open/consume"]
 
 ## Core Components
 - Authentication provider: manages OIDC login, callback completion, silent refresh, logout, and exposes username/roles to the app.
-- Session workspace: maintains per-mode session lists and active session pointer; used by Chat, Incidents, Documents, and Settings.
+- Dual workspace architecture: maintains separate operation and development session workspaces; operation backs Chat, Incidents, Documents, and Settings, while development backs Studio.
 - Streaming chat adapter: accumulates turns, tool evidence frames, and HITL confirmation cards; supports session switching and re-seeding from transcripts.
 - Views:
+  - Chat workspace operates in either operation or development mode using the same ChatView component.
+  - Studio workspace provides skill authoring capabilities with development-specific features.
   - Approvals inbox polls pending confirmations and history, renders shared confirmation cards, and drives decisions over the same confirm stream.
   - Audit trail loads events with cursor pagination, summary aggregation, CSV export, and drill-down filters.
   - Incidents list/detail with auto-refresh, triage run, report form, connector dispatches, and deep-link into chat.
@@ -158,6 +171,35 @@ Schedule --> Ready
 - [oidc.ts:75-156](file://products/operator-portal/web-ui/app/src/auth/oidc.ts#L75-L156)
 - [oidc.ts:158-205](file://products/operator-portal/web-ui/app/src/auth/oidc.ts#L158-L205)
 
+### Navigation and Workspace Architecture
+The portal implements a dual-workspace architecture with separate operation and development environments:
+
+- **Operation Workspace**: Backs Chat, Incidents, Documents, and Settings views for day-to-day operations
+- **Development Workspace**: Backs Studio for skill authoring and development activities
+- **Role-Based Access**: Studio is gated by `STUDIO_ROLES` (equivalent to `SKILL_GRADUATE_ROLES`), requiring `session:skill_graduate` permission
+- **Navigation Structure**: Top-level menu includes Chat, Studio (for authorized users), Control section (Incidents, Approvals, Audit, Permissions), and Workspace section (Documents, Tools, Skills, Settings)
+
+```mermaid
+flowchart TD
+A["User navigates"] --> B{"Has STUDIO_ROLES?"}
+B -- Yes --> C["Show Studio menu item"]
+B -- No --> D["Show only Chat"]
+C --> E["Studio uses development workspace"]
+D --> F["Chat uses operation workspace"]
+E --> G["Skill authoring capabilities"]
+F --> H["Operational tasks"]
+```
+
+**Diagram sources**
+- [App.tsx:105-143](file://products/operator-portal/web-ui/app/src/App.tsx#L105-L143)
+- [App.tsx:312-324](file://products/operator-portal/web-ui/app/src/App.tsx#L312-L324)
+- [roles.ts:83-90](file://products/operator-portal/web-ui/app/src/roles.ts#L83-L90)
+
+**Section sources**
+- [App.tsx:105-143](file://products/operator-portal/web-ui/app/src/App.tsx#L105-L143)
+- [App.tsx:312-324](file://products/operator-portal/web-ui/app/src/App.tsx#L312-L324)
+- [roles.ts:83-90](file://products/operator-portal/web-ui/app/src/roles.ts#L83-L90)
+
 ### Streaming Chat Interface
 - useChatStream owns turn state, tool evidence accumulation, and HITL confirmation cards.
 - Sends messages via GET /api/v1/chat/stream with query parameters for user, optional session, modality, and model selection.
@@ -196,11 +238,12 @@ S-->>V : card locked, turn completed
 - [transport.ts:1-165](file://products/operator-portal/web-ui/app/src/stream/transport.ts#L1-L165)
 - [ChatView.tsx:1-800](file://products/operator-portal/web-ui/app/src/chat/ChatView.tsx#L1-L800)
 
-### Approvals Inbox
+### Approvals Panel
 - Polls pending confirmations and decision history every 30 seconds and on focus.
 - Renders shared confirmation cards identical to those in chat, enabling consistent UX.
 - Decisions reuse POST /api/v1/chat/confirm and consume the resumed stream to capture outcomes.
-- Handles race conditions (409 already resolved) and expiration (410) gracefully, flipping cards to the winner’s outcome with attribution.
+- Handles race conditions (409 already resolved) and expiration (410) gracefully, flipping cards to the winner's outcome with attribution.
+- Integrated with sidebar badge showing pending count and triggers immediate workspace refresh when decisions are made.
 
 ```mermaid
 flowchart TD
@@ -212,14 +255,17 @@ D --> F{"User decides?"}
 F -- Yes --> G["POST /api/v1/chat/confirm"]
 G --> H["Consume resumed stream for outcome"]
 H --> I["Move to history, refresh"]
+I --> J["Trigger workspace refresh"]
 ```
 
 **Diagram sources**
 - [ApprovalsView.tsx:69-241](file://products/operator-portal/web-ui/app/src/views/control/ApprovalsView.tsx#L69-L241)
 - [ApprovalsView.tsx:243-441](file://products/operator-portal/web-ui/app/src/views/control/ApprovalsView.tsx#L243-L441)
+- [App.tsx:333-341](file://products/operator-portal/web-ui/app/src/App.tsx#L333-L341)
 
 **Section sources**
 - [ApprovalsView.tsx:69-441](file://products/operator-portal/web-ui/app/src/views/control/ApprovalsView.tsx#L69-L441)
+- [App.tsx:333-341](file://products/operator-portal/web-ui/app/src/App.tsx#L333-L341)
 
 ### Audit Trail
 - Role-gated view for auditors/platform-admins.
@@ -250,7 +296,7 @@ Merge --> Load
 
 ### Incidents Panel
 - Role-gated incident list with filters and 15-second auto-refresh.
-- Detail view includes triage report, connector dispatches, and “Continue in chat” deep link that pins the incident’s session into the chat workspace.
+- Detail view includes triage report, connector dispatches, and "Continue in chat" deep link that pins the incident's session into the chat workspace.
 - Supports manual incident reporting and running triage; failed triage exposes raw agent output.
 
 ```mermaid
@@ -289,6 +335,7 @@ G-->>D : Updated detail with report
 - The app shell composes feature views based on role visibility.
 - AuthContext supplies identity and roles consumed by all views and components.
 - Chat depends on the stream adapter and transport layer for SSE.
+- Studio shares the same ChatView component but uses a separate development workspace instance.
 - Approvals reuses the same confirmation card and decision flow as Chat.
 - Audit and Incidents fetch data via the gateway and render read-only surfaces.
 - Settings reads health/runtime endpoints directly.
@@ -296,12 +343,14 @@ G-->>D : Updated detail with report
 ```mermaid
 graph LR
 Auth["AuthContext"] --> App["App shell"]
-App --> Chat["ChatView"]
+App --> Chat["ChatView (operation)"]
+App --> Studio["ChatView (development)"]
 App --> Approvals["ApprovalsView"]
 App --> Audit["AuditView"]
 App --> Incidents["IncidentsView"]
 App --> Settings["SettingsView"]
 Chat --> Stream["useChatStream"]
+Studio --> Stream
 Stream --> Transport["transport"]
 ```
 
@@ -321,6 +370,7 @@ Stream --> Transport["transport"]
 - Inbox polling interval balances freshness with network load; decisions trigger immediate refresh to keep UI consistent.
 - Audit export uses blob downloads to avoid large JSON payloads in memory.
 - Auto-refresh intervals are conservative (incidents 15s, approvals 30s) to reduce unnecessary requests.
+- Dual workspace architecture ensures operation and development sessions don't interfere with each other.
 
 [No sources needed since this section provides general guidance]
 
@@ -329,12 +379,14 @@ Stream --> Transport["transport"]
   - If sign-in fails or token refresh fails, the session is cleared and the sidebar prompts re-authentication.
   - Stream requests returning 401 show a friendly message prompting sign-in.
 - Confirmation races:
-  - 409 responses indicate another approver decided first; the UI flips the card to the winner’s outcome with attribution.
+  - 409 responses indicate another approver decided first; the UI flips the card to the winner's outcome with attribution.
   - 410 indicates the confirmation expired; the card locks and the turn completes.
+- Studio access:
+  - Missing `STUDIO_ROLES` prevents Studio menu item from appearing; requires `session:skill_graduate` permission.
 - Audit access:
   - 403 indicates missing audit:read; 503/502 indicate service configuration or availability issues.
 - Incidents:
-  - “Continue in chat” is disabled if the incident’s triage session is not currently owned/visible in the workspace.
+  - "Continue in chat" is disabled if the incident's triage session is not currently owned/visible in the workspace.
 
 **Section sources**
 - [oidc.ts:52-73](file://products/operator-portal/web-ui/app/src/auth/oidc.ts#L52-L73)
@@ -343,9 +395,10 @@ Stream --> Transport["transport"]
 - [ApprovalsView.tsx:156-225](file://products/operator-portal/web-ui/app/src/views/control/ApprovalsView.tsx#L156-L225)
 - [AuditView.tsx:72-88](file://products/operator-portal/web-ui/app/src/views/audit/AuditView.tsx#L72-L88)
 - [IncidentsView.tsx:238-259](file://products/operator-portal/web-ui/app/src/views/incidents/IncidentsView.tsx#L238-L259)
+- [roles.ts:83-90](file://products/operator-portal/web-ui/app/src/roles.ts#L83-L90)
 
 ## Conclusion
-The Operator Portal delivers a secure, role-aware, real-time operator workspace. It integrates OIDC authentication, streams agent activity via SSE, and centralizes human-in-the-loop decisions in both chat and a dedicated approvals inbox. Compliance and observability are supported through a durable audit trail and an incidents triage workflow. The modular architecture and role-based UI make it extensible for future features while keeping the gateway as the authority for authorization.
+The Operator Portal delivers a secure, role-aware, real-time operator workspace with dual-environment support. It integrates OIDC authentication, streams agent activity via SSE, and centralizes human-in-the-loop decisions in both chat and a dedicated approvals inbox. The addition of Studio provides skill authoring capabilities for authorized users, while maintaining separation between operational and development workflows. Compliance and observability are supported through a durable audit trail and an incidents triage workflow. The modular architecture and role-based UI make it extensible for future features while keeping the gateway as the authority for authorization.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -359,3 +412,13 @@ The Operator Portal delivers a secure, role-aware, real-time operator workspace.
 **Section sources**
 - [package.json:1-36](file://products/operator-portal/web-ui/app/package.json#L1-L36)
 - [README.md:37-88](file://products/operator-portal/README.md#L37-L88)
+
+### Role-Based Access Control Matrix
+- **Auditor/Platform Admin**: Full audit access, incident viewing and action capabilities
+- **Approver/Platform Admin**: All operational capabilities plus approval decision rights
+- **Operator/Developer**: Operational task execution, incident management, and skill drafting
+- **Read-only Observer**: Limited viewing capabilities without write access
+- **Studio Authors**: Specialized skill authoring and graduation permissions (subset of operator capabilities)
+
+**Section sources**
+- [roles.ts:4-90](file://products/operator-portal/web-ui/app/src/roles.ts#L4-L90)

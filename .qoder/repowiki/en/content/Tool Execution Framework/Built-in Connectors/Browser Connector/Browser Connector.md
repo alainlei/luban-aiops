@@ -12,6 +12,14 @@
 - [flow_approvals.py](file://products/agent-platform/src/agent_service/services/flow_approvals.py)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Updated tool surface documentation to reflect expansion from six to fifteen total tools
+- Added comprehensive documentation for nine new read-class tools (web.extract, web.wait_for, web.hover, web.scroll, web.switch_frame)
+- Enhanced write-class tools documentation (web.select, web.press_key, web.upload_file, web.evaluate)
+- Updated security model documentation with enhanced HITL integration and flow binding
+- Expanded usage examples and configuration options
+
 ## Table of Contents
 1. Introduction
 2. Project Structure
@@ -25,7 +33,7 @@
 10. Appendices
 
 ## Introduction
-This document describes the browser connector that provides bounded web automation through a headless Chromium sidecar reached via Chrome DevTools Protocol (CDP). It exposes a fixed tool surface split into read-tier and write-tier tools, enforces origin allowlists, binds flows to sessions with skill validation, manages credential sets, and handles session state safely under concurrent model calls. Security controls include step budgets, risk-class enforcement, deviation guards, and per-action approval for unbound interactions. Configuration knobs cover CDP endpoints, session limits, screenshot quality caps, upload directories, and flow budgets.
+This document describes the browser connector that provides bounded web automation through a headless Chromium sidecar reached via Chrome DevTools Protocol (CDP). It exposes a fixed tool surface of **fifteen tools** split into **nine read-tier tools** (auto-allowed when origin and flow rules permit) and **six write-tier tools** (requiring operator confirmation via HITL), enforces origin allowlists, binds flows to sessions with skill validation, manages credential sets, and handles session state safely under concurrent model calls. Security controls include step budgets, risk-class enforcement, deviation guards, and per-action approval for unbound interactions. Configuration knobs cover CDP endpoints, session limits, screenshot quality caps, upload directories, and flow budgets.
 
 ## Project Structure
 The browser connector lives in the tool gateway and is composed of:
@@ -50,7 +58,7 @@ BS --> PW
 ```
 
 **Diagram sources**
-- [browser_connector.py:315-399](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L315-L399)
+- [browser_connector.py:295-334](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L295-L334)
 - [browser_sessions.py:169-344](file://products/tool-gateway/src/tool_gateway/tools/browser_sessions.py#L169-L344)
 - [credential_sets.py:30-103](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L30-L103)
 
@@ -74,7 +82,7 @@ Key responsibilities:
 - Screenshot masking of password-tier values and URL redaction for evidence.
 
 **Section sources**
-- [browser_connector.py:315-699](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L315-L699)
+- [browser_connector.py:295-699](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L295-L699)
 - [browser_sessions.py:61-167](file://products/tool-gateway/src/tool_gateway/tools/browser_sessions.py#L61-L167)
 - [credential_sets.py:30-103](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L30-L103)
 
@@ -107,47 +115,49 @@ Note over BC,Pool : Subsequent tools serialize per chat session via interaction_
 ```
 
 **Diagram sources**
-- [browser_connector.py:730-863](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L730-L863)
+- [browser_connector.py:700-798](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L700-L798)
 - [browser_sessions.py:240-344](file://products/tool-gateway/src/tool_gateway/tools/browser_sessions.py#L240-L344)
 
 ## Detailed Component Analysis
 
 ### Tool Surface
-Read-tier tools (auto-allowed when origin and flow rules permit):
-- web.navigate: Open URL, optional skill_id to bind flow; enforces allowlist pre/post navigation; returns masked URL and flow context when bound.
-- web.snapshot: Enumerates interactive elements as 1-based refs with masked sensitive values; bounded text output.
-- web.screenshot: Captures JPEG with quality/clip fallback to meet byte cap; masks password-tier values.
-- web.fill_credential: Fills username/password from a named credential set into a snapshot ref; read-tier by design; tracks filled values for masking.
-- web.extract: Extracts structured data from CSS selector; table mode returns headers and rows; bounded items and columns.
-- web.wait_for: Waits for element state (attached/detached/visible/hidden) with timeout cap.
-- web.hover: Hovers an element identified by snapshot ref.
-- web.scroll: Scrolls by delta_x/delta_y; respects active frame context.
-- web.switch_frame: Switches into iframe by CSS selector; resets on navigate.
+The browser connector now exposes **fifteen tools** organized into two tiers:
 
-Write-tier tools (require operator confirmation via SPEC-020/037 path):
-- web.click: Clicks element ref; committing action.
-- web.type: Types text into element ref; payload-bearing mutation.
-- web.select: Selects option in <select>; payload-bearing mutation.
-- web.press_key: Presses key(s); optionally focuses element first; submitting keys are write-tier.
-- web.upload_file: Uploads file from configured upload directory; validates path containment.
-- web.evaluate: Executes JS expression; write-tier due to arbitrary DOM access; includes mutation pattern guard and result size cap.
+#### Read-Tier Tools (Auto-Allowed)
+Nine read-class tools are auto-allowed when origin and flow rules permit:
+
+1. **web.navigate**: Open URL, optional skill_id to bind flow; enforces allowlist pre/post navigation; returns masked URL and flow context when bound.
+2. **web.snapshot**: Enumerates interactive elements as 1-based refs with masked sensitive values; bounded text output.
+3. **web.screenshot**: Captures JPEG with quality/clip fallback to meet byte cap; masks password-tier values.
+4. **web.fill_credential**: Fills username/password from a named credential set into a snapshot ref; read-tier by design; tracks filled values for masking.
+5. **web.extract**: Extracts structured data from CSS selector; table mode returns headers and rows; bounded items and columns.
+6. **web.wait_for**: Waits for element state (attached/detached/visible/hidden) with timeout cap.
+7. **web.hover**: Hovers an element identified by snapshot ref.
+8. **web.scroll**: Scrolls by delta_x/delta_y; respects active frame context.
+9. **web.switch_frame**: Switches into iframe by CSS selector; resets on navigate.
+
+#### Write-Tier Tools (Require HITL Confirmation)
+Six write-class tools require operator confirmation via SPEC-020/037 path:
+
+1. **web.click**: Clicks element ref; committing action.
+2. **web.type**: Types text into element ref; payload-bearing mutation.
+3. **web.select**: Selects option in <select>; payload-bearing mutation.
+4. **web.press_key**: Presses key(s); optionally focuses element first; submitting keys are write-tier.
+5. **web.upload_file**: Uploads file from configured upload directory; validates path containment.
+6. **web.evaluate**: Executes JS expression; write-tier due to arbitrary DOM access; includes mutation pattern guard and result size cap.
 
 Important constraints:
 - Element refs come only from web.snapshot and invalidate on navigation/snapshot.
-- Evidence URLs report the active frame’s URL with secret query parameters masked.
+- Evidence URLs report the active frame's URL with secret query parameters masked.
 - Screenshot masking targets password-tier values even if rendered as type=text.
 
 **Section sources**
-- [browser_connector.py:730-863](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L730-L863)
-- [browser_connector.py:866-964](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L866-L964)
-- [browser_connector.py:967-1077](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L967-L1077)
-- [browser_connector.py:1274-1386](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1274-L1386)
-- [browser_connector.py:1711-1846](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1711-L1846)
-- [browser_connector.py:1849-1955](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1849-L1955)
-- [browser_connector.py:1958-2025](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1958-L2025)
-- [browser_connector.py:2236-2322](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L2236-L2322)
-- [browser_connector.py:2325-2399](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L2325-L2399)
-- [browser_connector.py:2028-2233](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L2028-L2233)
+- [browser_connector.py:295-334](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L295-L334)
+- [browser_connector.py:665-800](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L665-L800)
+- [browser_connector.py:801-964](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L801-L964)
+- [browser_connector.py:1079-1322](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1079-L1322)
+- [browser_connector.py:1327-1641](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1327-L1641)
+- [browser_connector.py:1646-2374](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1646-L2374)
 
 ### Session State and Concurrency
 - Sessions are keyed by chat session id so one browser context spans a full flow across owner→approver identity switches.
@@ -222,11 +232,10 @@ Deviation -- Yes --> ProceedBound["Proceed (budget accounted)"]
 ```
 
 **Diagram sources**
-- [browser_connector.py:533-653](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L533-L653)
-- [browser_connector.py:482-531](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L482-L531)
+- [browser_connector.py:468-588](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L468-L588)
 
 **Section sources**
-- [browser_connector.py:482-653](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L482-L653)
+- [browser_connector.py:417-588](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L417-L588)
 
 ### Credential Set Management
 - Credentials are resolved at call time from a secret-mounted JSON file; unknown set names return a structured error without enumerating available sets.
@@ -235,7 +244,7 @@ Deviation -- Yes --> ProceedBound["Proceed (budget accounted)"]
 
 **Section sources**
 - [credential_sets.py:30-103](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L30-L103)
-- [browser_connector.py:1274-1386](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1274-L1386)
+- [browser_connector.py:1258-1322](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1258-L1322)
 
 ### Security Model
 - Origin allowlist: deny-by-default; empty allowlist denies everything; enforced before navigation and re-checked on captures and unbound writes.
@@ -246,12 +255,11 @@ Deviation -- Yes --> ProceedBound["Proceed (budget accounted)"]
 - Evidence sanitization: Secret-bearing query parameters are masked in reported URLs; password-tier values are masked in screenshots.
 
 **Section sources**
-- [browser_connector.py:402-699](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L402-L699)
-- [browser_connector.py:830-863](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L830-L863)
-- [browser_connector.py:1030-1077](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1030-L1077)
+- [browser_connector.py:337-633](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L337-L633)
+- [browser_connector.py:700-798](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L700-L798)
 
 ### HITL Gate and Approval Kind
-- Write-tier interactions route through the platform’s confirmation bridge and signing path; approval_kind indicates whether the execution was authorized as part of a flow or as a standalone action.
+- Write-tier interactions route through the platform's confirmation bridge and signing path; approval_kind indicates whether the execution was authorized as part of a flow or as a standalone action.
 - The kernel determines approval_kind based on whether a browser-write batch has a bound flow; this ensures consistent card semantics.
 
 ```mermaid
@@ -271,11 +279,11 @@ end
 
 **Diagram sources**
 - [runtime_kernel.py:1232-1251](file://products/agent-platform/src/agent_service/runtime_kernel.py#L1232-L1251)
-- [browser_connector.py:533-653](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L533-L653)
+- [browser_connector.py:468-588](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L468-L588)
 
 **Section sources**
 - [runtime_kernel.py:1232-1251](file://products/agent-platform/src/agent_service/runtime_kernel.py#L1232-L1251)
-- [browser_connector.py:533-653](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L533-L653)
+- [browser_connector.py:468-588](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L468-L588)
 
 ## Dependency Analysis
 - BrowserConnector depends on:
@@ -295,11 +303,11 @@ FlowApprovals["Flow Approvals"] --> Kernel
 ```
 
 **Diagram sources**
-- [browser_connector.py:315-399](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L315-L399)
+- [browser_connector.py:295-334](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L295-L334)
 - [runtime_kernel.py:1232-1251](file://products/agent-platform/src/agent_service/runtime_kernel.py#L1232-L1251)
 
 **Section sources**
-- [browser_connector.py:315-399](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L315-L399)
+- [browser_connector.py:295-334](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L295-L334)
 - [runtime_kernel.py:1232-1251](file://products/agent-platform/src/agent_service/runtime_kernel.py#L1232-L1251)
 
 ## Performance Considerations
@@ -308,14 +316,12 @@ FlowApprovals["Flow Approvals"] --> Kernel
 - Interaction serialization prevents contention on a single page and protects step accounting integrity.
 - Session TTL and eviction keep memory usage bounded; idle contexts are closed proactively.
 
-[No sources needed since this section provides general guidance]
-
 ## Troubleshooting Guide
 Common errors and their meanings:
 - BROWSER_ORIGIN_NOT_ALLOWED: Navigation target origin is not on the allowlist.
 - BROWSER_REDIRECT_NOT_ALLOWED: Page drifted off allowlist or off-bound flow; session halted/reset.
-- BROWSER_FLOW_TARGET_MISMATCH: Navigated URL does not match skill’s declared web_target.
-- BROWSER_FLOW_ORIGIN_DEVIATED: Current page origin differs from bound flow’s origin.
+- BROWSER_FLOW_TARGET_MISMATCH: Navigated URL does not match skill's declared web_target.
+- BROWSER_FLOW_ORIGIN_DEVIATED: Current page origin differs from bound flow's origin.
 - BROWSER_FLOW_READ_ONLY: Write-tier action attempted on read-class flow.
 - BROWSER_FLOW_EXHAUSTED: Step budget exceeded.
 - BROWSER_FLOW_AUTHORITY_STALE: Execution signed under flow authority but no flow bound.
@@ -323,6 +329,11 @@ Common errors and their meanings:
 - BROWSER_EVAL_MUTATION_BLOCKED: Expression contains known mutating patterns; use dedicated write tools.
 - BROWSER_SCREENSHOT_TOO_LARGE: Could not compress screenshot within configured byte cap.
 - CREDENTIAL_SET_NOT_FOUND: Named credential set not configured.
+- BROWSER_SELECT_NOT_A_SELECT: Referenced element is not a select element.
+- BROWSER_SELECT_OPTION_NOT_FOUND: Selected option not found in select element.
+- BROWSER_UPLOAD_PATH_NOT_ALLOWED: Filename contains path separators or traversal.
+- BROWSER_UPLOAD_NOT_A_FILE_INPUT: Referenced element is not an input type=file.
+- BROWSER_FRAME_NOT_FOUND: No element matching selector found or not a frame element.
 
 Verification tips:
 - Ensure GATEWAY_BROWSER_ALLOW_ORIGINS includes the intended origins; an empty list denies all.
@@ -331,16 +342,13 @@ Verification tips:
 - Check upload directory configuration and path containment for file uploads.
 
 **Section sources**
-- [browser_connector.py:730-863](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L730-L863)
-- [browser_connector.py:967-1077](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L967-L1077)
-- [browser_connector.py:1590-1705](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1590-L1705)
-- [browser_connector.py:2028-2233](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L2028-L2233)
-- [test_browser_connector.py:613-646](file://products/tool-gateway/tests/test_browser_connector.py#L613-L646)
+- [browser_connector.py:700-798](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L700-L798)
+- [browser_connector.py:1369-1407](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1369-L1407)
+- [browser_connector.py:1571-1641](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1571-L1641)
+- [browser_connector.py:2292-2374](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L2292-L2374)
 
 ## Conclusion
-The browser connector delivers a secure, bounded web automation surface backed by a headless Chromium sidecar. It enforces strict origin policies, binds flows to sessions with skill validation, accounts steps, and routes mutations through operator approval. Read-tier tools provide safe observation with origin re-checks, while write-tier tools are gated to protect against unintended changes. Proper configuration of CDP endpoints, session limits, screenshot caps, and upload directories ensures reliable operation in production environments.
-
-[No sources needed since this section summarizes without analyzing specific files]
+The browser connector delivers a secure, bounded web automation surface backed by a headless Chromium sidecar with **fifteen comprehensive tools**. It enforces strict origin policies, binds flows to sessions with skill validation, accounts steps, and routes mutations through operator approval. The expanded tool surface includes nine read-tier tools for safe observation with origin re-checks, and six write-tier tools gated to protect against unintended changes. Proper configuration of CDP endpoints, session limits, screenshot caps, and upload directories ensures reliable operation in production environments.
 
 ## Appendices
 
@@ -361,9 +369,7 @@ Defaults and behavior:
 - Screenshot capture falls back to lower quality and clipped regions to meet caps.
 
 **Section sources**
-- [config.py:17-24](file://products/tool-gateway/src/tool_gateway/core/config.py#L17-L24)
-- [config.py:141-157](file://products/tool-gateway/src/tool_gateway/core/config.py#L141-L157)
-- [test_browser_connector.py:370-396](file://products/tool-gateway/tests/test_browser_connector.py#L370-L396)
+- [config.py:276-314](file://products/tool-gateway/src/tool_gateway/core/config.py#L276-L314)
 
 ### Usage Examples
 - Navigate to an allowlisted page and bind a flow:
@@ -380,8 +386,14 @@ Defaults and behavior:
   - Use web.switch_frame to enter an iframe; subsequent operations target the frame; navigate resets to main frame.
 - Execute limited JavaScript:
   - Use web.evaluate for read-only expressions; expect mutation blocks and result size caps.
-
-[No sources needed since this section provides general guidance]
+- Extract structured data:
+  - Use web.extract with CSS selector; supports table extraction with headers and rows.
+- Hover and scroll:
+  - Use web.hover to reveal tooltips; web.scroll to navigate page content.
+- Handle keyboard input:
+  - Use web.press_key for keyboard shortcuts; optionally focus elements first.
+- Upload files:
+  - Use web.upload_file with filename from configured upload directory.
 
 ### Error Handling Patterns
 - All tools return structured ToolResult with status, data/evidence, and error codes.
@@ -389,6 +401,5 @@ Defaults and behavior:
 - Sensitive values are masked in evidence URLs and snapshots; exceptions are logged without leaking secrets.
 
 **Section sources**
-- [browser_connector.py:259-266](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L259-L266)
-- [browser_connector.py:830-863](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L830-L863)
-- [browser_connector.py:1030-1077](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1030-L1077)
+- [browser_connector.py:194-201](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L194-L201)
+- [browser_connector.py:700-798](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L700-L798)
