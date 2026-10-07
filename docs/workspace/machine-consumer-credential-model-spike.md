@@ -5,7 +5,7 @@ Date: 2026-10-04
 Roadmap home: [Exploration Backlog](../agentic-aiops-platform/delivery-roadmap.md#exploration-backlog), rows "Independent MCP toolsets consumed by tool-gateway" (R6 candidate) and "Stable API productization / external consumption" (parked).
 Builds on: [mcp-ingestion-spike.md](mcp-ingestion-spike.md) (§5 credential/audience boundary, §8 open questions), [mcp-exposure-spike.md](mcp-exposure-spike.md) (§5 trust boundary, §6 adapter owns "server authentication"), [ADR-0004](../adr/0004-broker-mediated-token-delegation.md), and the [identity & authorization design](../agentic-aiops-platform/identity-and-authorization-design.md) Service Identity Model.
 Evidence baseline: repository at v0.46.0 (`fdc0039`). Static code/manifest inspection only. **No MCP server installed, tested, or deployed; no credential flow exercised against any external system.**
-Promoted to: [SPEC-067 ServiceNow ITSM MCP-ingestion pilot](../specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md) — `draft` 2026-10-06, R6's first slice (§4 Option A becomes SPEC-067 R-1; §5's parked inbound plane stays a Non-Goal). Drafting authorizes no implementation; six Open Questions block `approved`.
+Promoted to: [SPEC-067 ServiceNow ITSM MCP-ingestion pilot](../specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md) — `draft` 2026-10-06, R6's first slice (§4 Option A becomes SPEC-067 R-1; §5's parked inbound plane stays a Non-Goal). Drafting authorizes no implementation; five Open Questions block `approved` (OQ-3, the transport decision, resolved 2026-10-07).
 
 ## 1. Question and recommendation
 

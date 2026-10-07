@@ -2,7 +2,8 @@
 
 > **Provisional — do not implement.** This plan was authored alongside `spec.md`
 > at drafting time per the SPEC-064/065/066 same-session precedent. SPEC-067 is
-> `draft` with **six unresolved Open Questions**, so everything below is a
+> `draft` with **five unresolved Open Questions** (OQ-3, the transport decision,
+> was resolved 2026-10-07), so everything below is a
 > provisional recommendation, not an authorized contract. The credential-shape
 > work in R-1 in particular cannot be finalized until **OQ-1** (ServiceNow's real
 > auth scheme) is pinned as a Stage-0 fact. Nothing here is implemented: approval,
@@ -28,8 +29,9 @@ is tested before any target-specific code depends on it.
    fact degrades the pilot's scope rather than blocking R-1.
 1. **Extend** (Stage 1, R-1) — additive `scheme` field + connector-local token
    client in tool-gateway, with redaction and fail-closed tests. `basic` unchanged.
-2. **Connect** (Stage 2, R-2 + R-3) — the ServiceNow ingestion connector reusing the
-   SPEC-007 registry seam, plus deny-by-default policy-bundle coverage.
+2. **Connect** (Stage 2, R-2 + R-3) — the MCP-SDK ingestion adapter against
+   ServiceNow's own MCP server (REST/Table-API fallback), reusing the SPEC-007
+   registry seam, plus deny-by-default policy-bundle coverage.
 3. **Attribute** (Stage 3, R-4 + R-5) — audit fidelity (requester + acting service +
    target + tool + outcome) and the fail-closed/no-fabrication guardrail.
 4. **Provision** (Stage 4, R-6) — secret sync + dev-k8s overlay wiring.
@@ -70,15 +72,27 @@ is tested before any target-specific code depends on it.
 ### R-2: ServiceNow read-tier ingestion connector beneath the gateway
 
 - affected files / modules: a new `products/tool-gateway/src/tool_gateway/` ingestion
-  subpackage; registration into the existing `ToolRegistry`.
-- chosen approach: hand-roll a ServiceNow REST client that registers read-tier tools
-  as `BaseTool`/`ToolDefinition` instances (SPEC-007 seam), authenticating via the
-  R-1 credential set. The kernel calls them through the existing signed-tool path
-  (SPEC-037); no new kernel seam, and the kernel never becomes an MCP client.
-- alternatives: taking a generic `mcp` client dependency — deferred (OQ-3), matching
-  the exposure spike's "don't take the dependency until it earns its keep."
+  subpackage (an MCP client adapter over the official `mcp` SDK + a ServiceNow
+  connector); registration into the existing `ToolRegistry`; a new **direct `mcp`
+  dependency** in tool-gateway's `pyproject.toml`/`uv.lock`.
+- chosen approach (**OQ-3 resolved 2026-10-07**): consume **ServiceNow's own MCP
+  server** through the **official `mcp` Python SDK** behind a gateway-owned adapter
+  that maps each discovered server tool into a `BaseTool`/`ToolDefinition` (SPEC-007
+  seam), authenticating the MCP session via the R-1 credential set (bearer/OAuth2).
+  Governance stays tool-gateway-side: the adapter admits only tools explicitly named
+  in the policy bundle and treats server-advertised metadata as untrusted. The kernel
+  calls them through the existing signed-tool path (SPEC-037); no new kernel seam, and
+  the kernel never becomes an MCP client. `mcp` is added to tool-gateway only — its
+  lockfile is separate from the kernel's transitive AgentScope pin.
+- alternatives: (a) a **hand-rolled REST/Table-API client** — retained as the
+  documented **fallback** if Stage-0 finds the target instance's MCP server
+  unavailable, preview-only, or short of read coverage; (b) a third-party ServiceNow
+  MCP *server* — rejected (supply-chain/license risk, an extra stateful deployment,
+  and it would re-expose our credential to a component we do not control); (c)
+  hand-rolling the MCP protocol — rejected (an official maintained SDK exists).
 - **OQ-4 gate:** the concrete tool set and each tool's argument-validation shape are
-  fixed in Stage 0.
+  fixed in Stage 0 (whether the needed reads come via the MCP server or the REST
+  fallback).
 
 ### R-3: Deny-by-default policy coverage for ServiceNow tools
 
@@ -129,13 +143,16 @@ is tested before any target-specific code depends on it.
 
 - unit tests: `credential_sets` per-scheme parsing + fail-closed on missing/malformed
   sets; `_resolve_auth` bearer branch; the token client's cache/near-expiry/redaction;
-  connector registration and read-tier-only exposure; the no-fabrication mapping.
-  Redaction tests mirror SPEC-009 R-1's deterministic tool-output redaction.
+  the MCP-tool→`ToolDefinition` mapping (server metadata treated as untrusted, never
+  setting tier); connector registration and read-tier-only exposure; the
+  no-fabrication mapping. Redaction tests mirror SPEC-009 R-1's deterministic
+  tool-output redaction.
 - contract tests: policy-bundle scenarios (`make validate-policy-scenarios`),
   `make validate-policy` + `make policy-diff`, and `make validate-secret-vocabulary`.
 - integration / overlay validation: `make overlays` renders the dev-k8s wiring; the
-  connector is exercised against a **local mock ServiceNow target** so CI makes no
-  live external call (live-tenant validation is an operator step per OQ-5's fallback).
+  adapter is exercised against a **local mock MCP server / mock ServiceNow target** so
+  CI makes no live external call (live-tenant validation is an operator step per
+  OQ-5's fallback), and the REST fallback path is covered by the same mock-target tests.
 
 ## Rollout And Migration
 
@@ -145,5 +162,6 @@ is tested before any target-specific code depends on it.
 - backward compatibility: `basic` sets are unchanged (`scheme` defaults to `basic`);
   the extension is inert until a non-`basic` set exists, so no current behavior moves.
 - rollback approach: remove the ServiceNow credential set and its policy entries; the
-  additive scheme code path is dead without a non-`basic` set, so rollback needs no
-  code revert.
+  additive scheme code path is dead without a non-`basic` set, and the MCP adapter is
+  inert without the credential set + policy entries, so rollback needs no code revert
+  (the `mcp` dependency can stay pinned-but-unused or be dropped).

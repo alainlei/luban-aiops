@@ -15,6 +15,9 @@
   [the credential memo](../../workspace/machine-consumer-credential-model-spike.md)
   §4) rather than connector-local (Option A); the connector-local direction reuses
   ADR-0004's delegation vocabulary without a new signing authority and needs no ADR.
+  Adopting the official MCP SDK as the ingestion transport (OQ-3, resolved
+  2026-10-07) is recorded here; whether it also merits its own ADR is an
+  approval-time call.
 - lineage: promoted from the
   [MCP ingestion spike](../../workspace/mcp-ingestion-spike.md) §2 (the
   gateway-as-client seam, ServiceNow-first staging), §5 (the credential/audience
@@ -35,18 +38,21 @@
 > `tasks.md`) was authored together per the SPEC-064/SPEC-065/SPEC-066
 > same-session precedent. At drafting this spec is deliberately **not**
 > decision-complete: the source memos authorize **no implementation** and hand the
-> scope questions to "the first pilot spec" — i.e. to this document. Six Open
-> Questions therefore block `approved`, and `plan.md`/`tasks.md` are banner-marked
-> provisional until they are resolved and the operator ratifies the resolutions.
+> scope questions to "the first pilot spec" — i.e. to this document. Five Open
+> Questions therefore block `approved` — OQ-3 (the transport/dependency decision)
+> was resolved by operator decision on 2026-10-07 — and `plan.md`/`tasks.md` stay
+> banner-marked provisional until the rest are resolved and ratified.
 > The largest is OQ-1: the credential shape R-1 builds depends on ServiceNow's
 > **actual** auth scheme, which is a Stage-0 fact to pin, not a design preference.
 
 ## Summary
 
 Give operators real read-only ServiceNow ITSM actions through the platform's
-existing governed tool path — and, as the prerequisite every MCP-ingestion pilot
-shares, extend the gateway's outbound credential model beyond HTTP Basic so a
-connector can authenticate to a modern API (bearer / OAuth2 `client_credentials`).
+existing governed tool path — consuming ServiceNow's **own** MCP server via the
+official `mcp` Python SDK behind a gateway-owned adapter — and, as the prerequisite
+every MCP-ingestion pilot shares, extend the gateway's outbound credential model
+beyond HTTP Basic so a connector can authenticate to a modern API (bearer / OAuth2
+`client_credentials`).
 This is R6's first slice: the credential extension (R-1) is the natural opening
 move because every pilot depends on it and nothing else in the platform does.
 
@@ -105,8 +111,13 @@ Acceptance criteria:
 
 Add a ServiceNow ingestion client owned by tool-gateway that registers read-tier
 tools into the same registry as native tools, reusing the SPEC-007
-`BaseTool`/`ToolDefinition`/`ToolRegistry` seam. The agent-platform kernel never
-becomes an MCP client. *(Provisional on OQ-3, OQ-4.)*
+`BaseTool`/`ToolDefinition`/`ToolRegistry` seam. The transport consumes
+**ServiceNow's own MCP server** through the **official `mcp` Python SDK**, wrapped
+in a gateway-owned ingestion adapter that keeps every governance decision
+(classification, policy, redaction, audit) tool-gateway-side. The `mcp` dependency
+is added to **tool-gateway only**; the agent-platform kernel never becomes an MCP
+client. *(Transport direction resolved 2026-10-07 — OQ-3; scope still provisional
+on OQ-4.)*
 
 Acceptance criteria:
 
@@ -115,8 +126,13 @@ Acceptance criteria:
 - Each call carries the requester identity and the acting service identity to the
   target, per the identity model's three-plane logging.
 - No write/mutating ServiceNow operation is exposed in this slice (read tier only).
-- The connector is hand-rolled over ServiceNow's REST/OAuth surface; no generic
-  `mcp` client dependency is added (OQ-3).
+- The connector talks to ServiceNow's own MCP server via the official `mcp` SDK;
+  `mcp` is a direct dependency of tool-gateway only, and the MCP protocol is never
+  hand-rolled. A hand-rolled REST/Table-API connector is the documented **fallback**
+  if Stage-0 (OQ-1/OQ-4) finds the target instance's MCP server unavailable,
+  preview-only, or short of the needed read coverage.
+- The MCP session authenticates using the R-1 credential scheme (bearer/OAuth2); no
+  credential or token crosses the adapter into a tool result or log.
 
 ### R-3: Deny-by-default policy coverage for ServiceNow tools
 
@@ -126,6 +142,11 @@ named read tool resolves to the correct tier.
 Acceptance criteria:
 
 - An unlisted ServiceNow tool is denied (deny-by-default preserved).
+- **Tool metadata advertised by the MCP server is untrusted input.** The adapter
+  admits only tools explicitly named in the policy bundle and never auto-registers
+  whatever the server advertises; a server-declared annotation, `readOnlyHint`, or
+  description never sets a tool's tier or grants approval (the MCP-exposure spike's
+  "remote annotations never auto-approve" invariant, applied to ingestion).
 - Each named read tool resolves to read tier; the policy-bundle scenario suite
   (`make validate-policy-scenarios`) gains coverage for the new tool names.
 - `make validate-policy` and `make policy-diff` stay green after the bundle change
@@ -193,14 +214,20 @@ Acceptance criteria:
 - **Centralizing token acquisition in identity-broker, or K8s workload-identity
   minting.** Only if OQ resolves to Option B/C in the credential memo §4 — which
   would require its own ADR — not the connector-local default this spec assumes.
-- **A generic `mcp` client dependency.** Deferred until it earns its keep; the
-  ServiceNow connector is hand-rolled over REST/OAuth.
+- **Hand-rolling the MCP protocol, or adopting a third-party ServiceNow MCP
+  *server*.** The official `mcp` Python SDK is the transport (OQ-3, resolved
+  2026-10-07); the protocol is never re-implemented here. We consume ServiceNow's
+  **own** MCP server — not a community/marketplace one (supply-chain + license
+  risk, an extra stateful deployment, and it would re-expose our credential to a
+  component we do not control).
 
 ## Impact
 
 - products touched: `products/tool-gateway` (`tools/credential_sets.py`,
-  `tools/http_connector.py`, a new ServiceNow ingestion connector, tool
-  registration); `shared/shared-contracts/policies` (ServiceNow tool names/tiers);
+  `tools/http_connector.py`, a new MCP ingestion adapter + ServiceNow connector,
+  tool registration, and a new **direct `mcp` dependency** in tool-gateway's
+  `pyproject.toml`/`uv.lock` — the kernel's separate lockfile is untouched);
+  `shared/shared-contracts/policies` (ServiceNow tool names/tiers);
   `shared/platform-ops/gitops/dev-k8s` (overlay + credential-set secret);
   `shared/shared-contracts/scripts` (secret vocabulary, if OQ-6 requires).
 - contracts touched: the policy bundle (new read-tier ServiceNow tool names);
@@ -218,8 +245,9 @@ Acceptance criteria:
 
 ## Open Questions
 
-These block `approved` and must be empty before approval. OQ-1 and OQ-5 are
-checkable facts (Stage-0 verification), not preferences; the rest are decisions.
+These block `approved` and must all be resolved before approval. **OQ-3 is resolved
+(2026-10-07); the remaining five are open.** OQ-1 and OQ-5 are checkable facts
+(Stage-0 verification), not preferences; the rest are decisions.
 
 - **OQ-1 (fact, blocks R-1's shape):** What is ServiceNow's actual auth scheme for
   the target REST surface — static bearer, OAuth2 `client_credentials`, mTLS, or
@@ -230,9 +258,17 @@ checkable facts (Stage-0 verification), not preferences; the rest are decisions.
   (the SPEC-007 tool-framework precedent) so the reusable capability is not bound
   to one target's fate? The credential memo §6 framed it as "R6's first slice,"
   which is compatible with either.
-- **OQ-3 (dependency):** Confirm the ServiceNow ingestion stays hand-rolled over
-  its REST/OAuth surface with no generic `mcp` client dependency, consistent with
-  the exposure spike's "don't take the dependency until it earns its keep" posture.
+- **OQ-3 (dependency) — RESOLVED 2026-10-07 (operator decision).** Adopt the
+  official `mcp` Python SDK as the ingestion transport against **ServiceNow's own**
+  MCP server, behind a gateway-owned governance adapter; add `mcp` as a direct
+  dependency of tool-gateway only; keep a hand-rolled REST/Table-API connector as
+  the fallback. Never hand-roll the protocol and never adopt a third-party
+  ServiceNow MCP server. Governance stays tool-gateway-side regardless of transport.
+  Stage-0 (OQ-1/OQ-4/OQ-5) still gates feasibility: if the target instance's MCP
+  server is not GA/enabled or lacks the needed read coverage, the REST fallback is
+  taken. This reverses the drafting-time lean in the exposure spike's "don't take
+  the dependency until it earns its keep" posture — overridden because ServiceNow now
+  ships an official MCP server and an official maintained SDK exists.
 - **OQ-4 (scope):** Which ServiceNow read-tier operations are in scope (incident
   query, CMDB read, user/assignment lookup, attachment read?) and what are their
   policy tier and argument-validation shape?
@@ -246,6 +282,15 @@ checkable facts (Stage-0 verification), not preferences; the rest are decisions.
 
 ## Changelog
 
+- 2026-10-07: **OQ-3 resolved by operator decision** — adopt the official `mcp`
+  Python SDK as the ingestion transport against ServiceNow's own MCP server, behind
+  a gateway-owned governance adapter (dependency added to tool-gateway only), with a
+  hand-rolled REST/Table-API fallback; never hand-roll the protocol, never adopt a
+  third-party ServiceNow MCP server. Amended R-2 (transport + fallback + credential
+  wiring), R-3 (untrusted server metadata never auto-registers or sets tier), the
+  Non-Goals, Impact, Summary, the approval note, and the Open Questions preamble
+  accordingly. Spec remains `draft` — five Open Questions still block `approved`. No
+  implementation.
 - 2026-10-06: created as `draft`; full scaffold (`spec.md` + `plan.md` +
   `tasks.md`) authored together per the SPEC-064/065/066 precedent, with
   `plan.md`/`tasks.md` banner-marked provisional because six Open Questions block
