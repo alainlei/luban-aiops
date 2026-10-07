@@ -1,0 +1,5 @@
+- Service-layer functions raise a domain `ExchangeError(detail, status_code)` whose `status_code` maps directly to the HTTP response code rather than using FastAPI HTTPException.
+- Long-lived mutable state (JWKS clients, RSA private key) is held as module-level globals and exposed only through explicit `reset_*` helpers for test teardown.
+- Configuration is consumed via frozen dataclasses (`IdentityRunSettings`, `IdentitySettings`) loaded from environment variables with typed defaults and graceful fallbacks (e.g. Kubernetes service-link URL parsing).
+- Structured observability goes through the shared `log_event` helper with a named event type plus keyword attributes instead of ad-hoc log messages.
+- Metrics are recorded through dedicated counters/histograms in `core.metrics` (e.g. `record_token_exchange`, `record_token_issued`) rather than inline counters.

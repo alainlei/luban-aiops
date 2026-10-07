@@ -1,0 +1,1 @@
+Python ≥3.11, FastAPI 0.115+, Pydantic v2, httpx for async upstream calls, PyJWT for local bearer-token verification, PyYAML for the policy bundle, Prometheus client for metrics, OpenTelemetry SDK + FastAPI/httpx/logging instrumentations exporting over OTLP HTTP, uvicorn as ASGI server, uv_build as the build backend.

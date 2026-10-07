@@ -1,0 +1,1 @@
+Python ≥3.11, FastAPI + Uvicorn HTTP server, psycopg[binary] 3.x for PostgreSQL, jsonschema Draft202012 with `referencing` for cross-schema references, OpenTelemetry SDK + OTLP HTTP exporter with FastAPI/httpx/logging instrumentation, Prometheus client, httpx async client for the tool-gateway call, and `uv`/`uv_build` for packaging.

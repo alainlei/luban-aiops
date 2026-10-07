@@ -1,0 +1,1 @@
+FastAPI service that ingests, persists, queries, summarizes, and exports durable audit events with pluggable in-memory/PostgreSQL backends and retention eviction.

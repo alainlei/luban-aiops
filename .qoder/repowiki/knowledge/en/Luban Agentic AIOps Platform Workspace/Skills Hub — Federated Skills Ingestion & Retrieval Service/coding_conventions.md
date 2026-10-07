@@ -1,0 +1,6 @@
+- Settings are modeled as frozen dataclasses with dedicated `parse_*` functions that raise `SettingsError` on malformed input, giving fail-fast startup semantics for every `SKILLS_*` environment variable.
+- Pluggable persistence is expressed via a `Protocol` (`SkillStore`) rather than inheritance, with an explicit `build_skill_store` factory selecting the implementation based on `settings.store_backend`.
+- Database access uses per-operation async context managers around `psycopg.AsyncConnection` connections opened inside each method, keeping connection lifecycle scoped to a single query/transaction.
+- SQL strings (DDL, INSERT, SELECT column lists, tsvector expressions) are defined as module-level constants so the index definition and the query prefilter share one source of truth and cannot drift.
+- Cross-cutting concerns (logging, metrics, telemetry, request-id propagation) are wired once in `create_app` via FastAPI middleware and `setup_*` helpers in `core/`, keeping route handlers free of infra boilerplate.
+- Audit and telemetry events are emitted fire-and-forget via `log_event` / `audit_emitter` with `x-request-id` correlation, never blocking the request path.

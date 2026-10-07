@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: operator_portal
+title: Operator Portal (SPA Admin UI)
+scope:
+    - products/operator-portal/
+source_files: []
+depends_on: []
+related_to:
+    - path: platform_gateway

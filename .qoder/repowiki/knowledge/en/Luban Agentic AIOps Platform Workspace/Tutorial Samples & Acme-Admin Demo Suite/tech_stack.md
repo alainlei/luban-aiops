@@ -1,0 +1,1 @@
+FastAPI application with in-memory store (no DB/PVC) serving JSON (`api.py`) and session-based HTML pages (`pages.py`); Kustomize manifests (`deployment.yaml`, `service.yaml`, `networkpolicy.yaml`, `kustomization.yaml`); Python project managed via `pyproject.toml` + `uv.lock` inside `app/`; shell-driven demo harness using `kubectl` against a dev cluster.

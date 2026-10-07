@@ -1,0 +1,1 @@
+Python services managed with `uv` (interpreter pinned by `.python-version`); container base image `luban-aiops/base-uv` built from `shared/base-images/base-uv` on Amazon Linux 2023; Kubernetes deployment via kustomize overlays under `shared/platform-ops/gitops`; operator portal is a Node/Vitest SPA (`products/operator-portal/web-ui`).

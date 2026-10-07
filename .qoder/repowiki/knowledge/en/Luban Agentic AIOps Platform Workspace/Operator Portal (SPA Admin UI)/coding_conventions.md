@@ -1,0 +1,5 @@
+- Client-side role gating is expressed as `Set<string>` constants in `roles.ts` and checked through the shared `hasAnyRole(roles, SET)` helper rather than ad-hoc string comparisons.
+- Every API call funnels through `requestJson` in `api/client.ts`, which automatically attaches `x-request-id` and the Bearer token from the auth session; callers never construct fetch calls directly.
+- Feature areas are organised as directories under `src/` (e.g. `chat/`, `stream/`, `views/*`) with colocated `__tests__/` Vitest suites alongside the source files they exercise.
+- Auth state is accessed exclusively via the `useAuth()` hook from `auth/AuthContext.tsx`, which throws when used outside `AuthProvider`, keeping session/role access uniform across components.
+- Build-time constants (`PLATFORM_VERSION`, `REACT_VERSION`, `ANTD_VERSION`) are injected through Vite's `define` config from the repository root `VERSION` and `package-lock.json`, not imported at runtime.

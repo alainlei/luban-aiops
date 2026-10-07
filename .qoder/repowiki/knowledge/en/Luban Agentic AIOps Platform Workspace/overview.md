@@ -1,1 +1,1 @@
-Monorepo workspace for the Luban agentic AIOps platform, organizing nine Python services plus an operator portal under a shared contract and GitOps overlay system.
+Repository root that assembles the Luban platform's FastAPI services, shared contracts, Kubernetes overlays, docs, and samples into a single spec-driven workspace.

@@ -1,0 +1,6 @@
+- Downstream HTTP failures are normalized uniformly: `httpx.HTTPStatusError` with status < 500 is re-raised as an `HTTPException` preserving the original code, while transport errors and upstream 5xx are mapped to a 502 with a human-readable detail string.
+- Every outbound call carries an `x-request-id` header produced by `_service_headers(request_id)` so traces across the gateway and its backends stay correlated.
+- Policy evaluation goes through `enforce_policy(settings, identity, action, request_id)`, which records a Prometheus metric and emits a durable audit event before raising a 403 on deny.
+- Identity resolution follows a fixed two-path: if a Bearer token is present it is verified locally via `token_verifier.verify_token`; otherwise, when `require_auth=False`, a synthetic developer identity is returned instead of failing.
+- Configuration is centralized in the frozen `PlatformGatewaySettings` dataclass with defaults and an `@lru_cache`-wrapped `get_settings()` accessor; new knobs are added as fields plus corresponding `os.getenv` entries in `from_env()`.
+- Authorization decisions are expressed declaratively in `policies/policy-default.yaml` using `domain: action_authz` rules with `roles_any`/`actions_any` matches and `allow`/`deny`/`require_approval` outcomes, rather than hard-coded role checks in route handlers.

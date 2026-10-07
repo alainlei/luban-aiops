@@ -3,10 +3,10 @@ schema_version: 1
 locale: en-US
 branch: main
 nodes_managed: true
-exported_at: "2026-10-06T16:19:25Z"
+exported_at: "2026-10-07T07:00:30Z"
 modules:
     "":
-        dir_name: Luban Agentic AIOps Platform Workspace
+        dir_name: Luban Agentic AIOps Platform Workspace_2
         title: Luban Agentic AIOps Platform Workspace
         scope: []
         source_files: []
@@ -14,8 +14,8 @@ modules:
         depends_on: []
         related_to: []
     agent_platform:
-        dir_name: agent_platform
-        title: agent_platform
+        dir_name: Agent Service Platform (Luban Agentic AIOps)
+        title: Agent Service Platform (Luban Agentic AIOps)
         scope:
             - products/agent-platform/
         source_files: []
@@ -28,7 +28,8 @@ modules:
             - agent_platform/session_management
             - agent_platform/skill_lifecycle
         depends_on: []
-        related_to: []
+        related_to:
+            - path: platform_gateway
     agent_platform/api_layer:
         dir_name: Agent Service HTTP API & Gateway Tool Bridge
         title: Agent Service HTTP API & Gateway Tool Bridge
@@ -104,17 +105,19 @@ modules:
         depends_on: []
         related_to: []
     audit_service:
-        dir_name: audit_service
-        title: audit_service
+        dir_name: Audit Trail Service (SPEC-013)
+        title: Audit Trail Service (SPEC-013)
         scope:
             - products/audit-service/
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: platform_gateway
+            - path: tool_gateway
     documentation:
-        dir_name: documentation
-        title: documentation
+        dir_name: Platform Documentation & Spec-Driven Development Artifacts
+        title: Platform Documentation & Spec-Driven Development Artifacts
         scope:
             - docs/
             - mk/
@@ -123,53 +126,66 @@ modules:
         depends_on: []
         related_to: []
     execution_runtime:
-        dir_name: execution_runtime
-        title: execution_runtime
+        dir_name: Execution Runtime Worker
+        title: Execution Runtime Worker
         scope:
             - products/execution-runtime/
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: tool_gateway
     identity_broker:
-        dir_name: identity_broker
-        title: identity_broker
+        dir_name: Identity Broker Service
+        title: Identity Broker Service
         scope:
             - products/identity-broker/
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: platform_gateway
+            - path: tool_gateway
     incident_service:
-        dir_name: incident_service
-        title: incident_service
+        dir_name: Incident Intake, Triage & Collaboration Dispatch Service
+        title: Incident Intake, Triage & Collaboration Dispatch Service
         scope:
             - products/incident-service/
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: platform_gateway
+            - path: tool_gateway
     operator_portal:
-        dir_name: operator_portal
-        title: operator_portal
+        dir_name: Operator Portal (SPA Admin UI)
+        title: Operator Portal (SPA Admin UI)
         scope:
             - products/operator-portal/
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: platform_gateway
     platform_gateway:
-        dir_name: platform_gateway
-        title: platform_gateway
+        dir_name: Platform Gateway (FastAPI Portal Edge)
+        title: Platform Gateway (FastAPI Portal Edge)
         scope:
             - products/platform-gateway/
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: agent_platform
+            - path: audit_service
+            - path: identity_broker
+            - path: incident_service
+            - path: operator_portal
+            - path: skills_hub
+            - path: tool_gateway
     platform_ops:
-        dir_name: platform_ops
-        title: platform_ops
+        dir_name: Platform Operations & GitOps Overlay
+        title: Platform Operations & GitOps Overlay
         scope:
             - shared/platform-ops/
         source_files: []
@@ -177,8 +193,8 @@ modules:
         depends_on: []
         related_to: []
     samples:
-        dir_name: samples
-        title: samples
+        dir_name: Tutorial Samples & Acme-Admin Demo Suite
+        title: Tutorial Samples & Acme-Admin Demo Suite
         scope:
             - samples/
         source_files: []
@@ -186,8 +202,8 @@ modules:
         depends_on: []
         related_to: []
     shared_contracts:
-        dir_name: shared_contracts
-        title: shared_contracts
+        dir_name: Shared Cross-Project Contracts & Policy Bundle
+        title: Shared Cross-Project Contracts & Policy Bundle
         scope:
             - shared/shared-contracts/
         source_files: []
@@ -195,20 +211,28 @@ modules:
         depends_on: []
         related_to: []
     skills_hub:
-        dir_name: skills_hub
-        title: skills_hub
+        dir_name: Skills Hub — Federated Skills Ingestion & Retrieval Service
+        title: Skills Hub — Federated Skills Ingestion & Retrieval Service
         scope:
             - products/skills-hub/
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: platform_gateway
+            - path: tool_gateway
     tool_gateway:
-        dir_name: tool_gateway
-        title: tool_gateway
+        dir_name: Tool Gateway — Connector & Tool Invocation Service
+        title: Tool Gateway — Connector & Tool Invocation Service
         scope:
             - products/tool-gateway/
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: audit_service
+            - path: execution_runtime
+            - path: identity_broker
+            - path: incident_service
+            - path: platform_gateway
+            - path: skills_hub

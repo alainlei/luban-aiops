@@ -1,0 +1,1 @@
+Kustomize overlays over raw Kubernetes manifests; OpenObserve v5 dashboard JSON format; Python AST validation of Prometheus metric families; shell-driven secret reconciliation against Keycloak and Kubernetes Secrets.

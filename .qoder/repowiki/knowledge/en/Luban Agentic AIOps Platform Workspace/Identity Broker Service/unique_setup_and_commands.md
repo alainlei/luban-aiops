@@ -1,0 +1,1 @@
+`make` targets drive the build/test workflow; the package exposes the `identity-service` console script pointing at `identity_service.main:run`. Development keys are auto-generated at `settings.jwt_private_key_path` on first boot when no path is configured.

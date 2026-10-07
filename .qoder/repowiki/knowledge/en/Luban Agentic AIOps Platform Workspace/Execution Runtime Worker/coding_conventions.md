@@ -1,0 +1,6 @@
+- All cross-boundary error reasons are expressed as `ProtocolError(reason_code)` strings rather than exception messages, so callers can classify failures without leaking implementation details.
+- Incoming payloads are validated against JSON Schemas loaded from `contracts/*.schema.json` via a cached `validators()` registry, and any validation or serialization failure is collapsed to the `bad_request` reason code.
+- Signed envelopes use canonical JSON plus HMAC signatures verified before any business logic proceeds, with `canonical_digest` used consistently to bind facts to their original request.
+- Database access goes through `ExecutionLedger.connection()` / `conn.transaction()` context managers with explicit `verify_schema(conn)` checks at transaction boundaries, never raw global connections.
+- Admission/state queries read from the database clock (`clock_timestamp()`) rather than host time, so drift between host and DB cannot invalidate deadlines.
+- Configuration is consumed via frozen dataclasses with `from_env` classmethods reading `os.getenv` with explicit defaults, keeping runtime settings immutable.

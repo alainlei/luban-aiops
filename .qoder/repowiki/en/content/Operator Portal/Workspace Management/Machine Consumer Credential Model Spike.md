@@ -8,7 +8,16 @@
 - [http_connector.py](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py)
 - [config.py](file://products/tool-gateway/src/tool_gateway/core/config.py)
 - [exchange_service.py](file://products/identity-broker/src/identity_service/services/exchange_service.py)
+- [SPEC-067 spec.md](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md)
+- [SPEC-067 plan.md](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/plan.md)
 </cite>
+
+## Update Summary
+**Changes Made**   
+- Updated transport decision section to reflect resolved OQ-3 decision for SPEC-067
+- Added reference to the official `mcp` Python SDK adoption as the ingestion transport
+- Clarified the relationship between the credential model extension and MCP ingestion strategy
+- Updated dependency analysis to reflect the resolved transport architecture
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -22,12 +31,14 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document summarizes the machine-consumer credential model spike and grounds its conclusions in the shipped codebase. The spike’s central finding is that the roadmap label “machine-consumer credential gap (`client_credentials`)” conflates two different problems:
+This document summarizes the machine-consumer credential model spike and grounds its conclusions in the shipped codebase. The spike's central finding is that the roadmap label "machine-consumer credential gap (`client_credentials`)" conflates two different problems:
 
 - **Outbound External Execution Identity**: tool-gateway authenticating to an external system (the real R6 prerequisite).
 - **Inbound approved machine consumer**: an external application authenticating to Luban as itself (parked, trust-model-blocked).
 
-The memo concludes that R6 does not require adding `client_credentials` to identity-broker. Instead, it needs a bounded extension of the existing outbound `credential_set` mechanism so tool-gateway connectors can present non-Basic credentials — such as a static bearer token or an OAuth client-credentials flow against the *external* target’s identity provider.
+The memo concludes that R6 does not require adding `client_credentials` to identity-broker. Instead, it needs a bounded extension of the existing outbound `credential_set` mechanism so tool-gateway connectors can present non-Basic credentials — such as a static bearer token or an OAuth client-credentials flow against the *external* target's identity provider.
+
+**Updated** The transport decision for SPEC-067 has been resolved, confirming that the credential extension will support the official `mcp` Python SDK ingestion transport against ServiceNow's own MCP server.
 
 ## Project Structure
 The relevant implementation spans two products:
@@ -68,7 +79,7 @@ The spike identifies three identity planes and maps each to shipped behavior:
 |---|---|---|---|
 | Human Identity | Operator → Luban | OIDC authorization code + refresh token via Keycloak. | Not the missing piece. |
 | Platform Service Identity | Luban service → Luban service | Broker-mediated delegation with `sub`=user, `act`=service, `aud`=target audience. | Constrains any new machine-subject design. |
-| External Execution Identity | Luban → external system | Per-target `credential_set`, but only HTTP Basic username/password. | **R6’s actual prerequisite.** |
+| External Execution Identity | Luban → external system | Per-target `credential_set`, but only HTTP Basic username/password. | **R6's actual prerequisite.** |
 
 The current outbound credential store validates exactly two required fields: `username` and `password`. It reloads from a mounted JSON file on modification time, ignores malformed sets, never logs values, and exposes only set names. The HTTP connector resolves a configured set into `httpx.BasicAuth`; no other scheme is projected. There is no outbound OAuth/token-acquisition code anywhere under `products/`.
 
@@ -131,7 +142,7 @@ Service-->>Client : Read-only response
 - [exchange_service.py:148-194](file://products/identity-broker/src/identity_service/services/exchange_service.py#L148-L194)
 - [identity-and-authorization-design.md:333-369](file://docs/agentic-aiops-platform/identity-and-authorization-design.md#L333-L369)
 
-The inbound flow is parked because today the broker exchange copies the human subject verbatim and never creates a token whose principal is the machine itself. Building inbound machine attribution would also collide with the platform’s HITL and ownership model, which requires a human owner and approver.
+The inbound flow is parked because today the broker exchange copies the human subject verbatim and never creates a token whose principal is the machine itself. Building inbound machine attribution would also collide with the platform's HITL and ownership model, which requires a human owner and approver.
 
 **Section sources**
 - [machine-consumer-credential-model-spike.md:52-81](file://docs/workspace/machine-consumer-credential-model-spike.md#L52-L81)
@@ -154,7 +165,7 @@ classDiagram
 class CredentialSetStore {
 -string _path
 -float? _mtime
--dict~string, dict~string, string~~ _sets
+-dict~string, dict~string~~ _sets
 +configured bool
 +names() string[]
 +get(name) dict~string, string~?
@@ -223,7 +234,7 @@ Settings --> Features["Feature flags"]
 - [config.py:206-425](file://products/tool-gateway/src/tool_gateway/core/config.py#L206-L425)
 
 ### Identity Broker Token Exchange
-The identity broker’s exchange service authenticates a calling service through either a static client registry or a Kubernetes workload token, verifies the presented subject token, and mints a delegated token. Critically, the delegated token copies `sub` from the subject token; it does not make the service the principal. Roles are copied verbatim and are never elevated.
+The identity broker's exchange service authenticates a calling service through either a static client registry or a Kubernetes workload token, verifies the presented subject token, and mints a delegated token. Critically, the delegated token copies `sub` from the subject token; it does not make the service the principal. Roles are copied verbatim and are never elevated.
 
 ```mermaid
 classDiagram
@@ -256,7 +267,7 @@ ExchangeService --> ExchangeError : "raises"
 - [exchange_service.py:148-194](file://products/identity-broker/src/identity_service/services/exchange_service.py#L148-L194)
 
 ## Dependency Analysis
-The spike’s recommendation is to extend the outbound seam rather than expand the identity broker. The dependency implications are:
+The spike's recommendation is to extend the outbound seam rather than expand the identity broker. The dependency implications are:
 
 | Extension option | New dependency | Blast radius |
 |---|---|---|
@@ -264,11 +275,15 @@ The spike’s recommendation is to extend the outbound seam rather than expand t
 | Identity broker as outbound token broker | Broker gains outbound exchange logic | Expands broker charter and adds hot-path dependency. |
 | Sidecar/in-cluster credential broker | External secret system | Strongest rotation story; heaviest operational lift. |
 
+**Updated** The transport decision for SPEC-067 has been resolved to adopt the official `mcp` Python SDK as the ingestion transport against ServiceNow's own MCP server. This confirms that the credential extension will support bearer/OAuth2 schemes needed for the MCP session authentication, while keeping governance decisions tool-gateway-side.
+
 ```mermaid
 graph TB
-MCP["MCP Ingestion Pilot"] --> TG["Tool Gateway"]
+MCP["MCP Ingestion Pilot<br/>(OQ-3 Resolved)"] --> TG["Tool Gateway"]
 TG --> CS["Credential Set Store"]
 TG --> HC["HTTP/Browser Connector"]
+TG --> MCPSDK["Official MCP SDK<br/>(Resolved Transport)"]
+MCPSDK --> SNOW["ServiceNow MCP Server"]
 TG --> ExtIdp["External Target IdP"]
 TG --> IB["Identity Broker"]
 IB --> Delegate["Delegated Platform Token"]
@@ -286,9 +301,11 @@ end
 - [machine-consumer-credential-model-spike.md:63-71](file://docs/workspace/machine-consumer-credential-model-spike.md#L63-L71)
 - [credential_sets.py:30-50](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L30-L50)
 - [exchange_service.py:148-194](file://products/identity-broker/src/identity_service/services/exchange_service.py#L148-L194)
+- [SPEC-067 spec.md:261-271](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md#L261-L271)
 
 **Section sources**
 - [machine-consumer-credential-model-spike.md:63-71](file://docs/workspace/machine-consumer-credential-model-spike.md#L63-L71)
+- [SPEC-067 spec.md:261-271](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md#L261-L271)
 
 ## Performance Considerations
 The spike recommends keeping token acquisition and caching connector-local and in-process for the first pilot. This mirrors existing precedents such as browser session management and secret-delivery buffering. The trade-off is that each connector may re-implement a bounded token client unless a shared helper is introduced.
@@ -301,6 +318,8 @@ Key performance-related constraints already present in the codebase include:
 - The identity broker caches JWKS clients per workload issuer.
 
 These patterns suggest that a connector-local token cache should be bounded by lifetime, size, and failure behavior rather than growing indefinitely.
+
+**Updated** The resolved transport decision confirms that the official `mcp` Python SDK will be used, which provides built-in connection pooling and session management. The credential extension will need to handle bearer/OAuth2 token caching similar to the existing patterns.
 
 **Section sources**
 - [credential_sets.py:30-50](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L30-L50)
@@ -347,11 +366,13 @@ CheckUpstream --> Action
 ## Conclusion
 The spike corrects a misleading roadmap label and narrows R6 to a concrete, bounded extension of the outbound credential model. The immediate prerequisite is not `client_credentials` in identity-broker, but a way for tool-gateway connectors to present an authenticated credential to an external system.
 
+**Updated** With the resolved transport decision in SPEC-067 (OQ-3), the architecture is now confirmed to use the official `mcp` Python SDK as the ingestion transport against ServiceNow's own MCP server. This validates the approach of extending the credential model to support bearer/OAuth2 schemes needed for MCP session authentication.
+
 Recommended next steps are:
 
 1. Accept the two-plane split and update backlog language to name the outbound External Execution Identity as the R6 prerequisite.
 2. Frame R6 around external system integration via MCP ingestion, with the additive `credential_set` scheme extension as the first slice.
-3. Pin the first pilot target’s actual authentication mechanism before designing the credential shape.
+3. Pin the first pilot target's actual authentication mechanism before designing the credential shape.
 4. Prefer Option A: connector-local OAuth client if needed, keeping the blast radius inside tool-gateway.
 5. Leave inbound approved-machine-consumer authentication parked until a named second consumer commits to a concrete workflow.
 6. Record an ADR only if the pilot chooses a new trust root or broker charter change beyond Option A.
@@ -359,3 +380,4 @@ Recommended next steps are:
 **Section sources**
 - [machine-consumer-credential-model-spike.md:83-93](file://docs/workspace/machine-consumer-credential-model-spike.md#L83-L93)
 - [identity-and-authorization-design.md:333-369](file://docs/agentic-aiops-platform/identity-and-authorization-design.md#L333-L369)
+- [SPEC-067 spec.md:261-271](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md#L261-L271)

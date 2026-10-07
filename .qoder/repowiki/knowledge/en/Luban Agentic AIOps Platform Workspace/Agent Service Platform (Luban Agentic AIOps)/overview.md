@@ -1,0 +1,1 @@
+FastAPI agent-service that wraps AgentScope runtime kernels behind a v2 HTTP API, wiring sessions, skills, execution admission, and model providers into a single deployable container.

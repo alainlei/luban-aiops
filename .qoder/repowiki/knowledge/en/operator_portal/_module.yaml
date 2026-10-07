@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: operator_portal
-title: operator_portal
-scope:
-    - products/operator-portal/
-source_files: []
-depends_on: []
-related_to: []

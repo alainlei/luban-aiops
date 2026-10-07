@@ -1,0 +1,1 @@
+Markdown-only documentation with a structured spec-driven-development process enforced by review discipline and the root `make verify` gate; shared Makefile fragments drive reproducible image builds on `linux/amd64` (with `linux/arm64` local/kind support) using a pinned `luban-aiops/base-uv` base image built from Amazon Linux 2023, Python 3.12, and uv 0.12.1.

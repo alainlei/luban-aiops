@@ -1,0 +1,5 @@
+- Architecturally significant decisions are recorded as sequentially numbered ADR files (`ADR-NNNN-slug.md`) in `docs/adr/` using `template.md`, with statuses `proposed` / `accepted` / `superseded by ADR-NNNN`, and superseded entries retain links to their replacement.
+- Feature work is driven by specs under `docs/specs/SPEC-NNN-<slug>/` following the three-file layout `spec.md` → `plan.md` → `tasks.md`, with requirement IDs (`R-1`, `R-2`, …) stable after approval and tasks referencing them for requirement-to-test traceability.
+- Specs carry a status header progressing through `draft` → `approved` → `in-progress` → `delivered` → `superseded`; once `delivered` a spec is frozen and corrections go into its changelog or a new spec.
+- Release notes under `docs/agentic-aiops-platform/release-notes/` are named with an ISO date prefix (`YYYY-MM-DD-release-<slug>.md`) and authored per delivery slice, keeping living docs intentionally minimal.
+- Shared Makefile defaults use `VAR ?= value` so command-line overrides always win, and all fragments guard against double inclusion via an `ifndef LUBAN_DEFAULTS_INCLUDED` sentinel.

@@ -1,0 +1,7 @@
+Documentation is organized into four stable tiers defined by `docs/specs/README.md`:
+- Tier 1 (Architecture Record): long-lived design documents under `docs/agentic-aiops-platform/` plus `docs/workspace/`, with new cross-boundary decisions funneled into numbered ADRs in `docs/adr/`.
+- Tier 2 (Feature Specs): short-lived, frozen-after-delivery feature specifications under `docs/specs/SPEC-NNN-<slug>/`, each a directory containing `spec.md` (requirements), `plan.md` (technical approach), and `tasks.md` (execution checklist), templated from `docs/specs/templates/`.
+- Tier 3 (Living State Docs): root README, CHANGELOG, product READMEs — kept minimal to reduce staleness surface.
+- Release notes under `docs/agentic-aiops-platform/release-notes/` are dated prose artifacts tied to the delivery roadmap.
+
+The `mk/` directory provides shared Makefile fragments (`defaults.mk`, `image.mk`, `python.mk`) consumed by both the root Makefile and per-product `make -C products/<name>` invocations; `defaults.mk` is the single source of truth for overridable build settings using `?=`, guarded against double inclusion via `LUBAN_DEFAULTS_INCLUDED`. Dependency direction: code builds consume `mk/*.mk`; documentation has no runtime dependency on code but references it through spec IDs, ADR numbers, and release-note filenames. Enforcement is review-based (`make verify` runs tests + renders GitOps overlays) rather than automated linting.

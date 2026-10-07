@@ -1,0 +1,1 @@
+Isolated FastAPI worker that admits signed execution requests, dispatches bounded tool invocations through a gateway, and persists a tamper-evident observation ledger in PostgreSQL.

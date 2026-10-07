@@ -1,0 +1,1 @@
+Python ≥3.11, FastAPI + Uvicorn ASGI server, PyJWT for local JWKS token verification, httpx for downstream service calls, elasticsearch/kubernetes clients, Playwright CDP client for the browser connector, Prometheus client for `/metrics`, OpenTelemetry OTLP exporter for traces/metrics, Redis-backed secret delivery buffer (with in-memory fallback), PyYAML policy bundles.

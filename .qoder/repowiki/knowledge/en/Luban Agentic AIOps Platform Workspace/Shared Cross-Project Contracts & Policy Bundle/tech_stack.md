@@ -1,0 +1,1 @@
+JSON Schema draft-2020-12 for all wire contracts; YAML for policy bundles; Python 3 scripts using `jsonschema` (Draft202012Validator) and PyYAML for validation; RSA-256 JWTs with JWKS (RFC 7517) for identity tokens; HMAC-SHA256 hex signatures over canonical JSON for execution envelopes.

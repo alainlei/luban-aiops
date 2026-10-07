@@ -1,0 +1,1 @@
+Python ≥3.11, FastAPI + Uvicorn ASGI server, Pydantic v2 for schemas, psycopg[binary] for PostgreSQL, PyJWT for token handling, OpenTelemetry OTLP HTTP exporter with FastAPI/httpx/logging instrumentation, Prometheus client for metrics, built on the `luban-aiops/base-uv:al2023` image and managed by `uv` (pyproject.toml + uv.lock).

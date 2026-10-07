@@ -1,0 +1,1 @@
+Versioned JSON Schema contracts, a canonical YAML action-authorization policy bundle, and validation scripts that define the wire formats shared across workspace products.

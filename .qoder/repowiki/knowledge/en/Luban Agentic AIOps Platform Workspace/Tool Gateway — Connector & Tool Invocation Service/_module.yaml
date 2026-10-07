@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: tool_gateway
+title: Tool Gateway — Connector & Tool Invocation Service
+scope:
+    - products/tool-gateway/
+source_files: []
+depends_on: []
+related_to:
+    - path: audit_service
+    - path: execution_runtime
+    - path: identity_broker
+    - path: incident_service
+    - path: platform_gateway
+    - path: skills_hub
