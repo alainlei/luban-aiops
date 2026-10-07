@@ -1,25 +1,27 @@
-# SPEC-067 Plan: ServiceNow ITSM MCP-Ingestion Pilot (Read Tier) And The Outbound Execution-Credential Scheme Extension It Requires
+# SPEC-067 Plan: ServiceNow ITSM MCP-Ingestion Pilot (Read Tier)
 
 > **Provisional — do not implement.** This plan was authored alongside `spec.md`
 > at drafting time per the SPEC-064/065/066 same-session precedent. SPEC-067 is
-> `draft` with **five unresolved Open Questions** (OQ-3, the transport decision,
-> was resolved 2026-10-07), so everything below is a
-> provisional recommendation, not an authorized contract. The credential-shape
-> work in R-1 in particular cannot be finalized until **OQ-1** (ServiceNow's real
-> auth scheme) is pinned as a Stage-0 fact. Nothing here is implemented: approval,
-> implementation, commit/push, deployment, and any version bump are each separate
-> authorization boundaries not granted by this document. **Stage 0 (verification)
-> is the first thing to execute once the spec is approved.**
+> `draft` with **three unresolved Open Questions** (OQ-1, OQ-4, OQ-5 — all PDI-gated
+> live-target facts; OQ-2 was resolved 2026-10-08 by extracting the credential
+> substrate to SPEC-068, OQ-3 on 2026-10-07, and OQ-6 moved to SPEC-068), so
+> everything below is a provisional recommendation, not an authorized contract. R-1 is
+> no longer built here — it is a dependency on
+> [SPEC-068](../SPEC-068-outbound-execution-credential-schemes/spec.md). Nothing here
+> is implemented: approval, implementation, commit/push, deployment, and any version
+> bump are each separate authorization boundaries not granted by this document.
+> **Stage 0 (verification) is the first thing to execute once the spec is approved.**
 
 ## Approach
 
-The pilot is two moves stacked, not one. The first (R-1) is a target-agnostic
-extension to the gateway's outbound credential vocabulary — the piece every future
-ingestion pilot reuses. The second (R-2–R-6) is the ServiceNow-specific read-tier
-connector that consumes it. R-1 is decision-ready from the shipped code; R-2–R-6
-are provisional until Stage 0 pins ServiceNow's auth scheme, operation set, and
-dev-cluster feasibility. The stages are ordered so the reusable substrate lands and
-is tested before any target-specific code depends on it.
+The pilot now builds one move, not two. The target-agnostic credential extension that
+was R-1 has been extracted to
+[SPEC-068](../SPEC-068-outbound-execution-credential-schemes/spec.md) (OQ-2, resolved
+2026-10-08); this plan therefore covers the ServiceNow-specific read-tier connector
+(R-2–R-6) that **consumes** that substrate, plus R-1 as a dependency gate. R-2–R-6 are
+provisional until Stage 0 pins ServiceNow's auth scheme, operation set, and dev-cluster
+feasibility. The stages are ordered so SPEC-068 lands and is tested before any
+target-specific code depends on it.
 
 0. **Verify** (Stage 0) — read-only. Pin the three facts the memos could not
    settle from the repository because they are properties of an external system, not
@@ -27,8 +29,10 @@ is tested before any target-specific code depends on it.
    and whether the pilot can be validated against the dev cluster or needs a real
    tenant/PDI (OQ-5). Each has a named fallback in *Sequencing* so a hard-to-obtain
    fact degrades the pilot's scope rather than blocking R-1.
-1. **Extend** (Stage 1, R-1) — additive `scheme` field + connector-local token
-   client in tool-gateway, with redaction and fail-closed tests. `basic` unchanged.
+1. **Depend** (Stage 1, R-1 → SPEC-068) — the outbound credential substrate (additive
+   `scheme` field + connector-local token client + resolver seam, with redaction and
+   fail-closed tests) is delivered by SPEC-068, not built here; this pilot consumes its
+   resolver. SPEC-068 is target-agnostic and does not wait on this pilot's Stage 0.
 2. **Connect** (Stage 2, R-2 + R-3) — the MCP-SDK ingestion adapter against
    ServiceNow's own MCP server (REST/Table-API fallback), reusing the SPEC-007
    registry seam, plus deny-by-default policy-bundle coverage.
@@ -40,34 +44,21 @@ is tested before any target-specific code depends on it.
 
 ## Design Per Requirement
 
-### R-1: Outbound execution-credential scheme extension (additive)
+### R-1: Outbound execution credential (dependency on SPEC-068)
 
-- affected files / modules:
-  - `products/tool-gateway/src/tool_gateway/tools/credential_sets.py` — add an
-    optional `scheme` key (default `basic`); make `_reload`'s required-field check
-    per-scheme instead of the fixed `REQUIRED_FIELDS = ("username", "password")`.
-  - `products/tool-gateway/src/tool_gateway/tools/http_connector.py` — extend
-    `_resolve_auth` (today returns only `httpx.BasicAuth`) with a bearer branch.
-  - a new connector-local token client module (e.g. `tools/oauth_client.py`) for the
-    `oauth2_client_credentials` fetch + in-memory cache + redaction.
-- chosen approach: **Option A — connector-local token client** (credential memo §4).
-  The scheme vocabulary is `basic` (unchanged default) | `bearer` (static token in
-  the set) | `oauth2_client_credentials` (`token_url` + `client_id` + `client_secret`
-  [+ `scope`], token fetched on miss/near-expiry and cached in memory only). All
-  secret handling reuses the existing never-logged, fail-closed, mtime-refreshed
-  `CredentialSetStore` behavior; the token client adds the same redaction guarantees
-  to the acquired `access_token`.
-- alternatives considered and why rejected (at draft):
-  - **Option B — centralize acquisition in identity-broker.** Rejected for the first
-    pilot: it adds a new signing authority and an ADR (the memo §4 records the ADR
-    trigger), which is over-scope when a connector-local client suffices. Revisit
-    only if a second consumer of the same target credential appears.
-  - **Option C — Kubernetes workload identity.** Rejected: the identity doc names it
-    the documented *upgrade path* for the External Execution Identity, appropriate
-    when cluster-to-cluster trust exists, not for a first SaaS pilot.
-- **OQ-1 gate:** the exact vocabulary (does ServiceNow need `bearer`, full OAuth2, or
-  something else?) is finalized against ServiceNow's real scheme in Stage 0. The
-  field is additive either way, so R-1's `basic` regression is unaffected.
+- affected files / modules: **none in this spec.** The credential-scheme extension —
+  the optional per-set `scheme`, the connector-local `oauth2_client_credentials` token
+  client, and the reusable async auth-resolution seam — was extracted to
+  [SPEC-068](../SPEC-068-outbound-execution-credential-schemes/spec.md) (OQ-2, resolved
+  2026-10-08). See SPEC-068's plan for the design, alternatives (Option A
+  connector-local chosen over B/C centralized), and test strategy.
+- chosen approach here: **consume** SPEC-068's resolver seam. The ServiceNow MCP/REST
+  session resolves its credential through SPEC-068 (never a pilot-local
+  re-implementation); this pilot adds no credential code of its own.
+- **OQ-1 gate:** ServiceNow's real scheme (Stage 0) selects **among** the schemes
+  SPEC-068 already ships (`bearer` or `oauth2_client_credentials`). If Stage-0 finds a
+  scheme SPEC-068 does not build (e.g. mTLS-only), that reopens SPEC-068's scope in a
+  follow-up — it is not special-cased in this pilot.
 
 ### R-2: ServiceNow read-tier ingestion connector beneath the gateway
 
@@ -129,11 +120,13 @@ is tested before any target-specific code depends on it.
 ## Sequencing And Dependencies
 
 1. **Stage 0 — Verify** — depends on nothing; read-only; first to execute at
-   approval. Fallbacks: if OQ-1 cannot be pinned, R-1 still ships `bearer` +
+   approval. Fallbacks: if OQ-1 cannot be pinned, SPEC-068 still ships `bearer` +
    `oauth2_client_credentials` (both are standard) and the ServiceNow connector waits;
    if OQ-5 shows no dev-cluster path, the connector is validated against a local mock
    target and live ServiceNow validation becomes an operator step.
-2. **Stage 1 — R-1 credential extension** — depends on Stage 0 (scheme vocabulary).
+2. **Stage 1 — R-1 credential substrate (SPEC-068)** — a dependency, not built here;
+   SPEC-068 is target-agnostic and does **not** depend on Stage 0. Gate: SPEC-068
+   approved/built before this pilot authenticates a live target.
 3. **Stage 2 — R-2 connector + R-3 policy** — depends on Stage 1.
 4. **Stage 3 — R-4 audit + R-5 fail-closed** — depends on Stage 2.
 5. **Stage 4 — R-6 provisioning + overlay** — depends on Stage 1 (fields) and Stage 2.
@@ -141,12 +134,12 @@ is tested before any target-specific code depends on it.
 
 ## Test Strategy
 
-- unit tests: `credential_sets` per-scheme parsing + fail-closed on missing/malformed
-  sets; `_resolve_auth` bearer branch; the token client's cache/near-expiry/redaction;
-  the MCP-tool→`ToolDefinition` mapping (server metadata treated as untrusted, never
-  setting tier); connector registration and read-tier-only exposure; the
-  no-fabrication mapping. Redaction tests mirror SPEC-009 R-1's deterministic
-  tool-output redaction.
+- unit tests: the MCP-tool→`ToolDefinition` mapping (server metadata treated as
+  untrusted, never setting tier); connector registration and read-tier-only exposure;
+  the no-fabrication mapping; and that the connector resolves its credential through
+  SPEC-068's resolver (not a local re-implementation). The `credential_sets` parsing,
+  bearer branch, and token-client cache/redaction tests live in SPEC-068. Redaction
+  tests mirror SPEC-009 R-1's deterministic tool-output redaction.
 - contract tests: policy-bundle scenarios (`make validate-policy-scenarios`),
   `make validate-policy` + `make policy-diff`, and `make validate-secret-vocabulary`.
 - integration / overlay validation: `make overlays` renders the dev-k8s wiring; the
@@ -156,12 +149,13 @@ is tested before any target-specific code depends on it.
 
 ## Rollout And Migration
 
-- deployment or configuration changes required: new credential-set fields delivered by
-  a sync script + the dev-k8s overlay; a synced policy-bundle update naming the
-  ServiceNow read tools.
-- backward compatibility: `basic` sets are unchanged (`scheme` defaults to `basic`);
-  the extension is inert until a non-`basic` set exists, so no current behavior moves.
+- deployment or configuration changes required: a ServiceNow credential-set entry
+  (delivered through SPEC-068's provisioning model) + the dev-k8s overlay; a synced
+  policy-bundle update naming the ServiceNow read tools.
+- backward compatibility: the SPEC-068 substrate is inert until a non-`basic` set
+  exists, and this pilot adds only the ServiceNow connector + policy entries, so no
+  current behavior moves.
 - rollback approach: remove the ServiceNow credential set and its policy entries; the
-  additive scheme code path is dead without a non-`basic` set, and the MCP adapter is
-  inert without the credential set + policy entries, so rollback needs no code revert
-  (the `mcp` dependency can stay pinned-but-unused or be dropped).
+  MCP adapter is inert without them, so rollback needs no code revert (the `mcp`
+  dependency can stay pinned-but-unused or be dropped). SPEC-068's additive scheme code
+  is unaffected by this pilot's rollback.
