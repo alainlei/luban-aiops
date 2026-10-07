@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: identity_broker
+title: identity_broker
+scope:
+    - products/identity-broker/
+source_files: []
+depends_on: []
+related_to: []

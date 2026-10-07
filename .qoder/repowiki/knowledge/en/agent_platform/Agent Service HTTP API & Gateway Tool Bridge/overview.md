@@ -1,0 +1,1 @@
+FastAPI v2 HTTP boundary for agent sessions and chat, plus a gateway-backed toolkit bridge that exposes platform tools to the AgentScope runtime kernel.

@@ -1,0 +1,1 @@
+Python `typing.Protocol` (runtime_checkable) for backend abstraction; `psycopg` for Postgres DDL and queries; `redis` client for the Redis backend; Pydantic `SessionRecord` model serialized to JSON for Redis blobs; raw SQL strings with parameterized bindings for Postgres.

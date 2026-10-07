@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: agent_platform/model_providers
+title: AgentScope Model Provider Adapters
+scope:
+    - products/agent-platform/src/agent_service/providers/
+source_files: []
+depends_on: []
+related_to: []

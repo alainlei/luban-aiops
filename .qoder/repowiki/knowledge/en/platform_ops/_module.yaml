@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: platform_ops
+title: platform_ops
+scope:
+    - shared/platform-ops/
+source_files: []
+depends_on: []
+related_to: []

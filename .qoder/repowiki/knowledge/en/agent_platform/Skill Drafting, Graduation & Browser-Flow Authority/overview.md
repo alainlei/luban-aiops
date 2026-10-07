@@ -1,0 +1,1 @@
+Generates skill drafts from session/incident facts, renders approved authoring traces into executable-flow runbooks, and maintains per-session browser-flow authority for mutating web steps.

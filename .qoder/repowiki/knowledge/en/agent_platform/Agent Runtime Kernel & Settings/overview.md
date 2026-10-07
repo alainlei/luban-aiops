@@ -1,0 +1,1 @@
+AgentScope runtime kernel that owns agent lifecycle, toolkits, streaming turns, evidence persistence, and the environment-driven RuntimeSettings configuration surface.

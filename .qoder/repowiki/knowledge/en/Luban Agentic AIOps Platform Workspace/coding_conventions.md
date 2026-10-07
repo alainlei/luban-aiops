@@ -1,5 +1,5 @@
-- Each product follows the same layout: `src/<service_name>/` with `app.py` (FastAPI app factory), `main.py` (entrypoint), `metadata.py`, plus `api/`, `core/`, `services/`, `schemas/` subpackages, and a sibling `tests/` directory.
-- Products declare dependencies and build metadata in `pyproject.toml` with a matching `uv.lock` lockfile, and share common Make targets via `include mk/python.mk` rather than duplicating rules.
-- Cross-service data shapes live in `shared/shared-contracts/schemas/` and are imported by producers/consumers instead of being redefined locally.
-- Feature work is tracked through `docs/specs/SPEC-NNN-<slug>/` directories containing the triad `plan.md`, `spec.md`, `tasks.md`, and linked from release notes under `docs/agentic-aiops-platform/release-notes/`.
-- Architecture decisions are recorded as numbered ADRs under `docs/adr/0001-...` following the template in `template.md`, with a central `README.md` indexing them.
+- Each product follows the same layout: `src/<service_name>/` with `app.py`, `main.py`, `metadata.py`, plus `api/`, `core/`, `services/`, `schemas/` subpackages, paired with a sibling `tests/` directory of `test_*.py` files.
+- Cross-product contracts live in `shared/shared-contracts/` (schemas, policies, SQL, scripts) and are consumed by reference rather than copied, with Make targets (`validate_policy_scenarios`, `policy_diff`, `validate_version`, `validate_secret_vocabulary`) enforcing consistency.
+- Policy bundles are authored as canonical YAML under `shared/shared-contracts/policies/` and propagated to consumers via `make sync-policy` instead of being edited at each call site.
+- Product images share a coordinated semver tag derived from `VERSION` plus git SHA and dirty-state timestamp, computed once by the root Makefile and reused across all `luban-aiops/*` images.
+- Spec-driven development is enforced by the `docs/specs/SPEC-NNN/` triad of `plan.md`, `spec.md`, `tasks.md`, with ADRs in `docs/adr/` numbered sequentially and linked from the spec index.

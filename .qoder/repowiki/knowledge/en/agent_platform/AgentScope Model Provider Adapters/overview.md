@@ -1,0 +1,1 @@
+Adapter layer that maps runtime settings to concrete AgentScope chat-model instances for OpenAI, DashScope, DeepSeek, and self-hosted Luban endpoints.

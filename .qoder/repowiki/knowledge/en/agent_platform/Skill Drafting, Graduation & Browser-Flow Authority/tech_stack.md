@@ -1,0 +1,1 @@
+Pydantic v2 models (`SkillFrontmatter`) for the fenced-contract frontmatter validation; AgentScope runtime kernel (`kernel._build_model`, `Msg`, `TextBlock`, `extract_text`) for the bounded LLM call; regex-based fenced-contract parsing rather than a YAML library (no YAML dependency in agent-platform).

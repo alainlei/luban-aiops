@@ -1,0 +1,6 @@
+- Closed reason-code sets (`_PRE_DISPATCH`, `_UNCERTAIN`, `_STOP_REASONS`, `EXECUTION_STATUSES`, `TOOL_REPORT_STATUSES`) classify outcomes instead of ad-hoc string comparisons, ensuring failures are never reported as positively-evidenced no-effect.
+- Database access goes through a `connection()` context manager that translates `psycopg.Error` into `ProtocolError("store_unavailable")`, keeping store outages from leaking driver exceptions to callers.
+- Read paths set `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY` and call `verify_schema(conn)` before any query, treating schema drift as a hard error rather than a soft fallback.
+- Owner-scoped reads enforce identity twice: caller-provided `session_id`/`owner_user_id` are validated locally and re-checked in SQL (`WHERE r.session_id=%s AND r.owner_user_id=%s`), returning `not_found` (never `unavailable`) for foreign IDs to avoid enumeration.
+- Cursor-based pagination uses HMAC-signed tokens (`_encode_cursor` / `_decode_cursor`) keyed by a domain-prefixed scope tuple plus position, so a cursor cannot be replayed across sessions, owners, or read kinds.
+- Backends implement a common `Protocol` (`ExecutionRecordStore`) with a `backend_name` attribute and a `build_*_store()` factory that selects memory vs postgres based on env vars and falls back gracefully on failure.

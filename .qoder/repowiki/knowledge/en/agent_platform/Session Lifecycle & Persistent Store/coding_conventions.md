@@ -1,0 +1,6 @@
+- Cross-store failures in non-critical bookkeeping paths (`mark_session_turn`, `pin_session_model`, cascade deletes) are wrapped in try/except blocks that log a warning and swallow the exception so the primary request never fails — fail-open degradation.
+- Foreign-session access is normalized to HTTP 404 (not 403) via `_assert_session_owner` so session IDs cannot be enumerated across users.
+- Each backend class exposes a `backend_name` string constant (`"memory"`, `"redis"`, `"postgres"`) and implements the full `SessionStore` Protocol, including optional methods like `server_version` and `__len__`.
+- Postgres operations use context-managed connections opened per call (`with self._connect() as conn:`) rather than a pooled connection, reflecting low-volume session traffic.
+- Raw SQL statements are defined as module-level constants prefixed by operation (`_INSERT_SESSION`, `_GET_SESSION`, `_LIST_USER_SESSIONS`, etc.) and executed with named parameters passed through a shared `_ttl_params()` dict.
+- Schema evolution uses idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` plus a `DO $$ BEGIN ... END $$;` guard around dynamic EXECUTE so migrations can run against clusters where dependent tables may not yet exist.

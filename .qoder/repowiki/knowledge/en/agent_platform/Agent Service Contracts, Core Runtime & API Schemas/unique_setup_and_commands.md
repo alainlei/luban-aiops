@@ -1,0 +1,1 @@
+Prometheus metrics are exposed at `GET /metrics` (always enabled); OTel push is disabled unless `OTEL_ENABLED=true` (accepts `1|true|yes|on`), configured via `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS`; root log level defaults to INFO but can be overridden via `LOG_LEVEL`.

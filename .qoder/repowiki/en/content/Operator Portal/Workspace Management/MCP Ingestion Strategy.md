@@ -4,19 +4,22 @@
 **Referenced Files in This Document**
 - [mcp-ingestion-spike.md](file://docs/workspace/mcp-ingestion-spike.md)
 - [mcp-exposure-spike.md](file://docs/workspace/mcp-exposure-spike.md)
+- [SPEC-067-servicenow-mcp-ingestion-pilot/spec.md](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md)
 - [base.py](file://products/tool-gateway/src/tool_gateway/tools/base.py)
 - [registry.py](file://products/tool-gateway/src/tool_gateway/tools/registry.py)
 - [tools.py](file://products/tool-gateway/src/tool_gateway/api/routes/tools.py)
 - [gateway_service.py](file://products/tool-gateway/src/tool_gateway/services/gateway_service.py)
 - [kernel_middleware.py](file://products/agent-platform/src/agent_service/services/kernel_middleware.py)
 - [executor.py](file://products/execution-runtime/src/execution_runtime/services/executor.py)
-- [SPEC-066-skill-retrieval-ranking-fidelity/spec.md](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md)
+- [credential_sets.py](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Updated references to SPEC-066 to reflect that the number was taken by skill retrieval ranking fidelity spec
-- Clarified that the stable API productization row remains de-numbered and will get its number at drafting time
+- Updated to reflect the creation of SPEC-067 ServiceNow ITSM MCP-ingestion pilot as the first staged pilot
+- Clarified the confirmed direction to build one generic ingestion connector beneath tool-gateway
+- Updated pilot sequencing to confirm ServiceNow → Ansible → Windows risk order
+- Emphasized that each pilot admits only required operations rather than building large catalogs upfront
 - Maintained all existing architectural and implementation details unchanged
 
 ## Table of Contents
@@ -31,17 +34,19 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document describes the planned **MCP ingestion strategy** for consuming external Model Context Protocol (MCP) servers beneath `tool-gateway`. It is based on two design assessments:
+This document describes the **MCP ingestion strategy** for consuming external Model Context Protocol (MCP) servers beneath `tool-gateway`. The strategy has been refined through two design assessments and now includes a concrete pilot specification:
 
 - The original assessment (`mcp-exposure-spike.md`) established that no MCP client exists today, identified the existing extension seam, and recommended retaining native connectors until a concrete trigger justifies a separately approved pilot.
 - The follow-up assessment (`mcp-ingestion-spike.md`) accepts three named operational targets — ServiceNow, Ansible, Windows — and recommends building one generic MCP-ingestion connector under `tool-gateway`, then admitting targets one at a time in risk order.
+- **SPEC-067** formalizes the first pilot: ServiceNow ITSM read-tier operations, establishing the outbound execution-credential scheme extension as R6's first slice.
 
-The strategy is an **assessment**, not an implementation. No MCP server has been installed, tested, or deployed as part of this codebase.
+The strategy is an **assessment with a concrete pilot specification**, not merely a concept. No MCP server has been installed, tested, or deployed as part of this codebase.
 
 ## Project Structure
 At present, the repository contains:
 
 - Two workspace assessments describing MCP exposure and ingestion.
+- A formal pilot specification (SPEC-067) for ServiceNow ITSM MCP-ingestion.
 - A tool execution framework in `tool-gateway` with base abstractions, a registry, HTTP routes, policy enforcement, redaction, and audit emission.
 - Kernel middleware in `agent-platform` that gates headless AgentScope tool calls.
 - An isolated execution runtime that calls `tool-gateway` after approval.
@@ -64,9 +69,9 @@ subgraph "Planned MCP Connector"
 MCPConn["MCP-Ingestion Connector<br/>(not implemented yet)")
 end
 subgraph "External Systems"
-SNOW["ServiceNow"]
-ANSIBLE["Ansible"]
-WIN["Windows UI"]
+SNOW["ServiceNow (SPEC-067 Pilot)"]
+ANSIBLE["Ansible (Future Pilot)"]
+WIN["Windows UI (Future Pilot)"]
 end
 Kernel --> Routes
 Executor --> Routes
@@ -109,6 +114,8 @@ Key invariants from the source:
 - A tool may declare additional required actions via `extra_required_actions`.
 - Results are redacted at a single choke point before response and audit emission.
 - Audit emission is fire-and-forget with log fallback, not transactional durability.
+
+**Updated** The credential model now supports multiple authentication schemes beyond Basic authentication, enabling modern SaaS integrations like ServiceNow OAuth2 client credentials.
 
 **Section sources**
 - [base.py:9-133](file://products/tool-gateway/src/tool_gateway/tools/base.py#L9-L133)
@@ -234,6 +241,23 @@ Audit --> Return(["Return ToolResult"])
 
 **Section sources**
 - [mcp-ingestion-spike.md:82-120](file://docs/workspace/mcp-ingestion-spike.md#L82-L120)
+
+### Confirmed Pilot Strategy
+The strategy now commits to a specific pilot sequence with clear governance:
+
+**Pilot Order:** ServiceNow → Ansible → Windows
+
+**ServiceNow (SPEC-067):** First pilot focusing on read-tier ITSM operations, establishing the outbound execution-credential scheme extension as R6's first slice. This pilot proves the substrate on the lowest-risk target while addressing the critical credential gap.
+
+**Ansible:** Second pilot with higher blast radius due to live infrastructure access and broad credentials. Requires careful blast-radius scoping for bundled playbooks and uncertain-outcome reconciliation.
+
+**Windows UI:** Third pilot with strongest pattern precedent but hardest topology challenges. Requires a separate boundary study for verification/evidence quality and cross-network trust models.
+
+**Updated** Each pilot admits only the required operations rather than building large catalogs upfront, maintaining the principle that "a large catalog is not itself a use case."
+
+**Section sources**
+- [mcp-ingestion-spike.md:126-179](file://docs/workspace/mcp-ingestion-spike.md#L126-L179)
+- [SPEC-067-servicenow-mcp-ingestion-pilot/spec.md:44-73](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md#L44-L73)
 
 ### Tool Execution Framework
 The existing framework models a tool as:
@@ -450,6 +474,7 @@ The current codebase does not implement MCP ingestion. The authoritative design 
 
 - `docs/workspace/mcp-exposure-spike.md`, which establishes the extension seam and retention-of-native-connectors posture.
 - `docs/workspace/mcp-ingestion-spike.md`, which records the staged ServiceNow → Ansible → Windows sequencing and the non-negotiable architecture.
+- `docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md`, which formalizes the first pilot and establishes R6 as the release theme.
 
 Before implementation, the assessments require:
 
@@ -461,9 +486,9 @@ Before implementation, the assessments require:
 
 Until those gates are met, the correct state is: assess, retain native connectors, and do not promote an implementation, pilot, ADR, or spec from these memos.
 
-**Updated** The stable API productization backlog row referenced in the ingestion strategy remains de-numbered, as the previously earmarked SPEC-066 number was taken by the skill retrieval ranking fidelity spec (SPEC-066). The stable API productization row will receive its number at drafting time, maintaining consistency with the project's spec numbering discipline.
+**Updated** The strategy now confirms the direction to build one generic ingestion connector beneath tool-gateway, with SPEC-067 establishing ServiceNow as the first pilot in the confirmed risk-ordered sequence (ServiceNow → Ansible → Windows). Each pilot admits only required operations rather than building large catalogs upfront, maintaining the principle that "a large catalog is not itself a use case." The stable API productization backlog row referenced in the ingestion strategy remains de-numbered, as the previously earmarked SPEC-066 number was taken by the skill retrieval ranking fidelity spec (SPEC-066). The stable API productization row will receive its number at drafting time, maintaining consistency with the project's spec numbering discipline.
 
 **Section sources**
 - [mcp-ingestion-spike.md:176-204](file://docs/workspace/mcp-ingestion-spike.md#L176-L204)
 - [mcp-exposure-spike.md:267-311](file://docs/workspace/mcp-exposure-spike.md#L267-L311)
-- [SPEC-066-skill-retrieval-ranking-fidelity/spec.md:581-585](file://docs/specs/SPEC-066-skill-retrieval-ranking-fidelity/spec.md#L581-L585)
+- [SPEC-067-servicenow-mcp-ingestion-pilot/spec.md:44-73](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md#L44-L73)

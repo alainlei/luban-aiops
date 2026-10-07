@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: agent_platform/contracts_and_core
+title: Agent Service Contracts, Core Runtime & API Schemas
+scope:
+    - products/agent-platform/src/agent_service/contracts/
+    - products/agent-platform/src/agent_service/core/
+    - products/agent-platform/src/agent_service/schemas/
+source_files: []
+depends_on: []
+related_to: []
