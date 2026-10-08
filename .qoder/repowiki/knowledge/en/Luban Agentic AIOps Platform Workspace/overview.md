@@ -1,1 +1,1 @@
-Monorepo for the Luban agentic AIOps platform, orchestrating agent-platform, execution-runtime, identity-broker, audit-service, incident-service, platform-gateway, skills-hub, tool-gateway, and operator-portal under shared contracts and spec-driven development.
+Workspace root that orchestrates nine independently deployable platform services, shared contracts, GitOps overlays, and spec-driven documentation under a single Makefile verification gate.

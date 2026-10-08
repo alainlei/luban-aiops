@@ -1,0 +1,16 @@
+schema_version: 1
+module_path: products
+title: Luban Agentic AIOps Product Services
+scope:
+    - products/
+source_files: []
+depends_on: []
+related_to:
+    - path: docs/specifications
+    - path: docs/user_and_operator_guides
+    - path: shared/platform_ops/dashboards
+    - path: shared/platform_ops/e2e_demos
+    - path: shared/platform_ops/gitops_manifests
+    - path: shared/platform_ops/runtime_profiles
+    - path: shared/platform_ops/skills
+    - path: shared/shared_contracts

@@ -1,1 +1,1 @@
-Python services built with uv + Pydantic v2, FastAPI-style app entrypoints, Dockerized per product, orchestrated via Kubernetes gitops in `shared/platform-ops/gitops`; specs are authored as Markdown documents (SPEC-NNN) driving implementation.
+Python services standardize on `uv` for environment/package management with a shared `luban-aiops/base-uv` Amazon Linux 2023 image; Kubernetes deployment uses Kustomize overlays under `shared/platform-ops/gitops`; OpenObserve dashboards under `shared/platform-ops/dashboards` are validated offline against emitted OTEL metrics.

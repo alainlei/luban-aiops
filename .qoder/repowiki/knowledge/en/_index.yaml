@@ -3,14 +3,17 @@ schema_version: 1
 locale: en-US
 branch: main
 nodes_managed: true
-exported_at: "2026-10-08T05:47:21Z"
+exported_at: "2026-10-08T18:34:11Z"
 modules:
     "":
         dir_name: Luban Agentic AIOps Platform Workspace
         title: Luban Agentic AIOps Platform Workspace
         scope: []
         source_files: []
-        children: []
+        children:
+            - docs
+            - products
+            - shared
         depends_on: []
         related_to: []
     docs:
@@ -53,7 +56,8 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: products
     docs/user_and_operator_guides:
         dir_name: Operator & Portal User Guides
         title: Operator & Portal User Guides
@@ -62,7 +66,8 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: products
     docs/workspace_spikes_and_product_plans:
         dir_name: Workspace Spikes & Product Plans
         title: Workspace Spikes & Product Plans
@@ -80,7 +85,15 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: docs/specifications
+            - path: docs/user_and_operator_guides
+            - path: shared/platform_ops/dashboards
+            - path: shared/platform_ops/e2e_demos
+            - path: shared/platform_ops/gitops_manifests
+            - path: shared/platform_ops/runtime_profiles
+            - path: shared/platform_ops/skills
+            - path: shared/shared_contracts
     shared:
         dir_name: Shared Platform Contracts & Operations Surface
         title: Shared Platform Contracts & Operations Surface
@@ -114,7 +127,8 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: products
     shared/platform_ops/e2e_demos:
         dir_name: Platform E2E Live-Check & Demo Scripts
         title: Platform E2E Live-Check & Demo Scripts
@@ -123,7 +137,8 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: products
     shared/platform_ops/gitops_manifests:
         dir_name: Dev Kubernetes Base Manifests (Kustomize)
         title: Dev Kubernetes Base Manifests (Kustomize)
@@ -132,7 +147,8 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: products
     shared/platform_ops/runtime_profiles:
         dir_name: Runtime Profiles & Dev Posture Overlays
         title: Runtime Profiles & Dev Posture Overlays
@@ -141,7 +157,8 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: products
     shared/platform_ops/skills:
         dir_name: Platform Ops Skills Library (Runbooks & Alerting Guides)
         title: Platform Ops Skills Library (Runbooks & Alerting Guides)
@@ -150,7 +167,8 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: products
     shared/shared_contracts:
         dir_name: Shared Cross-Project Contracts & Policy Bundles
         title: Shared Cross-Project Contracts & Policy Bundles
@@ -159,4 +177,5 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: products

@@ -1,5 +1,4 @@
-- Every product exposes an `app.py` (FastAPI lifespan) and a `main.py` entrypoint, paired with a `metadata.py` file carrying version/build info.
-- Product packages follow a fixed internal layout of `api/`, `core/`, `schemas/`, and `services/` subpackages, mirroring the shared contract layer.
-- Feature work is initiated as a `docs/specs/SPEC-NNN-<slug>/` directory containing `plan.md`, `spec.md`, and `tasks.md`, with release notes mirrored under `docs/agentic-aiops-platform/release-notes/`.
-- Cross-service data types are defined once in `shared/shared-contracts/schemas/` and imported by consumers rather than redefined per product.
-- Per-product build and image targets are factored into `mk/python.mk` and `mk/image.mk` and included from each product's `Makefile` instead of being duplicated.
+- Each Python product ships its own `pyproject.toml`, `Dockerfile`, `Makefile`, and `.python-version`, and is invoked through the root Makefile rather than directly.
+- Cross-product contracts (API schemas, events, policies, approval payloads) live in `shared/shared-contracts/` and are consumed as read-only references — products do not duplicate them.
+- Policy bundles are authored once under `shared/shared-contracts/policies/` and synchronized into consumers via `make sync-policy` instead of being edited per product.
+- Version pinning is centralized in the root `VERSION` file and enforced across all products and the portal via `make validate-version`.

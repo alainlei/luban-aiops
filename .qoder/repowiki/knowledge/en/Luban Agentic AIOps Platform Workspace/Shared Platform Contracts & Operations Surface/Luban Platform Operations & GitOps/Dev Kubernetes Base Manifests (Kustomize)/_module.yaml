@@ -5,4 +5,5 @@ scope:
     - shared/platform-ops/gitops/dev-k8s/base/
 source_files: []
 depends_on: []
-related_to: []
+related_to:
+    - path: products
