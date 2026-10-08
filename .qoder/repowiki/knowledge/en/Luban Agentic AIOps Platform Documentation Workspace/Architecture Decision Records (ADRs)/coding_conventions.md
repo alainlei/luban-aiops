@@ -1,0 +1,4 @@
+- Each ADR file follows the `template.md` section order: Status (with date, deciders, related specs), Context, Decision, Alternatives Considered, Consequences.
+- File names use a four-digit sequential prefix followed by a kebab-case slug (e.g. `0005-platform-gateway-extraction.md`).
+- Status values are limited to `proposed`, `accepted`, or `superseded by ADR-NNNN`, and accepted ADRs are treated as immutable except for status updates and supersession links.
+- Cross-references between ADRs and feature specs use the `ADR-NNNN` / `SPEC-NNN` shorthand forms documented in the README index.

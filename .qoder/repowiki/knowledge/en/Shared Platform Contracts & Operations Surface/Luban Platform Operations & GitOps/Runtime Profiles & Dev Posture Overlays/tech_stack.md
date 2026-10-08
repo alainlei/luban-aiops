@@ -1,0 +1,1 @@
+Kustomize v1beta1 overlays (`kustomization.yaml` per profile) layered on top of the base `dev-k8s` deployment; environment variables merged into `platform-runtime-config` ConfigMap via kustomize generators.

@@ -1,0 +1,6 @@
+- Every service exposes a `create_app()` factory in `app.py` that configures logging, includes the router, calls `setup_metrics(app)` and `setup_telemetry(app, SERVICE_NAME)`, then instantiates a module-level `app = create_app()` for uvicorn.
+- Cross-cutting concerns live in a `core/` package mirroring the same filenames (`config`, `metrics`, `observability`, `request_context`, `runtime`, `telemetry`) across all services.
+- HTTP routes are split into one file per concern under `api/routes/` and mounted via a single `api/router.py` that aggregates them.
+- Request tracing uses a consistent pattern: a middleware resolves `x-request-id` via `resolve_request_id`, logs duration_ms, and emits a structured event through `log_event(LOGGER, 'http_request', ...)`. 
+- Service identity is centralized in `metadata.py` exporting `SERVICE_NAME`, `SERVICE_TITLE`, `SERVICE_VERSION`, which are passed to both FastAPI constructor and telemetry setup.
+- Domain logic is isolated in `services/` modules named after their responsibility (e.g. `audit_emitter`, `policy_engine`, `token_verifier`, `skill_store`), keeping `api/routes/` thin.

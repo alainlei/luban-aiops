@@ -1,0 +1,1 @@
+No build or runtime commands; the README prescribes a recommended reading order starting with `workspace-model.md` → `product-boundaries.md` → `product-structure-review.md` → `backend-service-layout-convention.md` → `python-container-strategy.md` → `repository-reorganization-plan.md` → `github-repository-governance.md`.

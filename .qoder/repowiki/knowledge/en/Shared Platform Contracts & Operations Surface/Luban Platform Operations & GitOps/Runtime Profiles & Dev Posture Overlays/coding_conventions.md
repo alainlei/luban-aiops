@@ -1,0 +1,4 @@
+- Each profile directory contains its own `kustomization.yaml` declaring only the resources owned by that profile; strategic merge patches targeting resources outside the profile scope are deliberately omitted from `resources:` and applied by the parent overlay instead.
+- Feature flags default to deny-by-default in the base (`GATEWAY_MUTATING_TOOLS_ENABLED=false`, `GATEWAY_BROWSER_ENABLED=false`) and are flipped to `true` only inside the corresponding `-dev` posture overlay.
+- Environment-variable overrides are shipped as plain `.env` files per profile (`browser.env`, `mutating.env`, `secrets-dev/secrets.env`) and merged into `platform-runtime-config` by the consuming `dev-k8s` overlay rather than being referenced directly.
+- Profiles that are not LLM provider selections (mutating-dev, browser-dev) are documented in their `kustomization.yaml` header comments as 'not an LLM provider profile' and reference the governing SPEC number.

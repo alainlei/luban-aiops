@@ -1,0 +1,1 @@
+Shared operational surface for the Luban AIOps workspace — Kustomize dev manifests, runtime-profile overlays, OpenObserve dashboards, skills sources, and e2e demos that deploy and validate the platform on a Kubernetes cluster.

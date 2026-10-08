@@ -1,0 +1,5 @@
+- Each skill is a single Markdown file with YAML frontmatter containing at least `title`, `description`, `tags`, `version`, and `source_url` fields.
+- File naming encodes the skill identity: problem-title slugs under `platform-runbooks/guides/` and Prometheus alert-name slugs under `sre-alerting/alerts/`.
+- Runbook bodies follow a Symptoms / Diagnosis / Remediation (or Meaning / Impact / Triage / Remediation) section structure using numbered steps and fenced shell blocks.
+- Adapted upstream content carries a `source_url` pointing to the original (Kubernetes docs or prometheus-operator/runbooks) and an attribution notice in the source-level `NOTICE` file.
+- No secrets, hostnames, or customer data appear in skill bodies; guides use `<pod>`, `<namespace>` placeholders instead of real values.

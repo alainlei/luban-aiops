@@ -1,0 +1,6 @@
+- Each JSON Schema file declares `$schema` pointing to the 2020-12 draft URL and a stable `$id` under `https://metasync.github.io/luban-aiops/schemas/...`.
+- Schemas use `additionalProperties: false` and explicit `required` arrays to enforce strict payloads rather than relying on optional defaults.
+- Backward-compatible protocol evolution is modeled inside a single schema via `oneOf` branches gated on presence of new fields (e.g. `protocol_version`, `approval_kind`) instead of maintaining parallel versioned files.
+- Every field intended for consumers carries a human-readable `description` string referencing the governing spec number (SPEC-xxx) or ADR.
+- Policy rules in `policy-default.yaml` follow the `<resource>:<verb>` action naming convention and pair `roles_any` with `actions_any` matchers, assigning a numeric `priority` and an `outcome` of `allow`, `deny`, or `require_approval`.
+- Validation scripts are self-contained entry points that resolve `CONTRACTS_DIR = Path(__file__).resolve().parent.parent` and exit non-zero on any schema violation, making them suitable for CI gates.

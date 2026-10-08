@@ -1,0 +1,1 @@
+Documentation authored in Markdown; architecture diagrams use Mermaid flowcharts and sequence diagrams embedded directly in guide files (e.g. `architecture-overview.md`).

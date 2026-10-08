@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: docs/user_and_operator_guides
+title: Operator & Portal User Guides
+scope:
+    - docs/guides/
+source_files: []
+depends_on: []
+related_to: []

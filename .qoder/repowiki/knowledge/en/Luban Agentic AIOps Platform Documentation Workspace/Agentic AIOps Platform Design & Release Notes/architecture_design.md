@@ -1,0 +1,6 @@
+Two-part structure under `docs/agentic-aiops-platform/`:
+
+- Top-level design documents form a fixed reading order (`part-1-decision-matrix.md` → `part-2-reference-architecture.md` → `identity-and-authorization-design.md` → `authorization-matrix.md` → `policy-specification.md` → `agent-platform-runtime-options.md` → `delivery-roadmap.md`) that establishes the AgentScope 2.0-based target architecture, enterprise identity/Keycloak/AD federation model, enforceable policy rule model, and stacked R5 delivery sequencing.
+- `release-notes/` is an append-only chronological index of implementation waves (v0.7.0 through v0.46.0), each file documenting one SPEC or post-release remediation with version tag, scope, contract/policy/audit impact, and validation evidence; `release-notes/README.md` is the authoritative index that cross-links notes back to the spec set and roadmap.
+
+Dependency direction is one-way: release notes reference the top-level design docs and `docs/specs/` as authoritative sources; nothing in the design docs references individual release notes. The module is pure documentation — no build artifacts, code, or runtime behavior live here.

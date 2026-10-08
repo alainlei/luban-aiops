@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: shared/platform_ops/gitops_manifests
+title: Dev Kubernetes Base Manifests (Kustomize)
+scope:
+    - shared/platform-ops/gitops/dev-k8s/base/
+source_files: []
+depends_on: []
+related_to: []

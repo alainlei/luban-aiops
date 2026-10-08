@@ -1,0 +1,1 @@
+Documents reference AgentScope 2.0.8 middlewares (AgenticMemory, Mem0, ReME) for long-term memory evaluation, MCP for tool ingestion/exposure, pgvector as a candidate vector store for semantic skill retrieval, Keycloak/AD federation for identity, and Kubernetes connectors for execution isolation.

@@ -1,0 +1,1 @@
+Sample skill sources providing Kubernetes troubleshooting runbooks and Prometheus alert-to-runbook mappings consumed by the skills hub.

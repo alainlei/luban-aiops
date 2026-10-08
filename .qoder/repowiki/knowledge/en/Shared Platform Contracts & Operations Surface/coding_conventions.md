@@ -1,0 +1,2 @@
+- Service manifests follow a uniform layout of `<service>-deployment.yaml` + `<service>-service.yaml` plus paired `runtime-config.env` / `runtime-secrets.env` files.
+- Cross-service payloads are declared once as JSON Schema files under `shared-contracts/schemas/` and consumed by consumers rather than redefined locally.

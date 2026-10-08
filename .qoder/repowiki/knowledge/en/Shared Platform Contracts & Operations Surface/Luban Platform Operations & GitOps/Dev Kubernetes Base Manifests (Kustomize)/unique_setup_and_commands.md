@@ -1,0 +1,1 @@
+Skill content is intentionally excluded from this base — it is loaded out-of-band by `shared/platform-ops/skills` through the `platform-skills` git source referenced in `skills-hub/runtime-config.env`, and sample skill data is created separately via `make deploy-samples`.

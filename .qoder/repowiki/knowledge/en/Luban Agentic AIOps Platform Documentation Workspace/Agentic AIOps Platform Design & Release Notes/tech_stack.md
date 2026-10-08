@@ -1,0 +1,1 @@
+Markdown-based design repository organized around the project's Spec-Driven Development workflow (`docs/specs/`); release notes are versioned against the workspace's semantic-versioned product releases (v0.7.0–v0.46.0) and track dependencies on AgentScope 2.0.x, FastAPI, React/antd portal, PostgreSQL, Keycloak, and OpenObserve as described within the notes themselves.

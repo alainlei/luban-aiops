@@ -1,0 +1,6 @@
+- Each spec directory follows the fixed triple: `spec.md` (requirements + acceptance criteria), `plan.md` (technical approach), `tasks.md` (execution checklist), copied from `docs/specs/templates/`.
+- Specs are sequentially numbered `SPEC-NNN` with kebab-case slugs, and requirement IDs inside a spec use stable `R-1`, `R-2`, … identifiers once approved.
+- Every `spec.md` begins with a status header carrying `status`, `owner`, `created`, `release slice`, and `related ADRs` fields.
+- Cross-spec relationships are declared inline using `extends SPEC-NNN…` phrasing in the spec index table rather than via links between directories.
+- The status field advances through the prescribed lifecycle (`draft` → `approved` → `in-progress` → `delivered` → `superseded`) and a delivered spec is frozen — corrections go into the changelog or a new spec.
+- Delivery closure records include the version tag and evidence that full `make verify` passed, including real-Postgres campaign runs where applicable.

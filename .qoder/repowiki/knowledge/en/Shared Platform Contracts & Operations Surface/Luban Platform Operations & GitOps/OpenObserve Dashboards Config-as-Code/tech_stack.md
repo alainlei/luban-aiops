@@ -1,0 +1,1 @@
+OpenObserve dashboard JSON format v5; PromQL over OpenObserve streams (`_bucket`/`_sum`/`_count`/`_min`/`_max` histogram splits); Python 3 stdlib (`ast`, `json`, `re`) for offline validation; POSIX shell + `curl` for the live importer.

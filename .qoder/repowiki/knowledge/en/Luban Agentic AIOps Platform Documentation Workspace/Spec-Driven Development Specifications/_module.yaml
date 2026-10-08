@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: docs/specifications
+title: Spec-Driven Development Specifications
+scope:
+    - docs/specs/
+source_files: []
+depends_on: []
+related_to: []

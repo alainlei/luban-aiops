@@ -1,0 +1,1 @@
+JSON Schema Draft 2020-12 for API/event contracts; PyYAML + jsonschema (Draft202012Validator) for policy-bundle validation; HMAC-SHA256 hex signatures on execution envelopes; RSA-256 JWTs documented in `identity-token.schema.json` (JWKS-backed, per RFC 7517).

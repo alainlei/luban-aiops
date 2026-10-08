@@ -1,0 +1,1 @@
+`gitops/dev-k8s/deploy.sh` deploys the full platform overlay; `gitops/select-runtime-profile.sh` switches the active runtime profile; `gitops/verify-runtime-profile.sh` validates the composed profile; `dashboards/validate_dashboards.py` runs offline validation of dashboard JSON before import.

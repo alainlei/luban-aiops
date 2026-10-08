@@ -1,0 +1,1 @@
+Versioned JSON Schema contracts, YAML policy bundles, and validation scripts that define the wire formats shared across workspace products (chat, agent-service, execution, audit, identity, skills).

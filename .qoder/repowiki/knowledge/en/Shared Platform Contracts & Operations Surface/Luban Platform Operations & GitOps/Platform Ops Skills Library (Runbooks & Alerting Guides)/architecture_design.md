@@ -1,0 +1,6 @@
+Two parallel, independent skill source trees under `shared/platform-ops/skills/`, each a leaf of the skills-hub ingestion pipeline:
+
+- `platform-runbooks/guides/` — platform-team knowledge base; one Markdown file per problem domain (e.g. CrashLoopsAndOOM, DebugPods, ImagePullFailures). File names are human-readable problem titles; skill IDs are namespaced as `platform-runbooks/<slug>`.
+- `sre-alerting/alerts/` — SRE team's alert-driven runbooks; one Markdown file per Prometheus alert (e.g. KubePodCrashLooping, KubeNodeNotReady). File names match alert names so an alert → runbook lookup resolves by exact alert name.
+
+Both sources declare the same YAML frontmatter schema (`title`, `description`, `tags`, `version`, `source_url`) defined in `shared/shared-contracts/skill-format.md`. Each sub-tree ships its own `README.md` documenting contribution rules and a `NOTICE` for upstream attribution (Kubernetes CC-BY-4.0, prometheus-operator Apache-2.0). The two sources intentionally overlap on pod-troubleshooting topics with different ids so the deterministic scorer can cite both perspectives. Validation is delegated to `python -m skills_hub.validate <source-path>` from the repo root; there is no build script inside this module.

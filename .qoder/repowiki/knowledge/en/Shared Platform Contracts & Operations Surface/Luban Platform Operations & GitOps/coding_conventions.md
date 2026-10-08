@@ -1,0 +1,4 @@
+- Each application workload under `gitops/dev-k8s/base/<service>/` ships a paired `<service>-deployment.yaml` / `<service>-service.yaml` plus `runtime-config.env` and optional `runtime-secrets.env`.
+- Runtime posture (provider catalogs, mutating-tool posture, browser sidecar) is expressed as separate Kustomize overlays under `gitops/runtime-profiles/` rather than inline in the base manifests.
+- Secrets are split between checked-in `runtime-secrets.env` (non-sensitive defaults) and `runtime-secrets.example.env` (template), with `gitops/sync-*.sh` scripts handling sensitive values from external stores.
+- Dashboards are stored as versioned JSON files under `dashboards/` and validated via `validate_dashboards.py` before being applied to OpenObserve.

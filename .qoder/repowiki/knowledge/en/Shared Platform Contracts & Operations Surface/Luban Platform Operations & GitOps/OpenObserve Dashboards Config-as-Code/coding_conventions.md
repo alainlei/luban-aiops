@@ -1,0 +1,4 @@
+- Each dashboard JSON carries a unique `dashboardId` used as the idempotency key for create-vs-update matching against the OpenObserve backend.
+- Dashboard panels declare `queryType` explicitly as either `promql` or `sql`; content-only panels use `markdown`/`html` types with `markdownContent`/`htmlContent` instead of queries.
+- Metric references in dashboards are constrained to names declared in services' `OTEL_MIRROR_FAMILIES`; histogram histograms are referenced via their OpenObserve split suffixes (`_bucket`, `_sum`, `_count`, `_min`, `_max`) which the validator resolves back to the base family.
+- Validation errors are accumulated into a list and reported together at the end of `main`, rather than exiting on the first failure, so a single run surfaces all schema and cross-reference problems.

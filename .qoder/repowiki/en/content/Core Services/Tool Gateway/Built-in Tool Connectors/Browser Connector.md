@@ -1,11 +1,3 @@
-Based on my analysis of the codebase, I can now update the Browser Connector documentation to reflect the expansion from six to fifteen tools. The key changes include:
-
-1. **Nine new read-class tools**: web.extract, web.wait_for, web.hover, web.scroll, web.switch_frame
-2. **Four new write-class tools**: web.select, web.press_key, web.upload_file, web.evaluate  
-3. **Enhanced HITL model**: Nine auto-allowed read-class tools vs six confirmation-required write-class tools
-
-Here's the updated documentation:
-
 # Browser Connector
 
 <cite>
@@ -14,22 +6,27 @@ Here's the updated documentation:
 - [browser_sessions.py](file://products/tool-gateway/src/tool_gateway/tools/browser_sessions.py)
 - [config.py](file://products/tool-gateway/src/tool_gateway/core/config.py)
 - [credential_sets.py](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py)
+- [auth_resolution.py](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py)
+- [oauth_client.py](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py)
+- [http_connector.py](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py)
 - [test_browser_connector.py](file://products/tool-gateway/tests/test_browser_connector.py)
 - [secret_params.py](file://products/agent-platform/src/agent_service/services/secret_params.py)
 - [0007-browser-flow-single-hitl-gate.md](file://docs/adr/0007-browser-flow-single-hitl-gate.md)
 - [2026-09-02-spec-049-browser-web-check-tools.md](file://docs/agentic-aiops-platform/release-notes/2026-09-02-spec-049-browser-web-check-tools.md)
 - [2026-09-04-spec-050-browser-tools-expansion-and-samples.md](file://docs/agentic-aiops-platform/release-notes/2026-09-04-spec-050-browser-tools-expansion-and-samples.md)
 - [SPEC-050-browser-tools-expansion-and-samples/spec.md](file://docs/specs/SPEC-050-browser-tools-expansion-and-samples/spec.md)
+- [SPEC-068-outbound-execution-credential-schemes/spec.md](file://docs/specs/SPEC-068-outbound-execution-credential-schemes/spec.md)
 - [delivery-roadmap.md](file://docs/agentic-aiops-platform/delivery-roadmap.md)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Updated tool surface documentation to reflect expansion from 6 to 15 total tools
-- Added comprehensive documentation for nine new read-class tools (web.extract, web.wait_for, web.hover, web.scroll, web.switch_frame)
-- Added documentation for four new write-class tools (web.select, web.press_key, web.upload_file, web.evaluate)
-- Enhanced HITL model documentation reflecting nine auto-allowed read-class tools versus six confirmation-required write-class tools
-- Updated security model and flow binding sections to cover new capabilities
+- Updated credential scheme documentation to reflect integration with SPEC-068 authentication resolution system
+- Added comprehensive documentation for enhanced credential schemes (basic, bearer, oauth2_client_credentials)
+- Updated web.fill_credential tool documentation to handle non-basic credential sets with fail-closed behavior
+- Added OAuth2 client credentials token acquisition and caching mechanisms
+- Enhanced security model documentation for new outbound execution credential schemes
+- Updated troubleshooting guide with new credential-related error patterns
 
 ## Table of Contents
 1. Introduction
@@ -46,14 +43,15 @@ Here's the updated documentation:
 ## Introduction
 The Browser Connector provides bounded web automation through a Chromium headless sidecar reached via Chrome DevTools Protocol (CDP). It exposes a fixed tool surface expanded to **fifteen tools** split into read-tier and write-tier categories, enforces origin allowlisting, flow binding with skill declarations, step budgets, credential set management, and screenshot masking. Sessions are per-chat-session browser contexts with CDP communication and stateful page interactions. The connector integrates with skills-hub for flow validation and participates in the HITL approval workflow for write operations.
 
-**Updated** The tool surface has been significantly expanded from the original six tools to fifteen total tools, adding nine new read-class tools and four new write-class tools to support complex admin panel interactions including dropdown selection, structured data extraction, keyboard shortcuts, file uploads, JavaScript evaluation, scrolling, and iframe traversal.
+**Updated** The credential system now supports enhanced authentication schemes beyond basic username/password, including bearer tokens and OAuth2 client credentials, while maintaining backward compatibility with existing basic credential sets. The web.fill_credential tool now fails closed when attempting to fill fields from non-basic credential sets, ensuring secure handling of different authentication schemes.
 
 ## Project Structure
 The Browser Connector lives under the tool-gateway product and is composed of:
 - Tool implementations and enforcement logic in the browser connector module.
 - A session pool that manages CDP connections, browser contexts, pages, frames, and flow state.
 - Configuration loading from environment variables.
-- Credential set storage for named username/password sets.
+- Credential set storage for named username/password sets with support for multiple authentication schemes.
+- Authentication resolution system integrating with the new SPEC-068 outbound execution credential schemes.
 - Tests validating behavior and configuration parsing.
 
 ```mermaid
@@ -63,6 +61,8 @@ BC["BrowserConnector<br/>tool definitions + enforcement"]
 SP["BrowserSessionPool<br/>CDP connect, sessions, TTL, eviction"]
 CFG["GatewaySettings<br/>environment config"]
 CS["CredentialSetStore<br/>named credential sets"]
+AR["AuthResolution<br/>SPEC-068 resolver"]
+OC["OAuth2TokenClient<br/>client credentials"]
 end
 subgraph "Sidecar"
 PW["Playwright host"]
@@ -73,6 +73,8 @@ SP --> PW
 PW --> BR
 BC --> CS
 BC --> CFG
+BC --> AR
+AR --> OC
 ```
 
 **Diagram sources**
@@ -80,6 +82,8 @@ BC --> CFG
 - [browser_sessions.py:169-344](file://products/tool-gateway/src/tool_gateway/tools/browser_sessions.py#L169-L344)
 - [config.py:141-184](file://products/tool-gateway/src/tool_gateway/core/config.py#L141-L184)
 - [credential_sets.py:67-102](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L67-L102)
+- [auth_resolution.py:69-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L69-L113)
+- [oauth_client.py:81-232](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L81-L232)
 
 **Section sources**
 - [browser_connector.py:1-61](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1-L61)
@@ -90,7 +94,9 @@ BC --> CFG
 - BrowserConnector: Registers tools, enforces origin allowlist, binds flows, gates interactions and captures, and coordinates sessions.
 - BrowserSessionPool: Manages one shared CDP connection, per-chat-session browser contexts/pages, idle TTL, max-cap eviction, and interaction serialization locks.
 - FlowState: Tracks bound skill id, origin, risk class, title/description/intent, step budget, and approval flags.
-- CredentialSetStore: Loads and serves named credential sets from a secret-mounted JSON file; never leaks values to results or logs.
+- CredentialSetStore: Loads and serves named credential sets from a secret-mounted JSON file; never leaks values to results or logs; supports multiple authentication schemes.
+- AuthResolution: Reusable outbound auth-resolution seam implementing SPEC-068 R-3 for resolving credential sets into appropriate authentication mechanisms.
+- OAuth2TokenClient: Connector-local OAuth2 client credentials token acquisition with in-memory caching and near-expiry refresh.
 - Tool classes: One class per web.* tool implementing parameters, execution, error handling, and evidence emission.
 
 Key responsibilities:
@@ -99,14 +105,19 @@ Key responsibilities:
 - Step budget accounting for bound flows.
 - Screenshot masking for password-tier values.
 - Frame-aware operations with switch_frame and active target selection.
+- Multi-scheme credential resolution with fail-closed security guarantees.
 
 **Section sources**
 - [browser_connector.py:315-699](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L315-L699)
 - [browser_sessions.py:61-167](file://products/tool-gateway/src/tool_gateway/tools/browser_sessions.py#L61-L167)
 - [credential_sets.py:67-102](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L67-L102)
+- [auth_resolution.py:69-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L69-L113)
+- [oauth_client.py:81-232](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L81-L232)
 
 ## Architecture Overview
 The connector serializes model-emitted tool calls per chat session to avoid concurrent Playwright interactions on a shared page. Each call acquires an interaction lock keyed by the chat session id. Read-tier captures re-validate the live origin before producing snapshots or screenshots. Write-tier interactions pass through the confirmation bridge and signed execution path upstream, then hit deviation guards at the gateway.
+
+**Updated** The credential resolution system now supports three authentication schemes: basic (username/password), bearer (static tokens), and oauth2_client_credentials (dynamic token acquisition). The web.fill_credential tool validates credential scheme compatibility before attempting to fill form fields.
 
 ```mermaid
 sequenceDiagram
@@ -115,6 +126,9 @@ participant Kernel as "Kernel"
 participant GW as "Tool Gateway"
 participant BC as "BrowserConnector"
 participant Pool as "BrowserSessionPool"
+participant CS as "CredentialSetStore"
+participant AR as "AuthResolution"
+participant OC as "OAuth2TokenClient"
 participant Sidecar as "Chromium Headless"
 Model->>Kernel : Emit web.* calls
 Kernel->>GW : Dispatch tool invocation
@@ -130,6 +144,14 @@ else Write tier (6 tools)
 BC->>BC : gate_interaction(deviation guard)
 BC->>Sidecar : click/type/select/press_key/upload_file/evaluate
 end
+Note over BC,CS : For web.fill_credential
+BC->>CS : Get credential set
+CS->>AR : Resolve scheme
+AR->>OC : Acquire OAuth2 token (if needed)
+OC-->>AR : Bearer token
+AR-->>CS : Resolved auth
+BC->>Sidecar : Fill credential field
+end
 Sidecar-->>BC : Result
 BC-->>GW : ToolResult with evidence
 GW-->>Kernel : Response
@@ -139,7 +161,10 @@ GW-->>Kernel : Response
 - [browser_connector.py:730-863](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L730-L863)
 - [browser_connector.py:866-1027](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L866-L1027)
 - [browser_connector.py:1079-1141](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1079-L1141)
+- [browser_connector.py:1274-1332](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1274-L1332)
 - [browser_sessions.py:306-344](file://products/tool-gateway/src/tool_gateway/tools/browser_sessions.py#L306-L344)
+- [auth_resolution.py:69-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L69-L113)
+- [oauth_client.py:123-232](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L123-L232)
 
 ## Detailed Component Analysis
 
@@ -180,6 +205,9 @@ Execute --> End(["Return ToolResult"])
 - Deviation guard: Interactions must land on bound origin, respect risk_class, and stay within step budget; unbound writes are gated by live-origin check and authority-provenance staleness backstop.
 - Credential sets: Named sets loaded from a secret file; values only injected into Playwright fills; never appear in results, snapshots, evidence, or logs.
 - Screenshot masking: Password-tier values masked in screenshots using JS injection; unmask attempted after capture; failures are logged without leaking secrets.
+- **Enhanced credential schemes**: Support for basic, bearer, and oauth2_client_credentials schemes with fail-closed security guarantees.
+
+**Updated** The credential system now enforces scheme-specific validation and handles non-basic credential sets appropriately. The web.fill_credential tool validates that the requested field exists in the credential set before attempting to fill it, preventing accidental exposure of missing fields.
 
 ```mermaid
 flowchart TD
@@ -195,19 +223,86 @@ BindOK --> Go
 Go --> PostCheck["Post-load origin re-check"]
 PostCheck --> |Off-allowlist| Halt["Halt page, reset state"]
 PostCheck --> Success["Return success with masked URL"]
+Success --> CredCheck{"web.fill_credential?"}
+CredCheck --> |Yes| SchemeCheck["Validate credential scheme"]
+SchemeCheck --> |Non-basic| FailClosed["Fail closed - no username/password"]
+SchemeCheck --> |Basic| FillField["Fill field from credential set"]
+FillField --> MaskValues["Track filled/password values"]
+MaskValues --> Capture["Screenshot masking"]
 ```
 
 **Diagram sources**
 - [browser_connector.py:730-863](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L730-L863)
 - [browser_connector.py:445-531](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L445-L531)
+- [browser_connector.py:1274-1332](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1274-L1332)
+- [credential_sets.py:67-102](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L67-L102)
+- [secret_params.py:37-71](file://products/agent-platform/src/agent_service/services/secret_params.py#L37-L71)
 
 **Section sources**
 - [browser_connector.py:24-61](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L24-L61)
 - [browser_connector.py:402-443](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L402-L443)
 - [browser_connector.py:445-531](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L445-L531)
 - [browser_connector.py:533-653](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L533-L653)
+- [browser_connector.py:1274-1332](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1274-L1332)
 - [credential_sets.py:67-102](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L67-L102)
 - [secret_params.py:37-71](file://products/agent-platform/src/agent_service/services/secret_params.py#L37-L71)
+
+### Enhanced Credential Schemes and Authentication Resolution
+
+**New Section** The Browser Connector now integrates with the SPEC-068 authentication resolution system, supporting three credential schemes:
+
+#### Credential Scheme Types
+- **basic**: Traditional username/password authentication (default, backward compatible)
+- **bearer**: Static bearer token authentication requiring a `token` field
+- **oauth2_client_credentials**: Dynamic OAuth2 client credentials grant with automatic token acquisition and caching
+
+#### Credential Set Validation
+The credential system validates scheme-specific required fields:
+- basic: requires `username` and `password`
+- bearer: requires `token`
+- oauth2_client_credentials: requires `token_url`, `client_id`, and `client_secret`; optional fields include `scope`, `audience`, `resource`, and `client_auth`
+
+#### OAuth2 Token Acquisition
+For oauth2_client_credentials sets, the system performs automatic token acquisition:
+- In-memory caching with near-expiry refresh (30-second margin)
+- Concurrent request deduplication per credential set
+- Support for both `client_secret_basic` and `client_secret_post` authentication variants
+- Fail-closed behavior on any acquisition failure
+
+#### Web.fill_credential Integration
+The web.fill_credential tool now validates credential scheme compatibility:
+- Non-basic credential sets fail closed when attempting to fill username/password fields
+- Basic credential sets work as before, filling fields directly
+- Error messages remain generic to prevent information disclosure about available credential sets
+
+```mermaid
+flowchart TD
+CredSet["Credential Set"] --> SchemeCheck{"Scheme Type"}
+SchemeCheck --> |basic| BasicPath["Username/Password Fields"]
+SchemeCheck --> |bearer| BearerPath["Static Token Field"]
+SchemeCheck --> |oauth2_client_credentials| OAuth2Path["Token Acquisition"]
+BasicPath --> FillValidation["Field Validation"]
+BearerPath --> FailClosed["Fail Closed for Form Filling"]
+OAuth2Path --> TokenCache{"Cached Token?"}
+TokenCache --> |Yes| UseToken["Use Cached Token"]
+TokenCache --> |No| AcquireToken["Acquire New Token"]
+AcquireToken --> CacheToken["Cache Token with Expiry"]
+CacheToken --> UseToken
+UseToken --> ApplyAuth["Apply Authorization Header"]
+FillValidation --> FillField["Fill Form Field"]
+```
+
+**Diagram sources**
+- [credential_sets.py:40-94](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L40-L94)
+- [auth_resolution.py:69-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L69-L113)
+- [oauth_client.py:123-232](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L123-L232)
+- [browser_connector.py:1274-1332](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1274-L1332)
+
+**Section sources**
+- [credential_sets.py:1-157](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L1-L157)
+- [auth_resolution.py:1-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L1-L113)
+- [oauth_client.py:1-232](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L1-L232)
+- [browser_connector.py:1274-1332](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1274-L1332)
 
 ### Tool Surface
 
@@ -245,11 +340,11 @@ Read-tier tools are automatically allowed without operator confirmation and use 
 - web.fill_credential
   - Purpose: Fill username or password field from a named credential set.
   - Parameters: ref (required), credential_set (required), field (username|password).
-  - Behavior: Resolves value from store, fills element, tracks filled/password values for masking; read tier by design.
+  - Behavior: Resolves value from store, fills element, tracks filled/password values for masking; read tier by design. **Updated** Now validates credential scheme compatibility and fails closed for non-basic sets.
   - Response: success with url/filled/credential_set.
   - Errors: INVALID_PARAMETERS, CREDENTIAL_SET_NOT_FOUND, BROWSER_ACTION_ERROR.
   - Section sources
-    - [browser_connector.py:1274-1387](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1274-L1387)
+    - [browser_connector.py:1274-1332](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1274-L1332)
     - [credential_sets.py:67-102](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L67-L102)
 
 - web.extract
@@ -395,10 +490,14 @@ Note over Kernel,GW : Write-tier actions later go through HITL + signing
 - External dependencies:
   - Skills hub for flow validation via HTTP with client credentials.
   - Playwright/CDP for browser control.
-  - Credential set JSON file for login values.
+  - Credential set JSON file for login values with multi-scheme support.
+  - OAuth2 token endpoints for dynamic credential acquisition.
 - Internal coupling:
   - BrowserConnector depends on BrowserSessionPool for session management and on CredentialSetStore for secrets.
   - FlowState carries metadata used by both navigator and interaction tools for budget and approval tracking.
+  - AuthResolution provides reusable credential scheme resolution across connectors.
+
+**Updated** The dependency graph now includes the new authentication resolution system and OAuth2 token client for enhanced credential scheme support.
 
 ```mermaid
 graph LR
@@ -406,6 +505,8 @@ BC["BrowserConnector"] --> REG["ToolRegistry"]
 BC --> SP["BrowserSessionPool"]
 BC --> CS["CredentialSetStore"]
 BC --> SH["Skills Hub HTTP"]
+BC --> AR["AuthResolution"]
+AR --> OC["OAuth2TokenClient"]
 SP --> PW["Playwright/CDP"]
 REG --> Tools["web.* tool classes"]
 ```
@@ -414,6 +515,8 @@ REG --> Tools["web.* tool classes"]
 - [browser_connector.py:360-399](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L360-L399)
 - [browser_sessions.py:169-344](file://products/tool-gateway/src/tool_gateway/tools/browser_sessions.py#L169-L344)
 - [credential_sets.py:67-102](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L67-L102)
+- [auth_resolution.py:69-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L69-L113)
+- [oauth_client.py:81-232](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L81-L232)
 
 **Section sources**
 - [browser_connector.py:360-399](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L360-L399)
@@ -424,6 +527,10 @@ REG --> Tools["web.* tool classes"]
 - Screenshot sizing: Quality loop and viewport clipping ensure responses fit within configured byte caps.
 - Session TTL and eviction: Idle sessions expire and the pool evicts oldest sessions to keep sidecar memory bounded.
 - Interaction serialization: Per-session locks prevent concurrent Playwright calls that could corrupt state or lose budget accounting.
+- **Enhanced credential caching**: OAuth2 tokens are cached in memory with near-expiry refresh to minimize network calls.
+- **Concurrent credential resolution**: Per-set locks prevent thundering herd effects when multiple calls need the same OAuth2 token.
+
+**Updated** Added performance considerations for the new credential resolution system, including token caching and concurrent request handling.
 
 [No sources needed since this section provides general guidance]
 
@@ -444,6 +551,10 @@ Common error patterns and their meanings:
 - BROWSER_SELECT_NOT_A_SELECT / BROWSER_SELECT_OPTION_NOT_FOUND: Select element validation errors.
 - BROWSER_UPLOAD_*: File upload validation and path security errors.
 - BROWSER_WAIT_TIMEOUT: Element state wait timeout exceeded.
+- **CREDENTIAL_SET_NOT_FOUND**: Credential set not found or incompatible scheme for operation.
+- **CREDENTIAL_ACQUISITION_FAILED**: OAuth2 token acquisition failed (new error code from SPEC-068).
+
+**Updated** Added new credential-related error patterns including CREDENTIAL_SET_NOT_FOUND for scheme incompatibility and CREDENTIAL_ACQUISITION_FAILED for OAuth2 token acquisition failures.
 
 Operational checks:
 - Verify GATEWAY_BROWSER_ENABLED and GATEWAY_BROWSER_CDP_ENDPOINT.
@@ -453,6 +564,8 @@ Operational checks:
 - Review GATEWAY_BROWSER_FLOW_MAX_STEPS for flow budget needs.
 - Validate GATEWAY_BROWSER_SCREENSHOT_MAX_BYTES for response size constraints.
 - Validate GATEWAY_BROWSER_UPLOAD_DIR for file uploads.
+- **Verify credential scheme configuration**: Ensure credential sets have correct scheme-specific fields for their declared scheme.
+- **Check OAuth2 token endpoint connectivity**: Verify token_url accessibility for oauth2_client_credentials sets.
 
 **Section sources**
 - [browser_connector.py:425-443](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L425-L443)
@@ -461,13 +574,15 @@ Operational checks:
 - [browser_connector.py:866-1027](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L866-L1027)
 - [browser_connector.py:1144-1705](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1144-L1705)
 - [browser_connector.py:1711-2439](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1711-L2439)
+- [browser_connector.py:1274-1332](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L1274-L1332)
 - [config.py:141-184](file://products/tool-gateway/src/tool_gateway/core/config.py#L141-L184)
 - [test_browser_connector.py:367-396](file://products/tool-gateway/tests/test_browser_connector.py#L367-L396)
+- [oauth_client.py:224-232](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L224-L232)
 
 ## Conclusion
 The Browser Connector delivers a secure, bounded web automation surface with strong server-side enforcement. Origin allowlisting, flow binding, step budgets, credential masking, and frame-aware interactions combine to provide safe read and write capabilities. Integration with skills-hub and the HITL approval workflow ensures that mutating actions are authorized and auditable. Operators can tune performance and safety knobs via environment configuration while relying on consistent error surfaces and evidence.
 
-**Updated** The expanded tool surface now supports complex administrative workflows with fifteen total tools, providing comprehensive coverage for modern web applications including dropdown selection, structured data extraction, keyboard shortcuts, file uploads, JavaScript evaluation, scrolling, and iframe traversal.
+**Updated** The enhanced credential scheme system now supports modern authentication methods including bearer tokens and OAuth2 client credentials, while maintaining full backward compatibility with existing basic credential sets. The fail-closed security model ensures that credential misconfigurations are caught early rather than allowing partial or insecure operations.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -489,11 +604,60 @@ Environment variables controlling the Browser Connector:
 - [config.py:141-184](file://products/tool-gateway/src/tool_gateway/core/config.py#L141-L184)
 - [test_browser_connector.py:367-396](file://products/tool-gateway/tests/test_browser_connector.py#L367-L396)
 
+### Enhanced Credential Set Configuration
+
+**New Section** The credential set file format now supports multiple authentication schemes:
+
+#### Basic Credential Sets (Default)
+Traditional username/password authentication, fully backward compatible:
+```json
+{
+  "inventory-app": {"username": "svc-check", "password": "..."},
+  "legacy-crm": {"username": "checker", "password": "..."}
+}
+```
+
+#### Bearer Token Credential Sets
+Static bearer token authentication:
+```json
+{
+  "api-service": {"scheme": "bearer", "token": "static-bearer-token"}
+}
+```
+
+#### OAuth2 Client Credentials Credential Sets
+Dynamic token acquisition with automatic refresh:
+```json
+{
+  "snow-oauth": {
+    "scheme": "oauth2_client_credentials",
+    "token_url": "https://.../oauth_token.do",
+    "client_id": "...",
+    "client_secret": "...",
+    "scope": "read write",
+    "audience": "service-api",
+    "resource": "https://api.example.com",
+    "client_auth": "client_secret_basic"
+  }
+}
+```
+
+#### Supported OAuth2 Options
+- `client_auth`: Either `client_secret_basic` (default) or `client_secret_post`
+- `scope`: Optional scope parameter for token requests
+- `audience`: Optional audience parameter for token requests  
+- `resource`: Optional resource parameter for token requests
+
+**Section sources**
+- [credential_sets.py:19-27](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L19-L27)
+- [credential_sets.py:40-47](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L40-L47)
+- [oauth_client.py:45-53](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L45-L53)
+
 ### Practical Examples Summary
 - web.navigate: Provide url and optional skill_id to bind a flow; expect success with url/title and flow dict when bound; errors include origin not allowed and flow mismatch.
 - web.snapshot: Call with no parameters to obtain refs; use refs in subsequent write tools; expect bounded snapshot text and element count.
 - web.screenshot: Call with no parameters to obtain base64 JPEG; expect size-bounded output; errors if compression cannot meet cap.
-- web.fill_credential: Provide ref, credential_set, and field; expect success without exposing values; errors for missing sets or invalid fields.
+- web.fill_credential: Provide ref, credential_set, and field; expect success without exposing values; errors for missing sets or invalid fields. **Updated** Now validates credential scheme compatibility and fails closed for non-basic sets.
 - web.extract: Provide selector and optional max_rows; expect structured items or table data; errors for invalid selectors.
 - web.wait_for: Provide selector, optional state and timeout; expect success when element reaches state; timeout errors otherwise.
 - web.hover: Provide ref; expect success with tag; errors for invalid refs.
@@ -511,12 +675,17 @@ Environment variables controlling the Browser Connector:
 ### References to Specifications and Release Notes
 - SPEC-049 introduced the initial six-tool browser surface and core security posture.
 - SPEC-050 expanded the surface with additional read and write tools and frame support, bringing the total to fifteen tools.
+- **SPEC-068 introduced the enhanced credential scheme system with basic, bearer, and oauth2_client_credentials support.**
 - ADR-0007 documents the single HITL gate for browser flows.
 - Delivery roadmap entries summarize feature delivery timelines and scope changes.
+
+**Updated** Added reference to SPEC-068 for the enhanced credential scheme system.
 
 **Section sources**
 - [2026-09-02-spec-049-browser-web-check-tools.md:34-64](file://docs/agentic-aiops-platform/release-notes/2026-09-02-spec-049-browser-web-check-tools.md#L34-L64)
 - [2026-09-04-spec-050-browser-tools-expansion-and-samples.md:1-89](file://docs/agentic-aiops-platform/release-notes/2026-09-04-spec-050-browser-tools-expansion-and-samples.md#L1-L89)
 - [SPEC-050-browser-tools-expansion-and-samples/spec.md:1-200](file://docs/specs/SPEC-050-browser-tools-expansion-and-samples/spec.md#L1-L200)
+- [SPEC-068-outbound-execution-credential-schemes/spec.md:1-320](file://docs/specs/SPEC-068-outbound-execution-credential-schemes/spec.md#L1-L320)
 - [delivery-roadmap.md:339-348](file://docs/agentic-aiops-platform/delivery-roadmap.md#L339-L348)
+- [delivery-roadmap.md:397-419](file://docs/agentic-aiops-platform/delivery-roadmap.md#L397-L419)
 - [0007-browser-flow-single-hitl-gate.md:119-135](file://docs/adr/0007-browser-flow-single-hitl-gate.md#L119-L135)

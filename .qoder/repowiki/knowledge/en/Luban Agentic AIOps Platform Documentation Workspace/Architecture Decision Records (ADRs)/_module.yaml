@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: docs/architecture_decision_records
+title: Architecture Decision Records (ADRs)
+scope:
+    - docs/adr/
+source_files: []
+depends_on: []
+related_to: []

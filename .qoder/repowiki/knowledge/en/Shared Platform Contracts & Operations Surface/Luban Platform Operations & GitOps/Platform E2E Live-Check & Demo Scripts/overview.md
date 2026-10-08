@@ -1,0 +1,1 @@
+Shell-driven end-to-end smoke tests and demos that assert the deployed platform-gateway, identity broker, and service APIs against a live dev cluster.

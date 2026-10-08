@@ -1,0 +1,1 @@
+No build or test commands live in this module; the README points readers to `make verify`, `make policy-diff`, and `make deploy-samples` / `make undeploy-samples` from the repository root as the validation surface referenced by the release notes.

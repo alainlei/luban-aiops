@@ -1,0 +1,1 @@
+New specs are created from the files under `docs/specs/templates/`; delivery requires every `R-x` acceptance criterion to map to at least one asserting test and any shipped `samples/` demo to be exercised by its own verification script, as enforced by review discipline and `make verify`.

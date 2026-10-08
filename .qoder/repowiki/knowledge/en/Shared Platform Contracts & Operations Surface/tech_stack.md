@@ -1,0 +1,1 @@
+Kustomize for manifest composition across all child services; JSON Schema + YAML for cross-service contracts; OpenObserve dashboard JSON for observability; uv Docker image as the shared base.

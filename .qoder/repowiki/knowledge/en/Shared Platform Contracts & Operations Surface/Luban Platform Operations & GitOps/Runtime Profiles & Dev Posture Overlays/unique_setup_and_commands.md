@@ -1,0 +1,1 @@
+Local secrets go in `default/runtime-secrets.env` (git-ignored); the example contract is `default/runtime-secrets.example.env`. Browser credential sets are synced out-of-band via `sync-browser-credentials.sh` into `tool-gateway-browser-credentials`. The sample browser target app is deployed separately with `make deploy-sample-app`.

@@ -3,6 +3,8 @@
 <cite>
 **Referenced Files in This Document**
 - [credential_sets.py](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py)
+- [auth_resolution.py](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py)
+- [oauth_client.py](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py)
 - [redaction.py](file://products/tool-gateway/src/tool_gateway/tools/redaction.py)
 - [url_redaction.py](file://products/tool-gateway/src/tool_gateway/tools/url_redaction.py)
 - [http_connector.py](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py)
@@ -30,6 +32,8 @@
 - Enhanced audit logging with new secret delivery tracking events
 - Updated troubleshooting guide with secrets connector-specific issues and policy enforcement scenarios
 - **Updated** Enhanced credential model now supports scheme-aware parsing system with optional per-set scheme field, extending beyond fixed username/password requirements while maintaining backward compatibility
+- **New** Complete OAuth2 client credentials implementation with token caching, refresh management, and fail-closed security semantics
+- **New** Reusable outbound authentication resolution seam supporting basic, bearer, and oauth2_client_credentials schemes
 
 ## Table of Contents
 1. Introduction
@@ -45,7 +49,7 @@
 
 ## Introduction
 This document explains how the Tool Gateway manages credentials and prevents sensitive data from leaking in tool outputs through enhanced credential masking throughout the entire request/response lifecycle. It covers:
-- The credential set architecture for browser login flows and HTTP service authentication with reference-based credential resolution and scheme-aware parsing.
+- The credential set architecture for browser login flows and HTTP service authentication with reference-based credential resolution and scheme-aware parsing supporting multiple authentication schemes.
 - The new secrets connector providing cryptographically secure password generation with centralized policy enforcement and one-time secure delivery mechanisms.
 - One-time secure delivery mechanisms including portal-based copy functionality and gated email delivery.
 - The enhanced redaction system that detects and masks secrets, tokens, and personal information in tool results with comprehensive pattern matching.
@@ -56,6 +60,8 @@ This document explains how the Tool Gateway manages credentials and prevents sen
 ## Project Structure
 The Tool Gateway implements comprehensive credential handling and output sanitization across a focused set of modules:
 - Credential sets: lazy-loaded JSON secret file with named sets supporting scheme-aware parsing for both browser login flows and HTTP Basic authentication.
+- Authentication resolution: reusable seam for resolving credential sets into appropriate outbound authentication mechanisms (basic, bearer, oauth2_client_credentials).
+- OAuth2 token client: connector-local token acquisition with caching, refresh management, and fail-closed security semantics.
 - Secrets connector: CSPRNG password generation with centralized policy enforcement and one-time secure delivery mechanisms.
 - Redaction engine: deterministic, code-owned pattern matching and key-based masking applied to every tool result before it leaves the gateway.
 - URL redaction: specialized URL masking for query parameters and userinfo components to prevent secret leakage.
@@ -68,28 +74,34 @@ The Tool Gateway implements comprehensive credential handling and output sanitiz
 ```mermaid
 graph TB
 A["GatewaySettings<br/>config.py"] --> B["CredentialSetStore<br/>credential_sets.py"]
-A --> C["Secrets Connector<br/>secrets_connector.py"]
-A --> D["Redaction rules<br/>redaction.py"]
-A --> E["URL Redaction<br/>url_redaction.py"]
-A --> F["Secret Delivery Buffer<br/>secret_delivery.py"]
-G["HTTP Connector<br/>http_connector.py"] --> B
-G --> E
-H["BrowserConnector<br/>browser_connector.py"] --> B
-H --> E
-I["Secrets Connector<br/>secrets_connector.py"] --> J["Password Policy<br/>policy contract"]
-I --> K["Delivery Buffer<br/>one-time handles"]
-L["GatewayService.invoke_tool<br/>gateway_service.py"] --> G
-L --> H
-L --> I
-L --> M["Redact tool output<br/>redaction.py"]
-L --> N["Audit events<br/>audit_emitter (external)"]
-F --> O["Portal Copy Channel<br/>ephemeral storage"]
-F --> P["Email Channel<br/>gated delivery"]
+A --> C["Auth Resolution<br/>auth_resolution.py"]
+A --> D["OAuth2 Token Client<br/>oauth_client.py"]
+A --> E["Secrets Connector<br/>secrets_connector.py"]
+A --> F["Redaction rules<br/>redaction.py"]
+A --> G["URL Redaction<br/>url_redaction.py"]
+A --> H["Secret Delivery Buffer<br/>secret_delivery.py"]
+I["HTTP Connector<br/>http_connector.py"] --> B
+I --> C
+I --> D
+I --> G
+J["BrowserConnector<br/>browser_connector.py"] --> B
+J --> G
+K["Secrets Connector<br/>secrets_connector.py"] --> L["Password Policy<br/>policy contract"]
+K --> M["Delivery Buffer<br/>one-time handles"]
+N["GatewayService.invoke_tool<br/>gateway_service.py"] --> I
+N --> J
+N --> K
+N --> O["Redact tool output<br/>redaction.py"]
+N --> P["Audit events<br/>audit_emitter (external)"]
+H --> Q["Portal Copy Channel<br/>ephemeral storage"]
+H --> R["Email Channel<br/>gated delivery"]
 ```
 
 **Diagram sources**
 - [config.py:200-240](file://products/tool-gateway/src/tool_gateway/core/config.py#L200-L240)
 - [credential_sets.py:30-103](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L30-L103)
+- [auth_resolution.py:69-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L69-L113)
+- [oauth_client.py:81-232](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L81-L232)
 - [redaction.py:24-57](file://products/tool-gateway/src/tool_gateway/tools/redaction.py#L24-L57)
 - [url_redaction.py:27-41](file://products/tool-gateway/src/tool_gateway/tools/url_redaction.py#L27-L41)
 - [secret_delivery.py:231-282](file://products/tool-gateway/src/tool_gateway/tools/secret_delivery.py#L231-L282)
@@ -103,7 +115,8 @@ F --> P["Email Channel<br/>gated delivery"]
 
 ## Core Components
 - **CredentialSetStore**: Loads a JSON file of named credential sets on demand, validates required fields based on scheme type, and reloads automatically when the file changes. Supports scheme-aware parsing with optional per-set scheme field.
-- **Secrets Connector**: Provides cryptographically secure password generation using Python's `secrets` module, enforced against a centralized password policy contract, with one-time delivery mechanisms.
+- **Authentication Resolution**: Reusable seam that resolves credential sets into appropriate outbound authentication mechanisms, supporting basic, bearer, and oauth2_client_credentials schemes with fail-closed security semantics.
+- **OAuth2 Token Client**: Connector-local token acquisition with memory-only caching, near-expiry refresh management, concurrent request deduplication, and structured error handling.
 - **Enhanced Redaction Engine**: Applies value-pattern matches (e.g., PEM private keys, JWTs, Bearer/Basic headers, AWS access key IDs) and explicit sensitive key names to replace values with a marker. Includes comprehensive overflow protection and fail-closed behavior.
 - **URL Redaction**: Specialized URL masking for query parameters and userinfo components using a shared vocabulary of secret-bearing parameter names.
 - **Secret Delivery Buffer**: Ephemeral storage for one-time secret handoff with TTL expiration, owner scoping, and atomic redemption operations.
@@ -114,6 +127,8 @@ F --> P["Email Channel<br/>gated delivery"]
 
 **Section sources**
 - [credential_sets.py:30-103](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L30-L103)
+- [auth_resolution.py:69-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L69-L113)
+- [oauth_client.py:81-232](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L81-L232)
 - [redaction.py:24-151](file://products/tool-gateway/src/tool_gateway/tools/redaction.py#L24-L151)
 - [url_redaction.py:27-91](file://products/tool-gateway/src/tool_gateway/tools/url_redaction.py#L27-L91)
 - [secret_delivery.py:231-282](file://products/tool-gateway/src/tool_gateway/tools/secret_delivery.py#L231-L282)
@@ -136,8 +151,9 @@ participant GW as "GatewayService.invoke_tool"
 participant POL as "PolicyEngine"
 participant REG as "ToolRegistry"
 participant HC as "HttpConnector"
-participant BC as "BrowserConnector"
-participant SC as "SecretsConnector"
+participant CS as "CredentialSetStore"
+participant AR as "Auth Resolution"
+participant OC as "OAuth2 Token Client"
 participant RED as "Redaction"
 participant UR as "URL Redaction"
 participant AUD as "AuditEmitter"
@@ -152,6 +168,16 @@ else allow
 GW->>REG : invoke(tool_name, parameters, identity)
 alt http.get/post
 REG->>HC : execute(http.get/post)
+HC->>CS : get(credential_set)
+CS-->>HC : {scheme, fields...}
+HC->>AR : resolve_outbound_auth()
+alt basic/bearer
+AR-->>HC : ResolvedAuth(auth, bearer_token)
+else oauth2_client_credentials
+AR->>OC : acquire(token_url, client_id, client_secret)
+OC-->>AR : cached/fresh token
+AR-->>HC : ResolvedAuth(auth, bearer_token)
+end
 HC->>UR : redact_secret_query(url)
 HC->>RED : project_response()
 HC-->>REG : ToolResult
@@ -179,7 +205,9 @@ end
 
 **Diagram sources**
 - [gateway_service.py:158-376](file://products/tool-gateway/src/tool_gateway/services/gateway_service.py#L158-L376)
-- [http_connector.py:389-492](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L389-L492)
+- [http_connector.py:368-402](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L368-L402)
+- [auth_resolution.py:69-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L69-L113)
+- [oauth_client.py:123-140](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L123-L140)
 - [url_redaction.py:49-91](file://products/tool-gateway/src/tool_gateway/tools/url_redaction.py#L49-L91)
 - [redaction.py:126-151](file://products/tool-gateway/src/tool_gateway/tools/redaction.py#L126-L151)
 - [secret_delivery.py:126-158](file://products/tool-gateway/src/tool_gateway/tools/secret_delivery.py#L126-L158)
@@ -230,6 +258,106 @@ IgnoreSet --> UpdateCache
 - [credential_sets.py:30-103](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L30-L103)
 - [SPEC-068 spec.md:96-114](file://docs/specs/SPEC-068-outbound-execution-credential-schemes/spec.md#L96-L114)
 
+### Reusable Outbound Authentication Resolution
+
+**New** Complete authentication resolution seam supporting multiple schemes with fail-closed security semantics.
+
+#### Multi-Scheme Support
+- **Scheme dispatch**: Centralized resolver that routes credential sets to appropriate authentication mechanisms based on scheme type.
+- **Basic authentication**: Returns `httpx.BasicAuth` instance with username/password credentials.
+- **Bearer authentication**: Creates custom `BearerAuth` class that attaches `Authorization: Bearer <token>` headers.
+- **OAuth2 client credentials**: Delegates to OAuth2TokenClient for token acquisition and returns bearer-authenticated requests.
+- **Fail-closed errors**: All authentication failures return structured gateway errors with `CREDENTIAL_ACQUISITION_FAILED` code, never falling back to unauthenticated calls.
+
+#### ResolvedAuth Data Structure
+- **Scheme tracking**: Records which scheme was used for the current authentication.
+- **HTTPX auth object**: Provides `httpx.Auth` instance for HTTP-based connectors.
+- **Bearer token access**: Exposes raw token for non-HTTPX transports that need direct header manipulation.
+- **Immutable design**: Frozen dataclass ensures authentication state cannot be modified after resolution.
+
+```mermaid
+flowchart TD
+Input["resolve_outbound_auth(set_name, entry, token_client)"] --> GetScheme["Get scheme from entry"]
+GetScheme --> BasicCheck{"scheme == 'basic'?"}
+BasicCheck --> |Yes| BasicAuth["Create httpx.BasicAuth(username, password)"]
+BasicCheck --> |No| BearerCheck{"scheme == 'bearer'?"}
+BearerCheck --> |Yes| BearerAuth["Create BearerAuth(token)"]
+BearerCheck --> |No| OAuth2Check{"scheme == 'oauth2_client_credentials'?"}
+OAuth2Check --> |Yes| TokenAcquire["token_client.acquire()"]
+OAuth2Check --> |No| Error["Return structured error"]
+TokenAcquire --> CreateBearer["Create BearerAuth(fresh_token)"]
+BasicAuth --> ReturnResolved["Return ResolvedAuth"]
+BearerAuth --> ReturnResolved
+CreateBearer --> ReturnResolved
+Error --> ReturnError["Return (None, error_tuple)"]
+```
+
+**Diagram sources**
+- [auth_resolution.py:69-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L69-L113)
+
+**Section sources**
+- [auth_resolution.py:1-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L1-L113)
+
+### OAuth2 Client Credentials Implementation
+
+**New** Complete OAuth2 client credentials token acquisition with caching, refresh management, and comprehensive error handling.
+
+#### Token Acquisition Flow
+- **Memory-only caching**: Acquired tokens live exclusively in memory, never persisted to disk or logs.
+- **Near-expiry refresh**: Tokens are refreshed when within a safety margin (default 30 seconds) of expiry to prevent mid-flight expiration.
+- **Concurrent request deduplication**: Per-set locks ensure only one token fetch occurs even with concurrent callers.
+- **Double-check pattern**: Lock holders re-check cache after acquiring lock to avoid redundant network calls.
+
+#### Client Authentication Variants
+- **client_secret_basic**: Default variant where client ID and secret are sent via HTTP Basic authentication header.
+- **client_secret_post**: Alternative variant where client credentials are included in the form body.
+- **Explicit selection**: Operator must explicitly configure the variant per credential set to prevent accidental misconfiguration.
+
+#### Optional Request Parameters
+- **Scope**: Requested permissions/scopes for the access token.
+- **Audience**: Target audience for the token (useful in multi-tenant environments).
+- **Resource**: Resource identifier for the target service.
+- **Forwarding**: Optional parameters are forwarded to the token endpoint when configured.
+
+#### Fail-Closed Security Semantics
+- **Structured errors**: All failures return `CREDENTIAL_ACQUISITION_FAILED` with descriptive messages.
+- **No fallback**: Failed token acquisition never results in unauthenticated calls or fabricated tokens.
+- **Safe logging**: Only failure classes and credential set names are logged, never actual secrets or tokens.
+- **Timeout protection**: Configurable timeouts prevent hanging token requests.
+
+```mermaid
+sequenceDiagram
+participant Caller as "Auth Resolver"
+participant TC as "OAuth2TokenClient"
+participant Cache as "Token Cache"
+participant Endpoint as "OAuth2 Endpoint"
+Caller->>TC : acquire(name, entry)
+TC->>Cache : _fresh_token(name)
+alt Cached & Fresh
+Cache-->>TC : access_token
+TC-->>Caller : (access_token, None)
+else Expired or Missing
+TC->>Cache : _lock_for(name)
+Cache->>Cache : Double-check fresh token
+alt Still Fresh
+Cache-->>TC : access_token
+TC-->>Caller : (access_token, None)
+else Need Refresh
+TC->>Endpoint : POST token_url with credentials
+Endpoint-->>TC : {access_token, expires_in}
+TC->>Cache : Store cached token
+TC-->>Caller : (access_token, None)
+end
+end
+```
+
+**Diagram sources**
+- [oauth_client.py:123-140](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L123-L140)
+- [oauth_client.py:141-221](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L141-L221)
+
+**Section sources**
+- [oauth_client.py:1-232](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L1-L232)
+
 ### Reference-Based Credential Injection into Tool Invocations
 
 **Updated** Enhanced support for scheme-aware credential sets with proper secret handling across all authentication types.
@@ -239,7 +367,7 @@ IgnoreSet --> UpdateCache
 - **Scheme-aware authentication**: Credential sets resolve to appropriate authentication mechanisms based on scheme type:
   - `basic`: HTTP Basic auth headers server-side
   - `bearer`: Authorization Bearer token headers
-  - `oauth2_client_credentials`: OAuth2 client credentials flow
+  - `oauth2_client_credentials`: OAuth2 client credentials flow with automatic token acquisition
 - **Origin validation**: Requests must target allowlisted origins; loopback, link-local, and multicast addresses are always refused.
 - **Redirect protection**: POST requests never follow redirects; GET requests validate each hop against the allowlist.
 - **Secret query parameter handling**: POST URLs cannot carry secret-bearing query parameters; GET URLs mask them in responses.
@@ -257,18 +385,20 @@ participant Caller as "Caller"
 participant GW as "GatewayService"
 participant HC as "HttpConnector"
 participant CS as "CredentialSetStore"
+participant AR as "Auth Resolution"
 participant BA as "Basic Auth"
 participant UR as "URL Redaction"
 Caller->>GW : http.get {url, credential_set}
 GW->>HC : execute(...)
 HC->>CS : get(credential_set)
 CS-->>HC : {scheme, fields...}
+HC->>AR : resolve_outbound_auth()
 alt basic scheme
-HC->>BA : create BasicAuth(username, password)
+AR->>BA : create BasicAuth(username, password)
 else bearer scheme
-HC->>HC : add Authorization : Bearer token
+AR->>AR : create BearerAuth(token)
 else oauth2_client_credentials
-HC->>HC : perform OAuth2 client credentials flow
+AR->>AR : perform OAuth2 client credentials flow
 end
 HC->>UR : redact_secret_query(url)
 Note over HC,BA : Credentials never leave process in plaintext
@@ -276,15 +406,17 @@ HC-->>GW : ToolResult (no secrets)
 ```
 
 **Diagram sources**
-- [http_connector.py:361-388](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L361-L388)
-- [http_connector.py:389-492](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L389-L492)
+- [http_connector.py:368-402](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L368-L402)
+- [http_connector.py:404-506](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L404-L506)
 - [url_redaction.py:49-91](file://products/tool-gateway/src/tool_gateway/tools/url_redaction.py#L49-L91)
 - [credential_sets.py:47-103](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L47-L103)
+- [auth_resolution.py:69-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L69-L113)
 
 **Section sources**
 - [http_connector.py:322-699](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L322-L699)
 - [browser_connector.py:174-257](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L174-L257)
 - [credential_sets.py:30-103](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L30-L103)
+- [auth_resolution.py:69-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L69-L113)
 
 ### Generated Password Policy Enforcement
 
@@ -542,6 +674,7 @@ CFG --> HC["HttpConnector"]
 CFG --> BC["BrowserConnector"]
 CFG --> SC["SecretsConnector"]
 HC --> CS["CredentialSetStore"]
+HC --> AR["Auth Resolution"]
 HC --> UR["URL Redaction"]
 BC --> CS
 BC --> UR
@@ -574,6 +707,8 @@ BC --> SKILLS["Skills Service"]
 - Password generation cost: CSPRNG generation is computationally lightweight; policy validation adds minimal overhead.
 - Delivery buffer operations: Single-use redemption involves database lookups and atomic operations; designed for low-latency access.
 - Ephemeral masking overhead: Tracking generated credentials adds minimal overhead during tool execution but provides comprehensive protection across all output surfaces.
+- OAuth2 token caching: Memory-only token cache eliminates repeated network calls; near-expiry refresh prevents mid-flight expiration.
+- Concurrent token acquisition: Per-set locks prevent thundering herd effects during token refresh cycles.
 
 ## Troubleshooting Guide
 Common issues and diagnostics:
@@ -631,9 +766,26 @@ Common issues and diagnostics:
 - **Browser flow with non-basic scheme**:
   - Symptom: Browser credential filling fails when referencing non-basic schemes.
   - Action: Use `basic` scheme sets for browser credential filling; other schemes are not supported for web form filling.
+- **OAuth2 token acquisition failures**:
+  - Symptom: HTTP requests with OAuth2 credential sets fail with `CREDENTIAL_ACQUISITION_FAILED`.
+  - Action: Verify token endpoint connectivity; check client credentials configuration; review token endpoint response format.
+- **OAuth2 token endpoint unreachable**:
+  - Symptom: Token acquisition fails with timeout or connection errors.
+  - Action: Verify network connectivity to token endpoint; check firewall rules; verify DNS resolution.
+- **OAuth2 token response malformed**:
+  - Symptom: Token acquisition fails with JSON parsing or missing access_token errors.
+  - Action: Check token endpoint response format; ensure `access_token` field is present; verify JSON structure.
+- **OAuth2 client authentication variant mismatch**:
+  - Symptom: Token acquisition fails with authentication errors.
+  - Action: Configure correct `client_auth` variant (`client_secret_basic` or `client_secret_post`); verify server expectations.
+- **OAuth2 token cache issues**:
+  - Symptom: Frequent token refreshes or stale token errors.
+  - Action: Check `expires_in` values in token responses; verify clock synchronization; review refresh margin configuration.
 
 **Section sources**
 - [credential_sets.py:52-103](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L52-L103)
+- [auth_resolution.py:60-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L60-L113)
+- [oauth_client.py:141-232](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L141-L232)
 - [redaction.py:60-73](file://products/tool-gateway/src/tool_gateway/tools/redaction.py#L60-L73)
 - [gateway_service.py:307-335](file://products/tool-gateway/src/tool_gateway/services/gateway_service.py#L307-L335)
 - [http_connector.py:100-181](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L100-L181)
@@ -644,6 +796,8 @@ The Tool Gateway centralizes credential management and output sanitization to mi
 - Credentials are stored as named sets in a secret-mounted file with scheme-aware parsing and injected safely into both browser sessions and HTTP authentication mechanisms.
 - Reference-based credential resolution ensures secrets never appear as literals in tool parameters or logs.
 - Enhanced credential model supports multiple authentication schemes (`basic`, `bearer`, `oauth2_client_credentials`) while maintaining backward compatibility.
+- Complete OAuth2 client credentials implementation provides automated token acquisition with caching, refresh management, and fail-closed security semantics.
+- Reusable authentication resolution seam enables consistent credential handling across different connectors and transport types.
 - Generated passwords provide cryptographically secure alternatives to manual password creation, enforced against centralized policy contracts.
 - One-time secure delivery mechanisms prevent plaintext exposure through redemption-on-click and gated email channels.
 - Enhanced redaction applies deterministic pattern and key-based masking to all tool outputs, with fail-closed overflow protection and comprehensive coverage.
@@ -776,3 +930,9 @@ result = await registry.invoke("secrets.deliver", {
 - Validate credential set configurations regularly to ensure scheme compatibility.
 - Test browser credential flows with basic scheme sets only.
 - Monitor for unknown scheme warnings and missing required field errors.
+- Configure OAuth2 token endpoints with appropriate timeouts and retry policies.
+- Use explicit client authentication variants to prevent accidental misconfiguration.
+- Monitor OAuth2 token cache health and refresh patterns.
+- Implement proper error handling for token acquisition failures.
+- Test OAuth2 flows end-to-end with mock token endpoints during development.
+- Review token endpoint security configurations and access controls regularly.

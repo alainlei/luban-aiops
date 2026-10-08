@@ -1,0 +1,1 @@
+New ADRs are created by copying `template.md`, assigning the next sequential number, setting status to `proposed`, and updating the index table in `README.md`; existing long-form architecture docs in `docs/agentic-aiops-platform/` remain the founding record and are not moved here.

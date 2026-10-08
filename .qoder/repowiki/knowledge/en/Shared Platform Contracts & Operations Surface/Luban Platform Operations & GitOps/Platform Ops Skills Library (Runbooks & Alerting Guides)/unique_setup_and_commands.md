@@ -1,0 +1,1 @@
+Pre-flight validation before PR: `python -m skills_hub.validate shared/platform-ops/skills/platform-runbooks` or `python -m skills_hub.validate shared/platform-ops/skills/sre-alerting`; exit code 0 means the source is safe to publish.

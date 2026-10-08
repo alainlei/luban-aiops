@@ -1,0 +1,1 @@
+Python 3.x services built on FastAPI with uv as the package manager (per-service `pyproject.toml` + `uv.lock`); the operator portal is a TypeScript/Vite React SPA. Shared inter-service contracts are declared as JSON Schema files under `agent-platform/src/agent_service/contracts/` and mirrored in `execution-runtime/src/execution_runtime/contracts/`.

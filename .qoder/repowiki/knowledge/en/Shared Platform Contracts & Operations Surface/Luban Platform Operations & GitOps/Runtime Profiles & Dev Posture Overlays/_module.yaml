@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: shared/platform_ops/runtime_profiles
+title: Runtime Profiles & Dev Posture Overlays
+scope:
+    - shared/platform-ops/gitops/runtime-profiles/
+source_files: []
+depends_on: []
+related_to: []

@@ -3,12 +3,159 @@ schema_version: 1
 locale: en-US
 branch: main
 nodes_managed: true
-exported_at: "2026-10-07T16:53:55Z"
+exported_at: "2026-10-08T05:47:21Z"
 modules:
     "":
         dir_name: Luban Agentic AIOps Platform Workspace
         title: Luban Agentic AIOps Platform Workspace
         scope: []
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    docs:
+        dir_name: Luban Agentic AIOps Platform Documentation Workspace
+        title: Luban Agentic AIOps Platform Documentation Workspace
+        scope:
+            - docs/
+        source_files: []
+        children:
+            - docs/architecture_decision_records
+            - docs/platform_design_and_release_notes
+            - docs/specifications
+            - docs/user_and_operator_guides
+            - docs/workspace_spikes_and_product_plans
+        depends_on: []
+        related_to: []
+    docs/architecture_decision_records:
+        dir_name: Architecture Decision Records (ADRs)
+        title: Architecture Decision Records (ADRs)
+        scope:
+            - docs/adr/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    docs/platform_design_and_release_notes:
+        dir_name: Agentic AIOps Platform Design & Release Notes
+        title: Agentic AIOps Platform Design & Release Notes
+        scope:
+            - docs/agentic-aiops-platform/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    docs/specifications:
+        dir_name: Spec-Driven Development Specifications
+        title: Spec-Driven Development Specifications
+        scope:
+            - docs/specs/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    docs/user_and_operator_guides:
+        dir_name: Operator & Portal User Guides
+        title: Operator & Portal User Guides
+        scope:
+            - docs/guides/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    docs/workspace_spikes_and_product_plans:
+        dir_name: Workspace Spikes & Product Plans
+        title: Workspace Spikes & Product Plans
+        scope:
+            - docs/workspace/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    products:
+        dir_name: Luban Agentic AIOps Product Services
+        title: Luban Agentic AIOps Product Services
+        scope:
+            - products/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    shared:
+        dir_name: Shared Platform Contracts & Operations Surface
+        title: Shared Platform Contracts & Operations Surface
+        scope:
+            - shared/
+        source_files: []
+        children:
+            - shared/platform_ops
+            - shared/shared_contracts
+        depends_on: []
+        related_to: []
+    shared/platform_ops:
+        dir_name: Luban Platform Operations & GitOps
+        title: Luban Platform Operations & GitOps
+        scope:
+            - shared/platform-ops/
+        source_files: []
+        children:
+            - shared/platform_ops/dashboards
+            - shared/platform_ops/e2e_demos
+            - shared/platform_ops/gitops_manifests
+            - shared/platform_ops/runtime_profiles
+            - shared/platform_ops/skills
+        depends_on: []
+        related_to: []
+    shared/platform_ops/dashboards:
+        dir_name: OpenObserve Dashboards Config-as-Code
+        title: OpenObserve Dashboards Config-as-Code
+        scope:
+            - shared/platform-ops/dashboards/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    shared/platform_ops/e2e_demos:
+        dir_name: Platform E2E Live-Check & Demo Scripts
+        title: Platform E2E Live-Check & Demo Scripts
+        scope:
+            - shared/platform-ops/e2e/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    shared/platform_ops/gitops_manifests:
+        dir_name: Dev Kubernetes Base Manifests (Kustomize)
+        title: Dev Kubernetes Base Manifests (Kustomize)
+        scope:
+            - shared/platform-ops/gitops/dev-k8s/base/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    shared/platform_ops/runtime_profiles:
+        dir_name: Runtime Profiles & Dev Posture Overlays
+        title: Runtime Profiles & Dev Posture Overlays
+        scope:
+            - shared/platform-ops/gitops/runtime-profiles/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    shared/platform_ops/skills:
+        dir_name: Platform Ops Skills Library (Runbooks & Alerting Guides)
+        title: Platform Ops Skills Library (Runbooks & Alerting Guides)
+        scope:
+            - shared/platform-ops/skills/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    shared/shared_contracts:
+        dir_name: Shared Cross-Project Contracts & Policy Bundles
+        title: Shared Cross-Project Contracts & Policy Bundles
+        scope:
+            - shared/shared-contracts/
         source_files: []
         children: []
         depends_on: []

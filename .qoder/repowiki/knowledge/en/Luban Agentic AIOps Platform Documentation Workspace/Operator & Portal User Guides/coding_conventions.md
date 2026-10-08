@@ -1,0 +1,4 @@
+- Each guide is a single self-contained Markdown file named in kebab-case describing one operational topic, referenced from the top-level `README.md` table of contents.
+- Cross-references to other documentation use relative paths into sibling doc trees (`../agentic-aiops-platform/`, `../specs/`, `../../shared/platform-ops/`) rather than absolute URLs.
+- Operational walkthroughs follow a numbered step format with prerequisite tables, concrete shell commands, and an end-to-end verification checklist at the bottom.
+- Architecture and request-flow explanations embed Mermaid diagrams (`graph TB`, `sequenceDiagram`) alongside prose to illustrate service topology and trust chains.

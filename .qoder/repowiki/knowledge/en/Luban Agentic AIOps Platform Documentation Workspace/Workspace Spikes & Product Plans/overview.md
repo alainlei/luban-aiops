@@ -1,0 +1,1 @@
+Design and planning documents that define the Luban AIOps platform's modular workspace layout, product boundaries, and technical spikes evaluating AgentScope, MCP, semantic skill retrieval, and related capabilities.

@@ -1,0 +1,5 @@
+- Each microservice lives in its own sub-directory containing a matching `<name>-deployment.yaml` and `<name>-service.yaml` pair, with optional `runtime-config.env` and secret files.
+- Runtime configuration is split between plain `runtime-config.env` (merged into the shared `platform-runtime-config` ConfigMap) and `runtime-secrets.env` / `runtime-secrets.example.env` pairs for sensitive values.
+- Deployments set `enableServiceLinks: false` and discover peers via DNS names instead of Kubernetes service-link environment variables to avoid `_PORT`/`_HOST` collisions.
+- Containers run non-root with `runAsNonRoot: true`, `runAsUser: 1000`, `allowPrivilegeEscalation: false`, and `seccompProfile.type: RuntimeDefault`.
+- Prometheus scraping is opt-in per pod via the `prometheus.io/scrape`, `prometheus.io/path`, and `prometheus.io/port` annotations.

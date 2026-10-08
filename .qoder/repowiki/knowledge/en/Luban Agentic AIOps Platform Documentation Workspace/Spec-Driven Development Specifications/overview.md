@@ -1,0 +1,1 @@
+Repository of numbered feature specifications (SPEC-001 through SPEC-068) that drive Luban's spec-driven development workflow, each owning requirements, technical plan, and task checklist.

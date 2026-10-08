@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: shared/platform_ops/e2e_demos
+title: Platform E2E Live-Check & Demo Scripts
+scope:
+    - shared/platform-ops/e2e/
+source_files: []
+depends_on: []
+related_to: []

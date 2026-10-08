@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: docs/platform_design_and_release_notes
+title: Agentic AIOps Platform Design & Release Notes
+scope:
+    - docs/agentic-aiops-platform/
+source_files: []
+depends_on: []
+related_to: []

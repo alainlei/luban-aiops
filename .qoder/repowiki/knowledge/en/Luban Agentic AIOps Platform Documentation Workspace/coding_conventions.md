@@ -1,0 +1,3 @@
+- Feature work follows a three-stage doc pipeline: spike/plan in workspace/, formal specification in specs/SPEC-NNN-*, then implementation reflected in release notes under agentic-aiops-platform/release-notes/.
+- Architecturally significant decisions are recorded as numbered Markdown ADRs in adr/ and take precedence over longer-form design docs.
+- Each SPEC directory is self-contained with a fixed trio of plan.md, spec.md, and tasks.md files.

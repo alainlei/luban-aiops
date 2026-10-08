@@ -1,0 +1,1 @@
+Design documentation and milestone-oriented release notes for the proposed enterprise agentic AIOps platform, covering framework selection, reference architecture, identity/authorization design, policy specification, delivery roadmap, and per-release implementation waves.

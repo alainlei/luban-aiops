@@ -1,0 +1,6 @@
+- Scripts declare `set -eu` and define a local `fail()` helper that prints `FAIL:` to stderr and exits 1, used uniformly for assertion failures.
+- JSON payloads are parsed through an inline python3 snippet exposing a `json_field` function that walks dot-separated keys, instead of relying on external tools like jq.
+- HTTP responses are captured into global `HTTP_CODE`/`HTTP_BODY` variables via a wrapper around `curl -w "%{http_code}"`, keeping request/response handling uniform across steps.
+- Test runs append a unique suffix built from `$(date +%s)-$$` so concurrent executions do not collide on generated IDs, labels, or session titles.
+- Cluster-facing demos authenticate against the identity broker via `POST /api/v1/auth/token` with a username/email/roles/groups body, then pass the resulting `access_token` as a Bearer header to gateway endpoints.
+- Each script's top comment documents the SPEC number(s) asserted, prerequisite port-forwards, environment overrides, and the numbered sequence of assertions it performs.

@@ -1,0 +1,3 @@
+- Spike documents follow a consistent structure: objective, evidence/gate evaluation, findings, and an explicit assessment-only outcome that states whether implementation or spec authorization is granted.
+- Product definitions consistently enumerate Primary Responsibility, Key Concerns, Consumes, Publishes, and Ownership Groups to keep trust boundaries and integration points visible across files.
+- Boundary rules are expressed as numbered assertions (e.g., 'operator-portal may request actions, but it does not authorize them') rather than prose paragraphs, making them checkable against future implementations.

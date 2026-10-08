@@ -1,0 +1,1 @@
+POSIX sh + embedded python3 snippets for JSON path access; `curl` for HTTP; `kubectl` for in-cluster exec and ConfigMap/Secret reads; `uv run --frozen` for the execution-runtime test harness; `pytest` invoked from the agent-platform package for the observability local leg; `caffeinate` (macOS) used only to keep the host awake during long campaign runs.

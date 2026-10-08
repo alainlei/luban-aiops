@@ -1,0 +1,1 @@
+Kustomize overlays (base + runtime-profile composition), OpenObserve dashboard JSON, shell-driven e2e smoke tests, and a collection of `sync-*.sh` secret-synchronisation scripts targeting the same `dev-luban-aiops` namespace.

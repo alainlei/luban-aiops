@@ -8,9 +8,19 @@
 - [elastic_connector.py](file://products/tool-gateway/src/tool_gateway/tools/elastic_connector.py)
 - [incidents_connector.py](file://products/tool-gateway/src/tool_gateway/tools/incidents_connector.py)
 - [skills_connector.py](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py)
+- [http_connector.py](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py)
+- [oauth_client.py](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py)
+- [auth_resolution.py](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py)
 - [base.py](file://products/tool-gateway/src/tool_gateway/tools/base.py)
 - [registry.py](file://products/tool-gateway/src/tool_gateway/tools/registry.py)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Added comprehensive documentation for the HTTP connector with its new auth resolution system integration
+- Documented OAuth2 token client support for connector-owned instances
+- Updated security considerations to include credential set management and OAuth2 flows
+- Enhanced error handling patterns for authentication failures
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -24,12 +34,13 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document describes the built-in tool connectors provided by the platform’s Tool Gateway. It covers:
+This document describes the built-in tool connectors provided by the platform's Tool Gateway. It covers:
 - Browser automation connector for bounded web operations (navigation, snapshots, screenshots, credential filling, and interactions).
 - Kubernetes connector for cluster inspection and a bounded mutating primitive.
 - Elasticsearch connector for log querying and service health/alerts.
 - Incidents connector for read-only access to incident records.
 - Skills connector for skill repository discovery and retrieval.
+- **HTTP connector for bounded HTTP operations with advanced authentication support including OAuth2 client credentials flow.**
 
 For each connector, you will find usage examples, parameter specifications, error handling patterns, security considerations, and access control requirements.
 
@@ -48,35 +59,51 @@ K8S["KubernetesConnector"]
 EL["ElasticConnector"]
 INC["IncidentsConnector"]
 SK["SkillsConnector"]
+HTTP["HttpConnector"]
+end
+subgraph "Auth Infrastructure"
+AUTH["Auth Resolution System"]
+OAUTH["OAuth2 Token Client"]
+CRED["Credential Set Store"]
 end
 BR --> REG
 K8S --> REG
 EL --> REG
 INC --> REG
 SK --> REG
+HTTP --> REG
 REG --> BASE
+HTTP --> AUTH
+AUTH --> OAUTH
+AUTH --> CRED
 ```
 
 **Diagram sources**
 - [registry.py:18-89](file://products/tool-gateway/src/tool_gateway/tools/registry.py#L18-L89)
 - [base.py:15-123](file://products/tool-gateway/src/tool_gateway/tools/base.py#L15-L123)
+- [http_connector.py:324-402](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L324-L402)
+- [auth_resolution.py:69-112](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L69-L112)
+- [oauth_client.py:81-139](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L81-L139)
 
 **Section sources**
-- [README.md:1-167](file://products/tool-gateway/README.md#L1-L167)
+- [README.md:1-199](file://products/tool-gateway/README.md#L1-L199)
 
 ## Core Components
 - Base abstractions define tool metadata, execution contracts, and standardized result/evidence envelopes.
 - The registry enforces risk-tier admission and dispatches invocations to registered tools.
 - Each connector implements a set of tools with consistent parameter validation, error mapping, and evidence generation.
+- **New unified authentication resolution system provides consistent credential handling across all connectors.**
 
 Key behaviors:
 - Risk tiers: read, write, admin; mutating tools require explicit enablement and authorization.
 - Evidence envelope: every result includes execution time, risk level, and source system.
 - Structured errors: all failures return a code/message pair for reliable handling.
+- **Unified auth resolution supports basic, bearer, and oauth2_client_credentials schemes with secure token caching.**
 
 **Section sources**
 - [base.py:15-123](file://products/tool-gateway/src/tool_gateway/tools/base.py#L15-L123)
 - [registry.py:18-89](file://products/tool-gateway/src/tool_gateway/tools/registry.py#L18-L89)
+- [auth_resolution.py:1-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L1-L113)
 
 ## Architecture Overview
 The Tool Gateway exposes two endpoints: tool discovery and tool invocation. Tools are registered per connector and gated by policy and risk tier. External integrations are isolated behind connector classes that manage client lifecycles and authentication.
@@ -87,10 +114,15 @@ participant Client as "Caller"
 participant GW as "ToolGateway"
 participant REG as "ToolRegistry"
 participant CONN as "Connector"
+participant AUTH as "Auth Resolver"
 participant EXT as "External System"
 Client->>GW : POST /api/v2/tools/invoke {tool_name, parameters}
 GW->>REG : invoke(tool_name, parameters, identity)
 REG->>CONN : execute(parameters, identity)
+CONN->>AUTH : resolve_outbound_auth(credential_set)
+AUTH->>EXT : acquire OAuth2 token (if needed)
+EXT-->>AUTH : access_token
+AUTH-->>CONN : httpx.Auth or BearerAuth
 CONN->>EXT : authenticated request
 EXT-->>CONN : response or error
 CONN-->>REG : ToolResult {status, data/error, evidence}
@@ -101,6 +133,8 @@ GW-->>Client : ToolResult
 **Diagram sources**
 - [registry.py:65-89](file://products/tool-gateway/src/tool_gateway/tools/registry.py#L65-L89)
 - [base.py:35-69](file://products/tool-gateway/src/tool_gateway/tools/base.py#L35-L69)
+- [http_connector.py:368-402](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L368-L402)
+- [auth_resolution.py:69-112](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L69-L112)
 
 ## Detailed Component Analysis
 
@@ -158,7 +192,7 @@ Tools:
 - k8s.delete_pod(name, namespace?) — write-tier, only when mutating tools are enabled
 
 Parameters:
-- namespace defaults to configured default or “default”
+- namespace defaults to configured default or "default"
 - label_selector and field_selector filter lists
 - tail_lines clamped to a safe maximum
 
@@ -199,7 +233,7 @@ Tools:
 
 Parameters:
 - query required for search_logs
-- index defaults to “*”
+- index defaults to "*"
 - time_range_minutes clamped to a safe maximum
 - max_results clamped to a safe maximum
 - severity enum for alerts: critical, warning, info
@@ -297,12 +331,69 @@ Configuration flags:
 - [skills_connector.py:312-419](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py#L312-L419)
 - [README.md:58-59](file://products/tool-gateway/README.md#L58-L59)
 
+### HTTP Connector
+**Updated** Enhanced with new authentication resolution system integration and OAuth2 token client support for connector-owned instances.
+
+Purpose: Bounded HTTP operations with advanced authentication capabilities. Provides read-only GET requests and write-tier POST requests with strict destination validation, redirect handling, and multi-scheme authentication support.
+
+Tools:
+- Read tier: http.get
+- Write tier: http.post
+
+Key parameters and behavior:
+- http.get
+  - url (required): absolute http(s) URL on allowlisted origin
+  - timeout_ms (optional): request timeout with safe maximum
+  - max_bytes (optional): response body size limit
+  - credential_set (optional): named credential reference for authentication
+- http.post
+  - url (required): absolute http(s) URL on allowlisted origin
+  - body (optional): JSON object with depth ≤ 2, ≤ 32 keys, size bounded
+  - timeout_ms (optional): request timeout with safe maximum
+  - credential_set (optional): named credential reference for authentication
+
+Authentication and security:
+- **Unified auth resolution system supports three schemes:**
+  - `basic`: HTTP Basic authentication with username/password
+  - `bearer`: Static bearer token authentication
+  - `oauth2_client_credentials`: Dynamic OAuth2 token acquisition with client credentials flow
+- **OAuth2 token client features:**
+  - In-memory token caching with near-expiry refresh
+  - Per-set locking to prevent thundering herd during token refresh
+  - Support for both `client_secret_basic` and `client_secret_post` authentication variants
+  - Configurable scope, audience, and resource parameters
+- Destination validation enforces deny-by-default origin allowlist
+- Redirect handling prevents write operations from following redirects
+- Secret-bearing query parameters blocked for POST requests
+- Response header projection limited to safe headers (no set-cookie, authorization)
+
+Error handling patterns:
+- Authentication: CREDENTIAL_SET_NOT_FOUND, CREDENTIAL_ACQUISITION_FAILED
+- Destination: HTTP_ORIGIN_NOT_ALLOWED, HTTP_SCHEME_NOT_ALLOWED, HTTP_URL_SECRET_NOT_ALLOWED
+- Request: HTTP_TIMEOUT, HTTP_BODY_TOO_LARGE, HTTP_REDIRECT_NOT_ALLOWED
+- Transport: TOOL_EXECUTION_ERROR, UPSTREAM_ERROR
+
+Usage example:
+- Health check: GET request to verify service availability with projected status and headers
+- Mutation: POST request with bounded JSON body requiring operator approval
+- OAuth2: Automatic token acquisition and caching for protected APIs
+
+Configuration flags:
+- GATEWAY_HTTP_ALLOW_ORIGINS, GATEWAY_HTTP_TIMEOUT_MS, GATEWAY_HTTP_MAX_RESPONSE_BYTES, GATEWAY_HTTP_MAX_REQUEST_BYTES, GATEWAY_HTTP_CREDENTIAL_SETS
+
+**Section sources**
+- [http_connector.py:1-714](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L1-L714)
+- [oauth_client.py:1-232](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L1-L232)
+- [auth_resolution.py:1-113](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L1-L113)
+- [README.md:169-170](file://products/tool-gateway/README.md#L169-L170)
+
 ## Dependency Analysis
 Connectors depend on external clients and services:
 - Browser connector depends on Playwright CDP and skills-hub for flow binding.
 - Kubernetes connector depends on kubernetes-client/python and in-cluster or kubeconfig.
 - Elasticsearch connector depends on elasticsearch Python client.
 - Incidents and skills connectors depend on HTTP clients and respective services.
+- **HTTP connector depends on unified auth resolution system, OAuth2 token client, and credential set store.**
 
 ```mermaid
 graph LR
@@ -312,6 +403,10 @@ K8S["KubernetesConnector"] --> |k8s client| K8sAPI["Kubernetes API"]
 EL["ElasticConnector"] --> |ES client| ES["Elasticsearch"]
 INC["IncidentsConnector"] --> |HTTP| IncSvc["Incident Service"]
 SK["SkillsConnector"] --> |HTTP| SkillsHub
+HTTP["HttpConnector"] --> |HTTP| TargetAPI["Target API"]
+HTTP --> AUTH["Auth Resolution System"]
+AUTH --> OAUTH["OAuth2 Token Client"]
+AUTH --> CRED["Credential Set Store"]
 ```
 
 **Diagram sources**
@@ -320,6 +415,9 @@ SK["SkillsConnector"] --> |HTTP| SkillsHub
 - [elastic_connector.py:40-97](file://products/tool-gateway/src/tool_gateway/tools/elastic_connector.py#L40-L97)
 - [incidents_connector.py:68-94](file://products/tool-gateway/src/tool_gateway/tools/incidents_connector.py#L68-L94)
 - [skills_connector.py:71-109](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py#L71-L109)
+- [http_connector.py:324-402](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L324-L402)
+- [auth_resolution.py:69-112](file://products/tool-gateway/src/tool_gateway/tools/auth_resolution.py#L69-L112)
+- [oauth_client.py:81-139](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L81-L139)
 
 **Section sources**
 - [README.md:56-63](file://products/tool-gateway/README.md#L56-L63)
@@ -329,6 +427,7 @@ SK["SkillsConnector"] --> |HTTP| SkillsHub
 - Kubernetes operations: executed in executors to avoid blocking event loops; tail_lines capped to protect resources.
 - Elastic queries: time ranges and result counts are clamped to safe bounds; aggregations used for health metrics.
 - HTTP connectors: timeouts enforced; upstream errors mapped quickly to structured results.
+- **OAuth2 tokens: in-memory caching with near-expiry refresh prevents redundant token acquisitions; per-set locking avoids concurrent token fetch storms.**
 
 [No sources needed since this section provides general guidance]
 
@@ -345,6 +444,11 @@ Common issues and resolutions:
   - BROWSER_ORIGIN_NOT_ALLOWED: add target origin to allowlist.
   - BROWSER_FLOW_* errors: ensure skill binding matches target and risk class; respect step budget.
   - BROWSER_REF_UNKNOWN: re-take snapshot to refresh refs.
+- HTTP connector-specific:
+  - CREDENTIAL_SET_NOT_FOUND: verify credential set exists and is properly configured.
+  - CREDENTIAL_ACQUISITION_FAILED: check OAuth2 token endpoint connectivity and credentials.
+  - HTTP_ORIGIN_NOT_ALLOWED: add target origin to GATEWAY_HTTP_ALLOW_ORIGINS.
+  - HTTP_REDIRECT_NOT_ALLOWED: ensure target doesn't redirect or configure appropriate allowlist entries.
 - Transport errors:
   - Upstream unreachable returns TOOL_EXECUTION_ERROR; retry or check service health.
 
@@ -354,8 +458,12 @@ Common issues and resolutions:
 - [incidents_connector.py:125-149](file://products/tool-gateway/src/tool_gateway/tools/incidents_connector.py#L125-L149)
 - [skills_connector.py:128-149](file://products/tool-gateway/src/tool_gateway/tools/skills_connector.py#L128-L149)
 - [browser_connector.py:482-698](file://products/tool-gateway/src/tool_gateway/tools/browser_connector.py#L482-L698)
+- [http_connector.py:368-506](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L368-L506)
+- [oauth_client.py:223-231](file://products/tool-gateway/src/tool_gateway/tools/oauth_client.py#L223-L231)
 
 ## Conclusion
-The platform’s built-in connectors provide a secure, standardized interface to external systems. They enforce risk-tier policies, produce structured results with evidence, and handle errors consistently. Operators can enable features selectively via configuration flags and rely on robust validation and guardrails to keep automated operations safe and auditable.
+The platform's built-in connectors provide a secure, standardized interface to external systems. They enforce risk-tier policies, produce structured results with evidence, and handle errors consistently. Operators can enable features selectively via configuration flags and rely on robust validation and guardrails to keep automated operations safe and auditable.
+
+**The HTTP connector enhancement introduces a unified authentication resolution system that provides consistent credential handling across all connectors, with advanced OAuth2 support including secure token caching and multiple authentication variants. This creates a foundation for future connectors to leverage the same authentication infrastructure while maintaining security boundaries and audit trails.**
 
 [No sources needed since this section summarizes without analyzing specific files]

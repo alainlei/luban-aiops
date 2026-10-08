@@ -1,0 +1,1 @@
+Plain Markdown with no tooling; numbering and status enforcement rely on review discipline rather than an automated linter.

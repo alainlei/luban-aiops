@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: shared/platform_ops/skills
+title: Platform Ops Skills Library (Runbooks & Alerting Guides)
+scope:
+    - shared/platform-ops/skills/
+source_files: []
+depends_on: []
+related_to: []

@@ -1,0 +1,6 @@
+- Release-note filenames follow a `<YYYY-MM-DD>-<version-or-topic>.md` pattern and are ordered chronologically, with the date prefix serving as the stable sort key.
+- Each release note opens with a version-tagged summary line (e.g. `minor (v0.X.Y.0)` or `patch (v0.X.Y.Z)`) followed by a paragraph enumerating the SPEC(s) delivered, behavioral changes, contract/policy/audit/migration impact, and validation evidence.
+- Every feature release ties its work to a numbered SPEC (SPEC-013 through SPEC-066) and maps it onto the stacked R5 delivery roadmap rows rather than describing ad-hoc feature sets.
+- Notes consistently declare their boundary by listing what did NOT change — routes, actions, audit event types, shared contracts, schemas, database migrations, or execution paths — alongside what was added.
+- Post-release patches are named with a `post-*` prefix (e.g. `post-live-check-...`, `post-release-review-remediation.md`, `post-spec-047-hardening-...`) to distinguish them from feature deliveries while sharing the same filename convention.
+- The top-level README prescribes a fixed linear reading order across the design documents and cross-references sibling workspace/model docs, treating the document set as a single curated narrative rather than independent files.
