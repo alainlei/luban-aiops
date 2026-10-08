@@ -1,5 +1,14 @@
 # Repository Reorganization Plan
 
+> **Status: executed — historical planning doc.** This plan was written when the
+> repository was still a platform study with only an initial directory skeleton, and it
+> has since been carried out: `products/` and `shared/` now hold the implemented, tested,
+> deployable build products. The "Current State" section below describes that original
+> pre-reorganization starting point, not today's layout, and is retained only as a record
+> of the reorganization rationale. For the present structure see the
+> [architecture overview](../guides/architecture-overview.md) and the
+> [spec index](../specs/README.md).
+
 ## Objective
 
 Define how the current repository should evolve from a platform study repository into a modular workspace with multiple product-oriented projects.

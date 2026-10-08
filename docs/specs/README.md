@@ -29,6 +29,7 @@ All workspace documentation belongs to exactly one of three tiers, each with a d
 - must always reflect the current state of the workspace
 - examples: root `README.md`, `CHANGELOG.md`, product `README.md` files, GitOps overlay `README.md` files
 - kept intentionally minimal so there is less surface that can go stale
+- state the current release by pointing at `VERSION` / `CHANGELOG.md` / the spec index rather than hard-coding a version number or a "through SPEC-N" marker, which drift on every release
 - every delivered spec includes a task to update affected living state docs
 
 ## When A Spec Is Required
