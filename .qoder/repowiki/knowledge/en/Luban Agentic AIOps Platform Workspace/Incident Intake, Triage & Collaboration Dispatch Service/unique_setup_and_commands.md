@@ -1,1 +1,0 @@
-Built with `uv build` (uv_build backend); run via the installed `incident-service` entrypoint which invokes `uvicorn.run` against `incident_service.app:app`. Container image uses `uv sync --frozen --no-dev` and `CMD ["uv", "run", "incident-service"]`. Tests are pytest-based under `tests/` with dev dependencies declared in `[dependency-groups] dev`.

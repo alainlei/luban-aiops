@@ -1,6 +1,0 @@
-- Every JSON Schema file declares `$schema: https://json-schema.org/draft/2020-12/schema` plus an `$id` under `https://metasync.github.io/luban-aiops/schemas/...` and sets `additionalProperties: false` to enforce strict payloads.
-- Schema fields carry descriptions that cite the governing spec or ADR (e.g. SPEC-022 R-2, SPEC-037 R-3, ADR-0010) so the contract text doubles as the normative requirement.
-- Policy rules follow a fixed shape: `id`, `domain: action_authz`, `priority`, `enabled`, `match.roles_any` / `match.actions_any`, and a `decision.outcome` of `allow`, `deny`, or `require_approval` with an optional `approval.tier` block.
-- Action names use `<resource>:<verb>` notation (with bare `chat` for the conversational surface) and tool names use `<system>.<verb>_<noun>` (e.g. `k8s.list_pods`), both documented in the README and reflected in every rule.
-- Bundle changes go only through `policies/policy-default.yaml` with a bumped `version` field; scenario expectations live separately in `policy-scenarios.yaml` and are checked by `make verify`.
-- Identity travels in HTTP headers (`X-User-ID`, `x-request-id`) rather than request bodies, and response envelopes avoid framework-specific types such as AgentScope internals.

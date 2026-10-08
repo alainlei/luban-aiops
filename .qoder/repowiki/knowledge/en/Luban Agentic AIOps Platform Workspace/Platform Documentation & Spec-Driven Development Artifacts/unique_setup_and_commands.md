@@ -1,1 +1,0 @@
-`make verify` is the canonical verification gate used locally and in CI to run every product test suite and render every GitOps overlay via `kustomize build`; `make policy-diff` produces per-(role, action) policy impact reports; `make deploy-sample-app` deploys the `acme-admin` sample application referenced by SPEC-059.

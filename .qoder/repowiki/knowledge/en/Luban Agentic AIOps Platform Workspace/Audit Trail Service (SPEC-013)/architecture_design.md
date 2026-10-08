@@ -1,8 +1,0 @@
-Layered FastAPI application under `src/audit_service/`:
-- Entry point: `main.py` exposes the `audit-service` CLI script via `uvicorn.run`, bootstrapping from `AuditRunSettings.from_env()`.
-- App factory: `app.create_app()` wires lifespan (store init + `RetentionTask` start/stop), a request-id middleware (`x-request-id` propagation), metrics, telemetry, and includes the central `api/router.py` which mounts five route submodules (`health`, `ingest`, `query`, `summary`, `export`).
-- API layer (`api/routes/*.py`) is thin: it authenticates callers, validates Pydantic schemas, calls the store, records Prometheus metrics, and emits structured log events.
-- Services layer (`services/`): `audit_store.AuditStore` Protocol defines the backend contract; `build_audit_store(settings)` selects `InMemoryAuditStore` (dev/test) or `PostgresAuditStore` (deployed) based on `AUDIT_STORE_BACKEND`. Both share `summarize_events` for deterministic aggregation parity. `retention.py` runs a background task that evicts by cutoff window and hard cap. `ingest_auth.py` handles SPEC-008/009 client identity.
-- Schemas (`schemas/`): `AuditEvent` / `IngestRequest` / `AuditQuery` are Pydantic models bound to the external audit-event schema; `summary.py` holds summary types and shared constants (`TOP_ACTORS_LIMIT`, `DECISION_CHAIN_TYPES`).
-- Core (`core/`): `config.py` provides frozen `AuditSettings` loaded from env vars; `metrics.py` / `telemetry.py` / `observability.py` / `request_context.py` provide cross-cutting concerns.
-- Dependency direction: routes → services → schemas/core; no reverse imports. The store Protocol isolates persistence so tests can swap implementations without touching HTTP code.

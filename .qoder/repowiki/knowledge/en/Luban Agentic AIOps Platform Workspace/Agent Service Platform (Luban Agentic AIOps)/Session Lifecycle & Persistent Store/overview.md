@@ -1,1 +1,0 @@
-Manages per-user session creation, listing, ownership checks, title/model bookkeeping, deletion with cascading cleanup, and best-effort transcript reconstruction from agent state snapshots.

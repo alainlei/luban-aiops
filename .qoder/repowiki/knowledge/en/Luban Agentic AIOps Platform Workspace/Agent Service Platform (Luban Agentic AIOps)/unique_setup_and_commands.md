@@ -1,1 +1,0 @@
-Built and tested via `uv` (see `pyproject.toml` / `uv.lock`); Docker image defined by `Dockerfile`; `Makefile` exposes the standard build/test/lint targets used by CI.

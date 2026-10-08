@@ -1,1 +1,0 @@
-Agent-side durable admission boundary for signed mutating tool calls: intent registration, worker dispatch coordination, receipt-backed execution records, and owner-scoped recovery ledger.

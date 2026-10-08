@@ -1,1 +1,0 @@
-Shared operational assets for deploying the Luban platform on Kubernetes, including Kustomize overlays, runtime profiles, secret-sync scripts, OpenObserve dashboards, and e2e smoke tests.

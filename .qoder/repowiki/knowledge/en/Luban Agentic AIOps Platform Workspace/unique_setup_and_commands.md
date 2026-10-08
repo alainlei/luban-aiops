@@ -1,1 +1,1 @@
-Workspace-level Makefile fragments referenced from documentation drive the spec-driven development workflow used across children (setup → configure → operate → author skills); platform_ops contains the Kustomize overlays used to deploy the full stack.
+Each product under `products/` is self-contained with its own `.python-version`, `pyproject.toml`, `uv.lock`, `Makefile`, and `Dockerfile`; workspace-wide commands live in the root `Makefile` and shared Makefile fragments under `mk/`. Samples are deployed via `samples/deploy-samples.sh`.

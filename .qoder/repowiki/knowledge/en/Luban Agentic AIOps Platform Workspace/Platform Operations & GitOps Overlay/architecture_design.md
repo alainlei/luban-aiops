@@ -1,9 +1,0 @@
-The module is organized by operational concern rather than product:
-- `gitops/dev-k8s/` — a single Kustomize overlay that deploys nine application workloads (operator-portal/web-ui, platform-gateway, tool-gateway, agent-service/agent-platform, execution-runtime, identity-broker, audit-service, skills-hub, incident-service) plus in-cluster Redis and PostgreSQL into the `dev-luban-aiops` namespace. Each service lives in its own subdirectory under `base/<service>/` with paired `<service>-deployment.yaml`, `<service>-service.yaml`, optional RBAC, and `runtime-config.env` / `runtime-secrets.env` fragments.
-- `gitops/runtime-profiles/` — a provider/posture layer (`default`, `mutating-dev`, `browser-dev`, `secrets-dev`) selected via the root `kustomization.yaml`; profiles contribute non-secret ConfigMaps and strategic merge patches so active posture remains Git-diffable.
-- `gitops/sync-*.sh` — idempotent secret-provisioning scripts (audit, delegation, browser credentials, email, incidents, sessions DB, OTEL, execution handoff/signing, runtime secrets) invoked by `deploy.sh` after rollout waits.
-- `dashboards/` — OpenObserve-importable JSON dashboards validated offline by `validate_dashboards.py` (AST-based check against each service's `OTEL_MIRROR_FAMILIES`) and applied live via `apply-dashboards.sh`.
-- `e2e/` — deterministic smoke tests per feature (documents, HTTP checks, incidents, mutating tools, observability livecheck, secret delivery, skills).
-- `skills/` — sample skill sources (`platform-runbooks`, `sre-alerting`) mounted into `skills-hub` as git/local sources.
-
-Dependency direction is one-way: scripts depend on cluster state; manifests are pure declarative YAML consumed by Kustomize; dashboards depend only on emitted metric families. Application business logic lives outside this module.

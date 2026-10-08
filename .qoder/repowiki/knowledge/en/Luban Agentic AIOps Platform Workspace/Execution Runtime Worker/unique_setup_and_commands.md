@@ -1,1 +1,0 @@
-Built with `uv build` (pyproject declares `uv_build>=0.8.14,<0.9.0`). The `execution-runtime` console script invokes `main.run()`. Normal pytest excludes `failure/` (`norecursedirs`); failure/integration tests live under `tests/failure/` and require their own compose stack (`tests/failure/support/compose.yaml`).

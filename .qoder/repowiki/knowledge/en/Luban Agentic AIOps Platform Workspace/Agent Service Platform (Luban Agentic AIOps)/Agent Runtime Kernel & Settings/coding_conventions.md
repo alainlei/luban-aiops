@@ -1,5 +1,0 @@
-- Configuration knobs are exposed as fields of the frozen `RuntimeSettings` dataclass with explicit defaults, parsed from `os.getenv` in `from_env`, and validated in `__post_init__` so invalid deployments fail at startup rather than at call time.
-- Optional/external dependencies (agentscope classes, gateway tools, execution guard) are imported inside the function that needs them to avoid cold-start cost and circular imports.
-- Cross-turn request-scoped state between kernel and middleware layers is passed via `contextvars.ContextVar` (e.g. `TOOL_EVIDENCE_SINK`, `CURRENT_PROSE_REDACTOR`, `DELEGATED_TOKEN`) instead of global mutable state.
-- Failure paths degrade gracefully: evidence writes, state snapshots, and state restores are wrapped in try/except that log warnings and record metrics without raising, keeping the user turn intact when side effects fail.
-- Security-sensitive output is funneled through `redact_structure` / `redact_assistant_text` / `redact_user_text` using credential literals harvested from both user prose and generated values before any frame or error message is emitted.

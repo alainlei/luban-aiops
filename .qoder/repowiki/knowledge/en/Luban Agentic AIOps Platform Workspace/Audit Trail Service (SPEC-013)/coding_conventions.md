@@ -1,6 +1,0 @@
-- Configuration is centralized in frozen dataclasses under `core/config.py` with `from_env()` classmethods reading `AUDIT_*` environment variables, cached via `@lru_cache(maxsize=1)`.
-- Persistence backends implement the `AuditStore` Protocol and are selected through a `build_audit_store(settings)` factory rather than conditional branching at call sites.
-- Route handlers follow an authenticate → validate → persist → record-metrics → log-event sequence, returning `JSONResponse` with explicit status codes for each error branch.
-- Audit event envelopes are stored and returned verbatim with no field rewriting between ingest and query, enforced by `extra="forbid"` on Pydantic models.
-- Cursor-based pagination uses `encode_cursor`/`decode_cursor` helpers around base64-encoded `(occurred_at|event_id)` tuples, applied identically in both in-memory and Postgres stores.
-- Summary aggregation is implemented once in `summarize_events` and reused by both backends so in-memory and Postgres produce byte-identical results.

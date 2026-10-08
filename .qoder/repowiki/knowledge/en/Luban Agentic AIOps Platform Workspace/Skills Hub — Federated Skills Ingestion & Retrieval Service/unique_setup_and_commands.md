@@ -1,1 +1,0 @@
-`make -C products/skills-hub` delegates to shared fragments under `../../mk/image.mk` and `../../mk/python.mk` (run `make help` there). The package exposes a CLI entrypoint `skills-hub = skills_hub.main:run` registered in `pyproject.toml`. Tests use pytest with fixtures under `tests/fixtures/` and a compose-backed Postgres harness in `tests/support/postgres_infra.py`.

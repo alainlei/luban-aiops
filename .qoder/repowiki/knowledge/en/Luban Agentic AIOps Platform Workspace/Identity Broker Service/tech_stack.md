@@ -1,1 +1,0 @@
-Python ≥3.11, FastAPI + Uvicorn ASGI server, PyJWT + cryptography for RS256 JWT signing/JWKS, httpx for OIDC discovery, OpenTelemetry SDK with OTLP HTTP exporter and FastAPI/httpx/logging instrumentation, Prometheus client, Pydantic v2, built via uv_build.

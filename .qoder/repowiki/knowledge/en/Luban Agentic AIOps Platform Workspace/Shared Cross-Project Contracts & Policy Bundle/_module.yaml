@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: shared_contracts
-title: Shared Cross-Project Contracts & Policy Bundle
-scope:
-    - shared/shared-contracts/
-source_files: []
-depends_on: []
-related_to: []

@@ -1,7 +1,0 @@
-Layered FastAPI application under `src/incident_service/`:
-- Entry point: `main.py` exposes the `incident-service` CLI (uv script) which boots uvicorn with runtime settings from `core/runtime.py`.
-- App assembly in `app.py`: creates the FastAPI instance, installs an HTTP middleware for request logging (request-id propagation via `core/request_context.py`), wires the router, metrics (`core/metrics.py`), telemetry (`core/telemetry.py`), and a lifespan that builds connectors and the incident store at startup — unknown connector names fail fast per SPEC-015 R-5.
-- API layer (`api/routes/{health,incidents,webhooks}.py`) is mounted through `api/router.py`, which is the single include point for all HTTP endpoints.
-- Business logic lives in `services/`: `triage.py` drives agent triage, `normalization.py` normalizes payloads, `incident_store.py` abstracts persistence (memory or PostgreSQL via psycopg), `connectors.py` defines the `Connector` Protocol and registry driving post-triage dispatch, and `query_auth.py` validates query/auth tokens.
-- Shared data contracts are Pydantic models in `schemas/incident.py`; configuration is frozen dataclasses loaded from `INCIDENT_*` environment variables in `core/config.py`.
-- Dependency direction is strictly inward: routes → services → schemas/core; services never import routes. External integrations (agent-service, audit-service, DB backends) are reached only through the connector/store abstractions.

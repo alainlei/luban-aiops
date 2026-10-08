@@ -1,1 +1,0 @@
-FastAPI identity broker that authenticates services, verifies subject tokens, and issues short-lived delegated JWTs bound to target audiences.

@@ -1,9 +1,0 @@
-Layered FastAPI service with a clear dependency direction: `main.py` boots uvicorn with a 35s graceful drain (SPEC-063 R-7c) against the lifespan-managed `app.py`, which wires logging, metrics, telemetry, an HTTP request-id middleware, and the `api/router`. The API layer (`api/routes/{health,handoff}`) is thin; business logic lives under `services/`:
-
-- `execution_protocol.py` owns the closed v3 protocol: JSON Schema validation via `jsonschema.Draft202012Validator` over schemas in `contracts/*.schema.json`, canonical JSON/digest computation, HMAC signing/verification of envelopes, and typed `ProtocolError(reason)` codes that are the only values allowed to cross the service boundary.
-- `execution_ledger.ExecutionLedger` is the durable single-use dispatch authority backed by `psycopg` + the SQL schema in `contracts/execution-ledger-v1.sql`; it exposes `claim` → `open_send` → `finish`/`stop` as a linearized state machine using advisory locks per `run_id`, reserved slots for `worker_result`/`claim_committed`, overflow tracking, and a retention sweep gated by a DB trigger.
-- `executor.execute_tool` is a non-retrying HTTP client to the upstream tool gateway with a hard 30s inner timeout, redirect rejection, response identity checks, and `GatewayUncertain(ProtocolError)` for transport uncertainty.
-- Supporting services: `audit_emitter`, `execution_io`, `execution_records`, `execution_signing`, `single_flight`, `execution_cutover`, `execution_migration`.
-- `core/` holds shared infrastructure: settings (`config.py`, `runtime.ExecutionRunSettings`), Prometheus metrics, OpenTelemetry setup, structured logging, and request-scoped context.
-
-The process is containerized via `Dockerfile`, built with `uv_build`, and exposed as the `execution-runtime` console script. Tests under `tests/` are split into unit tests and a `failure/` harness (with its own `compose.yaml`) for integration/fault scenarios excluded from normal pytest discovery.

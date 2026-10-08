@@ -1,1 +1,0 @@
-Defines the agent-service's external JSON Schema contracts, Pydantic v2 API models, and shared runtime primitives (settings, env, request correlation, logging, Prometheus metrics, and OTel telemetry).

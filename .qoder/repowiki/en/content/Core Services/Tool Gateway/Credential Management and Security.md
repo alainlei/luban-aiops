@@ -15,6 +15,7 @@
 - [config.py](file://products/tool-gateway/src/tool_gateway/core/config.py)
 - [base.py](file://products/tool-gateway/src/tool_gateway/tools/base.py)
 - [SPEC-062 spec.md](file://docs/specs/SPEC-062-secure-password-generation-and-delivery/spec.md)
+- [SPEC-068 spec.md](file://docs/specs/SPEC-068-outbound-execution-credential-schemes/spec.md)
 - [ADR-0012](file://docs/adr/0012-one-time-secret-delivery-handoff.md)
 - [password-policy.yaml](file://shared/shared-contracts/policies/password-policy.yaml)
 </cite>
@@ -28,6 +29,7 @@
 - Improved URL secret masking for query parameters and userinfo components across all connectors
 - Enhanced audit logging with new secret delivery tracking events
 - Updated troubleshooting guide with secrets connector-specific issues and policy enforcement scenarios
+- **Updated** Enhanced credential model now supports scheme-aware parsing system with optional per-set scheme field, extending beyond fixed username/password requirements while maintaining backward compatibility
 
 ## Table of Contents
 1. Introduction
@@ -43,7 +45,7 @@
 
 ## Introduction
 This document explains how the Tool Gateway manages credentials and prevents sensitive data from leaking in tool outputs through enhanced credential masking throughout the entire request/response lifecycle. It covers:
-- The credential set architecture for browser login flows and HTTP service authentication with reference-based credential resolution.
+- The credential set architecture for browser login flows and HTTP service authentication with reference-based credential resolution and scheme-aware parsing.
 - The new secrets connector providing cryptographically secure password generation with centralized policy enforcement and one-time secure delivery mechanisms.
 - One-time secure delivery mechanisms including portal-based copy functionality and gated email delivery.
 - The enhanced redaction system that detects and masks secrets, tokens, and personal information in tool results with comprehensive pattern matching.
@@ -53,7 +55,7 @@ This document explains how the Tool Gateway manages credentials and prevents sen
 
 ## Project Structure
 The Tool Gateway implements comprehensive credential handling and output sanitization across a focused set of modules:
-- Credential sets: lazy-loaded JSON secret file with named sets for both browser login flows and HTTP Basic authentication.
+- Credential sets: lazy-loaded JSON secret file with named sets supporting scheme-aware parsing for both browser login flows and HTTP Basic authentication.
 - Secrets connector: CSPRNG password generation with centralized policy enforcement and one-time secure delivery mechanisms.
 - Redaction engine: deterministic, code-owned pattern matching and key-based masking applied to every tool result before it leaves the gateway.
 - URL redaction: specialized URL masking for query parameters and userinfo components to prevent secret leakage.
@@ -100,7 +102,7 @@ F --> P["Email Channel<br/>gated delivery"]
 - [gateway_service.py:158-376](file://products/tool-gateway/src/tool_gateway/services/gateway_service.py#L158-L376)
 
 ## Core Components
-- **CredentialSetStore**: Loads a JSON file of named credential sets on demand, validates required fields, and reloads automatically when the file changes.
+- **CredentialSetStore**: Loads a JSON file of named credential sets on demand, validates required fields based on scheme type, and reloads automatically when the file changes. Supports scheme-aware parsing with optional per-set scheme field.
 - **Secrets Connector**: Provides cryptographically secure password generation using Python's `secrets` module, enforced against a centralized password policy contract, with one-time delivery mechanisms.
 - **Enhanced Redaction Engine**: Applies value-pattern matches (e.g., PEM private keys, JWTs, Bearer/Basic headers, AWS access key IDs) and explicit sensitive key names to replace values with a marker. Includes comprehensive overflow protection and fail-closed behavior.
 - **URL Redaction**: Specialized URL masking for query parameters and userinfo components using a shared vocabulary of secret-bearing parameter names.
@@ -184,12 +186,22 @@ end
 
 ## Detailed Component Analysis
 
-### Credential Set Architecture
-- Named sets: Each entry maps a human-friendly name to a dictionary containing at least username and password strings.
-- Lazy loading: The store reads the file only when needed and caches until mtime changes.
-- Validation: Only entries with non-empty username and password are accepted; malformed entries are ignored with warnings.
-- Rotation: Because the store reloads on file modification, operators can rotate credentials by updating the mounted secret file without restarting the gateway.
-- Safety: Names are safe to expose; values never appear in logs or results and flow only into authentication mechanisms.
+### Enhanced Credential Set Architecture with Scheme-Aware Parsing
+
+**Updated** Enhanced credential model now supports scheme-aware parsing system with optional per-set scheme field, extending beyond fixed username/password requirements while maintaining backward compatibility.
+
+#### Scheme Vocabulary and Field Requirements
+- **Supported schemes**: `basic`, `bearer`, and `oauth2_client_credentials` with distinct field requirements for each.
+- **Backward compatibility**: Sets without a `scheme` field default to `basic` and parse exactly as before, ensuring existing configurations remain functional.
+- **Field validation**: Each scheme has specific required fields - `basic` requires `username` and `password`, `bearer` requires `token`, and `oauth2_client_credentials` requires `token_url`, `client_id`, and `client_secret`.
+- **Optional fields**: Additional fields like `scope`, `audience`, `resource`, and `client_auth` are retained when present for OAuth2 client credentials.
+- **Fail-closed behavior**: Unknown schemes or missing required fields cause sets to be ignored with warnings rather than crashing the system.
+
+#### Enhanced Loading and Validation Process
+- **Lazy loading**: The store reads the file only when needed and caches until mtime changes.
+- **Scheme-aware validation**: Instead of checking only `username` and `password`, the system now validates fields based on the declared scheme.
+- **Field retention**: Unlike previous implementation that projected sets down to only `username`/`password`, the enhanced version retains all scheme-specific fields.
+- **Error handling**: Malformed entries or unknown schemes are logged with warnings and skipped, maintaining system stability.
 
 ```mermaid
 flowchart TD
@@ -199,32 +211,42 @@ CheckPath --> |Yes| Stat["stat(path)"]
 Stat --> MtimeOK{"mtime == cached?"}
 MtimeOK --> |Yes| UseCache["Use cached sets"]
 MtimeOK --> |No| ReadFile["Read JSON file"]
-ReadFile --> Validate{"Valid object?<br/>Required fields present?"}
-Validate --> |No| Warn["Log warning, keep last good load"]
-Validate --> |Yes| BuildSets["Build parsed sets"]
-BuildSets --> UpdateCache["Update cache and mtime"]
+ReadFile --> ValidateSchema{"Has valid schema?<br/>Required fields present?"}
+ValidateSchema --> |No| Warn["Log warning, keep last good load"]
+ValidateSchema --> |Yes| ParseScheme{"Parse scheme:<br/>basic/bearer/oauth2"}
+ParseScheme --> ValidateFields{"Validate scheme-specific<br/>required fields"}
+ValidateFields --> |Invalid| IgnoreSet["Ignore set with warning"]
+ValidateFields --> |Valid| RetainFields["Retain all scheme fields"]
+RetainFields --> UpdateCache["Update cache and mtime"]
 UpdateCache --> ReturnSets["Return sets"]
+IgnoreSet --> UpdateCache
 ```
 
 **Diagram sources**
 - [credential_sets.py:30-103](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L30-L103)
+- [SPEC-068 spec.md:96-114](file://docs/specs/SPEC-068-outbound-execution-credential-schemes/spec.md#L96-L114)
 
 **Section sources**
 - [credential_sets.py:30-103](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L30-L103)
+- [SPEC-068 spec.md:96-114](file://docs/specs/SPEC-068-outbound-execution-credential-schemes/spec.md#L96-L114)
 
 ### Reference-Based Credential Injection into Tool Invocations
 
-**Updated** Added support for HTTP connector with reference-based credential sets and proper secret handling.
+**Updated** Enhanced support for scheme-aware credential sets with proper secret handling across all authentication types.
 
 #### HTTP Connector Credential Resolution
 - **Reference-only approach**: HTTP tools accept `credential_set` parameter (name only), never literal secrets.
-- **Basic Authentication**: Credential sets resolve to HTTP Basic auth headers server-side.
+- **Scheme-aware authentication**: Credential sets resolve to appropriate authentication mechanisms based on scheme type:
+  - `basic`: HTTP Basic auth headers server-side
+  - `bearer`: Authorization Bearer token headers
+  - `oauth2_client_credentials`: OAuth2 client credentials flow
 - **Origin validation**: Requests must target allowlisted origins; loopback, link-local, and multicast addresses are always refused.
 - **Redirect protection**: POST requests never follow redirects; GET requests validate each hop against the allowlist.
 - **Secret query parameter handling**: POST URLs cannot carry secret-bearing query parameters; GET URLs mask them in responses.
 
 #### Browser Connector Integration
 - **Fill credentials**: Browser connector holds a CredentialSetStore instance and resolves named sets at fill time.
+- **Scheme validation**: Browser flows require `basic` scheme sets; non-basic schemes fail closed with structured errors.
 - **Parameter binding**: The web.fill_credential tool consumes a named set and injects username/password into the page via Playwright. Values are not serialized into results, snapshots, or evidence.
 - **Screenshot protection**: When capturing screenshots, the connector masks filled password values in the DOM before capture to avoid leaking them in images.
 - **Query parameter masking**: URLs reported in evidence have secret-bearing query parameters masked so they do not leak into results or audit trails.
@@ -240,8 +262,14 @@ participant UR as "URL Redaction"
 Caller->>GW : http.get {url, credential_set}
 GW->>HC : execute(...)
 HC->>CS : get(credential_set)
-CS-->>HC : {username, password}
+CS-->>HC : {scheme, fields...}
+alt basic scheme
 HC->>BA : create BasicAuth(username, password)
+else bearer scheme
+HC->>HC : add Authorization : Bearer token
+else oauth2_client_credentials
+HC->>HC : perform OAuth2 client credentials flow
+end
 HC->>UR : redact_secret_query(url)
 Note over HC,BA : Credentials never leave process in plaintext
 HC-->>GW : ToolResult (no secrets)
@@ -594,6 +622,15 @@ Common issues and diagnostics:
 - **Ephemeral masking issues**:
   - Symptom: Generated credentials appearing in unexpected output surfaces.
   - Action: Verify redaction is enabled and configured correctly; check that all output paths go through the redaction layer; review overflow thresholds.
+- **Unknown credential scheme**:
+  - Symptom: Credential sets with unknown scheme values are ignored with warnings.
+  - Action: Verify scheme values are one of: `basic`, `bearer`, or `oauth2_client_credentials`; check for typos in scheme declarations.
+- **Missing required fields for scheme**:
+  - Symptom: Credential sets missing required fields for their declared scheme are ignored.
+  - Action: Ensure `basic` sets have `username` and `password`, `bearer` sets have `token`, and `oauth2_client_credentials` sets have `token_url`, `client_id`, and `client_secret`.
+- **Browser flow with non-basic scheme**:
+  - Symptom: Browser credential filling fails when referencing non-basic schemes.
+  - Action: Use `basic` scheme sets for browser credential filling; other schemes are not supported for web form filling.
 
 **Section sources**
 - [credential_sets.py:52-103](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L52-L103)
@@ -604,8 +641,9 @@ Common issues and diagnostics:
 
 ## Conclusion
 The Tool Gateway centralizes credential management and output sanitization to minimize risk through enhanced credential masking throughout the entire request/response lifecycle:
-- Credentials are stored as named sets in a secret-mounted file and injected safely into both browser sessions and HTTP Basic authentication.
+- Credentials are stored as named sets in a secret-mounted file with scheme-aware parsing and injected safely into both browser sessions and HTTP authentication mechanisms.
 - Reference-based credential resolution ensures secrets never appear as literals in tool parameters or logs.
+- Enhanced credential model supports multiple authentication schemes (`basic`, `bearer`, `oauth2_client_credentials`) while maintaining backward compatibility.
 - Generated passwords provide cryptographically secure alternatives to manual password creation, enforced against centralized policy contracts.
 - One-time secure delivery mechanisms prevent plaintext exposure through redemption-on-click and gated email channels.
 - Enhanced redaction applies deterministic pattern and key-based masking to all tool outputs, with fail-closed overflow protection and comprehensive coverage.
@@ -616,11 +654,27 @@ The Tool Gateway centralizes credential management and output sanitization to mi
 
 ## Appendices
 
-### Example: Defining Custom Credential Sets
-- Create a JSON file with named sets, each containing username and password strings.
+### Example: Defining Custom Credential Sets with Schemes
+- Create a JSON file with named sets supporting different authentication schemes.
 - Mount the file into the gateway container and configure the credential sets path via environment.
 - Reference the set name in `web.fill_credential` or HTTP tool parameters; values are injected into the respective systems but never logged or returned.
 - HTTP connector supports both browser and HTTP credential sets through shared configuration.
+
+**Example credential sets file:**
+```json
+{
+  "inventory-app": {"username": "svc-check", "password": "..."},
+  "legacy-crm": {"username": "checker", "password": "..."},
+  "api-service": {"scheme": "bearer", "token": "..."},
+  "oauth-service": {
+    "scheme": "oauth2_client_credentials",
+    "token_url": "https://auth.example.com/token",
+    "client_id": "...",
+    "client_secret": "...",
+    "scope": "read write"
+  }
+}
+```
 
 **Section sources**
 - [credential_sets.py:11-17](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L11-L17)
@@ -638,18 +692,25 @@ The Tool Gateway centralizes credential management and output sanitization to mi
 
 ### Example: Using Reference-Based Credentials in HTTP Tools
 ```python
-# HTTP GET with credential set
+# HTTP GET with basic credential set
 result = await registry.invoke("http.get", {
     "url": "https://api.example.com/data",
-    "credential_set": "my-service",
+    "credential_set": "inventory-app",
     "timeout_ms": 5000
 }, identity)
 
-# HTTP POST with credential set  
+# HTTP POST with bearer token credential set
 result = await registry.invoke("http.post", {
     "url": "https://api.example.com/update",
     "body": {"action": "update", "value": 42},
-    "credential_set": "my-service"
+    "credential_set": "api-service"
+}, identity)
+
+# HTTP POST with OAuth2 client credentials
+result = await registry.invoke("http.post", {
+    "url": "https://api.example.com/resource",
+    "body": {"query": "data"},
+    "credential_set": "oauth-service"
 }, identity)
 ```
 
@@ -711,3 +772,7 @@ result = await registry.invoke("secrets.deliver", {
 - Monitor delivery buffer capacity and TTL settings for optimal performance.
 - Leverage ephemeral masking knowledge to ensure comprehensive credential protection across all output surfaces.
 - Implement proper monitoring and alerting for credential-related security events.
+- Use appropriate credential schemes for different authentication requirements.
+- Validate credential set configurations regularly to ensure scheme compatibility.
+- Test browser credential flows with basic scheme sets only.
+- Monitor for unknown scheme warnings and missing required field errors.

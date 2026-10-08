@@ -1,1 +1,0 @@
-Python dataclasses for immutable config; integrates with the external `agentscope` library (Agent, Toolkit, MiddlewareBase, PermissionEngine, TracingMiddleware, ReplyBudgetControlMiddleware); uses `zoneinfo` for IANA timezone validation.

@@ -1,5 +1,0 @@
-- Configuration is expressed as frozen `dataclass` objects parsed from `INCIDENT_*` environment variables, cached via `@lru_cache(maxsize=1)` through a `get_settings()` accessor.
-- External integrations are exposed through `Protocol`-based interfaces (e.g. `Connector` in `services/connectors.py`) plus a module-level registry dict of name→factory, so new adapters register without changing callers.
-- Connector dispatch failures are caught broadly (`except Exception`) and recorded as failed outcomes rather than propagated, ensuring a downstream connector outage cannot abort the triage path.
-- Structured events are emitted through `core.observability.log_event` with a `service` field set to `SERVICE_NAME` from `metadata.py`, used consistently across lifecycle, HTTP middleware, and connector dispatch code.
-- Startup-time validation surfaces as dedicated exception types (`SettingsError`, `ConnectorConfigError`) raised during `from_env` / `build_connectors`, enforcing fail-fast configuration semantics.

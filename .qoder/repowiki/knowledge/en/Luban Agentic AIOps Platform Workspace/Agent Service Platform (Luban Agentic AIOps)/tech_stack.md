@@ -1,1 +1,0 @@
-Python 3.x with FastAPI for HTTP, AgentScope as the underlying agent/runtime framework, Pydantic v2 for all API/request/response schemas, and Prometheus + OpenTelemetry for metrics/tracing — shared across the API, kernel, and provider layers.

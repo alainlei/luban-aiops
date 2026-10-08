@@ -1,5 +1,0 @@
-- Vendor-specific providers subclass `AgentScopeProvider` and override `build_model` to construct the corresponding AgentScope `*ChatModel` with parameters mapped from `settings.provider_options`.
-- Each provider declares its identity via class attributes `provider_name`, `default_model`, optional `default_base_url`, `model_series`, and `discover_family_prefixes` rather than passing them into a constructor.
-- Live discovery filters are configured per-provider using `discover_family_prefixes` to restrict vendor model families and `discover_exclude_markers` (extending the shared `_NON_CHAT_MARKERS`) to drop embedding/tts/whisper/image/modalities.
-- External `agentscope.*` imports are performed inside `build_model` as local imports so the provider module can be loaded without pulling in the heavy SDK unless it is actually instantiated.
-- Configuration validation raises `ProviderConfigurationError` (from `base`) for missing keys, wrong option types, or unsupported provider names, instead of returning errors.

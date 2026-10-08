@@ -1,6 +1,0 @@
-- Request identity is read exclusively from HTTP headers (`X-User-ID`, `x-request-id`, forwarded `Authorization: Bearer`) and never from request bodies, with `_user_id` raising 401 when missing.
-- Route handlers act as thin adapters that validate inputs and delegate all business logic to `agent_service.services.*` modules; no AgentScope kernel types appear in function signatures or response models.
-- Streaming endpoints return `StreamingResponse` over `text/event-stream`, normalizing raw kernel chunks through `_normalize_stream_event` into the `AgentStreamEvent` contract before emitting SSE frames.
-- Mutating tool invocations are gated by verifying arguments against a signed execution envelope (`_verify_execution_request`) and returning structured rejection results instead of raising, preserving the stream and evidence frame shape.
-- Cross-cutting per-turn context (delegated token, chat session id, execution envelopes, current call id, generation owner) is propagated via module-level `ContextVar`s set by the runtime kernel, so closures read values at call time rather than capturing them at toolkit build time.
-- External dependencies (AgentScope toolkit classes, execution workers, signing utilities) are imported lazily inside functions to break circular imports between `tools` and `services/kernel_middleware`.

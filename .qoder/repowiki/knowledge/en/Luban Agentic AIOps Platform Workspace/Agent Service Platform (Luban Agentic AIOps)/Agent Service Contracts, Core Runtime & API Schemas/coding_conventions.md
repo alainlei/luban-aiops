@@ -1,6 +1,0 @@
-- Every public field on a Pydantic model carries a docstring or `Field(description=...)` that cites the governing SPEC number (e.g. SPEC-022 R-1, SPEC-024 R-3, SPEC-063 R-5a), so requirements are traceable from model to spec.
-- Additive schema evolution is expressed with `X | None = None` fields rather than breaking changes; presence/absence signals versioning (e.g. `flow_summary`, `approval_kind`, `recovery_only`).
-- Cross-field validation that cannot be expressed with per-field constraints is implemented via `@model_validator(mode="after")` raising `ValueError` (see `DocumentCreateRequest._check_type_fields`).
-- Prometheus metric families are mirrored to OTel through `MetricsMirror.count/observe/set_gauge` calls placed immediately beside the corresponding `prometheus_client` call, keeping both surfaces synchronized.
-- Optional infrastructure (OTel providers, meter provider, log bridge) is initialized lazily inside functions and wrapped in try/except blocks that log and swallow failures, preserving fail-open behavior.
-- Environment variables are read through the `get_env_value` / `get_env_int` helpers in `core/env.py` rather than direct `os.getenv` calls, enabling fallback-name chains.

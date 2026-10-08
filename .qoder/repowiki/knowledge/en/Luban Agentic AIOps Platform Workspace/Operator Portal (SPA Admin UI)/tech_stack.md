@@ -1,1 +1,0 @@
-React 19 + TypeScript 5.9 + Vite 8 + Vitest 4 (jsdom environment) + Ant Design 6 (`antd`, `@ant-design/icons`, `@ant-design/x`); runtime image is `nginxinc/nginx-unprivileged:1.27-alpine` serving hashed static assets and proxying `/api` to the gateway.

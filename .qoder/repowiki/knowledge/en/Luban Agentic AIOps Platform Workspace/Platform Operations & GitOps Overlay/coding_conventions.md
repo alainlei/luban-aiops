@@ -1,5 +1,0 @@
-- Runtime configuration is split per service into `runtime-config.env` (non-secret halves) and `runtime-secrets.env` (secret halves), merged by Kustomize into the shared `platform-runtime-config` ConfigMap.
-- Secret provisioning is centralized in dedicated `sync-<feature>-secrets.sh` scripts that generate or read values from environment variables and create/update Kubernetes Secrets, invoked by `deploy.sh` with `SKIP_<FEATURE>_SECRETS=true` opt-out.
-- Operational posture switches (mutating tools, browser checks, LLM provider) are modeled as separate Kustomize overlays under `gitops/runtime-profiles/` rather than inline flags, keeping the base deny-by-default and making profile changes reviewable.
-- Dashboards are authored as versioned OpenObserve JSON files and validated offline against source metric declarations via AST parsing of `products/*/src/*/core/metrics.py` `OTEL_MIRROR_FAMILIES`, never edited directly in the cluster UI.
-- Each service directory pairs a Deployment manifest, a Service manifest, and an env fragment, with optional RBAC and example secret templates kept alongside the real config.

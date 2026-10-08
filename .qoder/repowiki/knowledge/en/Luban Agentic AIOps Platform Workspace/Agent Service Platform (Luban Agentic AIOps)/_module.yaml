@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: agent_platform
-title: Agent Service Platform (Luban Agentic AIOps)
-scope:
-    - products/agent-platform/
-source_files: []
-depends_on: []
-related_to:
-    - path: platform_gateway

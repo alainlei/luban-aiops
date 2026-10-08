@@ -1,6 +1,0 @@
-- Connectors are registered lazily inside `_build_tool_registry()` guarded by a `settings.<connector>_enabled` flag, so optional features stay absent from discovery even if their package is installed.
-- Risk-tier admission is enforced centrally in `ToolRegistry.register()`: non-read tools are silently refused unless `allow_mutating=True`, which mirrors the `GATEWAY_MUTATING_TOOLS_ENABLED` runtime switch.
-- Policy evaluation uses a module-level singleton (`_bundle`, `_configured_path`, `_bundle_hash`) keyed on the configured path, with `load_bundle()` raising `PolicyLoadError` on invalid/missing paths rather than falling back silently.
-- Structured error responses go through `make_error_result()` with typed codes (`TOOL_NOT_FOUND`, `TOOL_EXECUTION_ERROR`, `REDACTION_OVERFLOW`, etc.) so callers receive a uniform envelope instead of raw exceptions.
-- Audit events are emitted asynchronously via `emit_audit_event()` with fire-and-forget semantics; audit-service unreachability degrades to log-only and never blocks the invoke path.
-- Sensitive output is redacted at the invoke choke point before both the HTTP response and the audit event, with a fail-closed `REDACTION_OVERFLOW` error when the redacted fraction exceeds `GATEWAY_REDACTION_OVERFLOW_FRACTION`.

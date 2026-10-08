@@ -1,4 +1,0 @@
-- Each product follows a uniform layout of `src/<package>/` (with `app.py`, `main.py`, `metadata.py`) plus a sibling `tests/` directory, enabling the root Makefile to discover and invoke them uniformly.
-- Feature work is organized as numbered `docs/specs/SPEC-NNN-<slug>/` directories containing `plan.md`, `spec.md`, and `tasks.md`, with release notes mirrored under `docs/agentic-aiops-platform/release-notes/`.
-- Cross-product configuration (policy bundles, password policy, versions, secret vocabulary) is authored once in `shared/shared-contracts/` and synced into consumers via root Makefile targets (`sync-policy`, `validate-version`, `validate-secret-vocabulary`, `validate-password-policy`) rather than duplicated ad hoc.
-- Container builds for all Python products layer `uv` on top of the shared `luban-aiops/base-uv` image and honor the same interpreter target declared in `.python-version` at both repo root and per-product.

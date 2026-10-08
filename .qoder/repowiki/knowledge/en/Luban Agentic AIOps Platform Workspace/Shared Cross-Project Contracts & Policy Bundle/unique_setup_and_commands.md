@@ -1,1 +1,0 @@
-Validation is driven by Make targets rather than direct script invocation: `make verify` runs policy/scenario/password validations, `make sync-policy` copies the canonical bundle into gateway packages and dev-k8s ConfigMap source, and `make policy-diff CANDIDATE=<bundle>` reports per-(role, action) outcome transitions. Scripts require `pip install pyyaml jsonschema` locally.

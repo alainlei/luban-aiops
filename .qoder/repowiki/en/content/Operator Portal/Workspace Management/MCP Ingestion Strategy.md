@@ -5,6 +5,7 @@
 - [mcp-ingestion-spike.md](file://docs/workspace/mcp-ingestion-spike.md)
 - [mcp-exposure-spike.md](file://docs/workspace/mcp-exposure-spike.md)
 - [SPEC-067-servicenow-mcp-ingestion-pilot/spec.md](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md)
+- [SPEC-068-outbound-execution-credential-schemes/spec.md](file://docs/specs/SPEC-068-outbound-execution-credential-schemes/spec.md)
 - [base.py](file://products/tool-gateway/src/tool_gateway/tools/base.py)
 - [registry.py](file://products/tool-gateway/src/tool_gateway/tools/registry.py)
 - [tools.py](file://products/tool-gateway/src/tool_gateway/api/routes/tools.py)
@@ -16,10 +17,9 @@
 
 ## Update Summary
 **Changes Made**
-- Updated to reflect the creation of SPEC-067 ServiceNow ITSM MCP-ingestion pilot as the first staged pilot
-- Clarified the confirmed direction to build one generic ingestion connector beneath tool-gateway
-- Updated pilot sequencing to confirm ServiceNow → Ansible → Windows risk order
-- Emphasized that each pilot admits only required operations rather than building large catalogs upfront
+- Updated to reflect that SPEC-067 ServiceNow pilot now consumes credential substrate from SPEC-068 rather than defining it
+- Clarified the reduced blocking Open Questions (from 6 to 3, with OQ-2 resolved by extraction)
+- Emphasized the positioning of ServiceNow pilot as consumer of external system authentication capability
 - Maintained all existing architectural and implementation details unchanged
 
 ## Table of Contents
@@ -34,11 +34,12 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document describes the **MCP ingestion strategy** for consuming external Model Context Protocol (MCP) servers beneath `tool-gateway`. The strategy has been refined through two design assessments and now includes a concrete pilot specification:
+This document describes the **MCP ingestion strategy** for consuming external Model Context Protocol (MCP) servers beneath `tool-gateway`. The strategy has been refined through two design assessments and now includes a concrete pilot specification with a critical architectural evolution:
 
 - The original assessment (`mcp-exposure-spike.md`) established that no MCP client exists today, identified the existing extension seam, and recommended retaining native connectors until a concrete trigger justifies a separately approved pilot.
 - The follow-up assessment (`mcp-ingestion-spike.md`) accepts three named operational targets — ServiceNow, Ansible, Windows — and recommends building one generic MCP-ingestion connector under `tool-gateway`, then admitting targets one at a time in risk order.
 - **SPEC-067** formalizes the first pilot: ServiceNow ITSM read-tier operations, establishing the outbound execution-credential scheme extension as R6's first slice.
+- **Critical Evolution**: The outbound execution-credential extension originally drafted as SPEC-067's R-1 was extracted to **SPEC-068** (2026-10-08), making SPEC-067 a consumer of this substrate rather than its definer. This reduces blocking Open Questions from 6 to 3 and positions the ServiceNow pilot as a consumer of external system authentication capability.
 
 The strategy is an **assessment with a concrete pilot specification**, not merely a concept. No MCP server has been installed, tested, or deployed as part of this codebase.
 
@@ -47,6 +48,7 @@ At present, the repository contains:
 
 - Two workspace assessments describing MCP exposure and ingestion.
 - A formal pilot specification (SPEC-067) for ServiceNow ITSM MCP-ingestion.
+- A standalone substrate specification (SPEC-068) for outbound execution-credential schemes.
 - A tool execution framework in `tool-gateway` with base abstractions, a registry, HTTP routes, policy enforcement, redaction, and audit emission.
 - Kernel middleware in `agent-platform` that gates headless AgentScope tool calls.
 - An isolated execution runtime that calls `tool-gateway` after approval.
@@ -65,6 +67,11 @@ Service["Gateway Service<br/>invoke_tool()"]
 Registry["ToolRegistry"]
 Base["BaseTool / ToolDefinition / ToolResult"]
 end
+subgraph "Credential Substrate (SPEC-068)"
+CredStore["CredentialSetStore<br/>Per-scheme parsing"]
+OAuthClient["OAuth2 Token Client<br/>client_credentials grant"]
+AuthResolver["Auth Resolution Seam<br/>basic/bearer/oauth2_client_credentials"]
+end
 subgraph "Planned MCP Connector"
 MCPConn["MCP-Ingestion Connector<br/>(not implemented yet)")
 end
@@ -79,6 +86,9 @@ Routes --> Service
 Service --> Registry
 Registry --> Base
 Registry --> MCPConn
+MCPConn --> CredStore
+MCPConn --> OAuthClient
+MCPConn --> AuthResolver
 MCPConn --> SNOW
 MCPConn --> ANSIBLE
 MCPConn --> WIN
@@ -115,7 +125,7 @@ Key invariants from the source:
 - Results are redacted at a single choke point before response and audit emission.
 - Audit emission is fire-and-forget with log fallback, not transactional durability.
 
-**Updated** The credential model now supports multiple authentication schemes beyond Basic authentication, enabling modern SaaS integrations like ServiceNow OAuth2 client credentials.
+**Updated** The credential model now supports multiple authentication schemes beyond Basic authentication, enabling modern SaaS integrations like ServiceNow OAuth2 client credentials through the SPEC-068 substrate.
 
 **Section sources**
 - [base.py:9-133](file://products/tool-gateway/src/tool_gateway/tools/base.py#L9-L133)
@@ -151,6 +161,7 @@ participant Exec as "Execution Runtime"
 participant GW as "Tool Gateway"
 participant Reg as "ToolRegistry"
 participant Conn as "Connector"
+participant Cred as "Credential Substrate"
 participant Target as "Target System"
 Operator->>Kernel : "Request action"
 Kernel->>Kernel : "GatewayPermissionMiddleware gate"
@@ -160,6 +171,8 @@ Exec->>GW : "POST /api/v2/tools/invoke"
 GW->>GW : "Identity + policy + risk-tier check"
 GW->>Reg : "Invoke tool(name, parameters, identity)"
 Reg->>Conn : "execute(parameters, identity)"
+Conn->>Cred : "Resolve auth (SPEC-068)"
+Cred-->>Conn : "Bearer token / OAuth2"
 Conn->>Target : "Call external MCP server"
 Target-->>Conn : "Response"
 Conn-->>Reg : "ToolResult"
@@ -226,7 +239,8 @@ Register --> Invoke["Invoke Through Gateway Service"]
 Invoke --> PolicyCheck{"tools:invoke + tools:mutate?"}
 PolicyCheck --> |No| Denied["Return DENIED"]
 PolicyCheck --> |Yes| Dispatch["Dispatch to MCP Connector"]
-Dispatch --> CallServer["Call External MCP Server"]
+Dispatch --> ResolveAuth["Resolve Auth via SPEC-068"]
+ResolveAuth --> CallServer["Call External MCP Server"]
 CallServer --> Normalize["Validate + Normalize Result"]
 Normalize --> Redact["Apply Redaction Choke Point"]
 Redact --> Audit["Emit tool_invoked Audit"]
@@ -247,7 +261,7 @@ The strategy now commits to a specific pilot sequence with clear governance:
 
 **Pilot Order:** ServiceNow → Ansible → Windows
 
-**ServiceNow (SPEC-067):** First pilot focusing on read-tier ITSM operations, establishing the outbound execution-credential scheme extension as R6's first slice. This pilot proves the substrate on the lowest-risk target while addressing the critical credential gap.
+**ServiceNow (SPEC-067):** First pilot focusing on read-tier ITSM operations, establishing the outbound execution-credential scheme extension as R6's first slice. This pilot proves the substrate on the lowest-risk target while addressing the critical credential gap. **Critical Update**: The pilot now consumes the credential substrate from SPEC-068 rather than defining it, reducing blocking Open Questions from 6 to 3 (OQ-2 resolved by extraction).
 
 **Ansible:** Second pilot with higher blast radius due to live infrastructure access and broad credentials. Requires careful blast-radius scoping for bundled playbooks and uncertain-outcome reconciliation.
 
@@ -378,6 +392,27 @@ This is critical for MCP ingestion: uncertainty after dispatch does not mean the
 **Section sources**
 - [executor.py:1-71](file://products/execution-runtime/src/execution_runtime/services/executor.py#L1-L71)
 
+### Credential Substrate Integration (SPEC-068)
+**New Section** The ServiceNow pilot now consumes the credential substrate from SPEC-068 rather than defining it. This represents a significant architectural improvement:
+
+**SPEC-068 provides:**
+- Per-set `scheme` field supporting `basic` | `bearer` | `oauth2_client_credentials`
+- Connector-local OAuth2 `client_credentials` token client
+- Reusable outbound auth-resolution seam
+- Secret-handling invariants with redaction and fail-closed behavior
+- Provisioning and config wiring reuse of existing models
+
+**Impact on ServiceNow Pilot:**
+- Reduces blocking Open Questions from 6 to 3 (OQ-2 resolved by extraction)
+- Positions ServiceNow as consumer of external system authentication capability
+- Enables modern SaaS integrations like ServiceNow OAuth2 client credentials
+- Maintains backward compatibility with existing Basic authentication
+- Provides target-agnostic substrate reusable by future pilots (Ansible, Windows)
+
+**Section sources**
+- [SPEC-068-outbound-execution-credential-schemes/spec.md:48-58](file://docs/specs/SPEC-068-outbound-execution-credential-schemes/spec.md#L48-L58)
+- [SPEC-067-servicenow-mcp-ingestion-pilot/spec.md:98-106](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md#L98-L106)
+
 ## Dependency Analysis
 The ingestion strategy introduces a new dependency between `tool-gateway` and external MCP servers while preserving existing dependencies:
 
@@ -390,6 +425,7 @@ GatewayService --> Registry["tool_gateway.tools.registry"]
 Registry --> Base["tool_gateway.tools.base"]
 Registry --> NativeConnectors["Native Connectors<br/>k8s, elastic, skills, incidents, secrets, http, browser"]
 Registry --> MCPConnector["MCP Ingestion Connector<br/>(planned)"]
+MCPConnector --> CredSubstrate["SPEC-068 Credential Substrate<br/>basic/bearer/oauth2_client_credentials"]
 MCPConnector --> ExternalServers["External MCP Servers<br/>ServiceNow, Ansible, Windows"]
 ```
 
@@ -408,6 +444,7 @@ Coupling and cohesion observations:
 - It must not forward the gateway's delegated token upstream.
 - It must preserve the existing redaction and audit choke points.
 - It must treat MCP tool metadata as untrusted input, not authority.
+- **Updated**: The connector now depends on SPEC-068's credential substrate for authentication rather than implementing its own credential logic.
 
 **Section sources**
 - [mcp-ingestion-spike.md:82-120](file://docs/workspace/mcp-ingestion-spike.md#L82-L120)
@@ -421,6 +458,7 @@ The ingestion strategy adds a network boundary between `tool-gateway` and extern
 - Redaction scans result structures and can withhold output if overflow thresholds are exceeded.
 - Kernel evidence frames buffer and summarize tool payloads.
 - MCP latency is additive to native connector latency.
+- **Updated**: Credential resolution via SPEC-068 adds minimal overhead through cached OAuth2 tokens and efficient auth resolution.
 
 Recommendations grounded in the current code:
 
@@ -430,6 +468,7 @@ Recommendations grounded in the current code:
 - Avoid automatic resource fetching from MCP results.
 - Measure latency and error rates against native baselines before promoting pilots.
 - Treat transport errors as uncertain outcomes rather than failures.
+- Leverage SPEC-068's token caching to minimize OAuth2 token acquisition overhead.
 
 [No sources needed since this section provides general guidance]
 
@@ -447,6 +486,8 @@ Common failure modes for a future MCP ingestion connector:
 | Redirect | Unexpected redirect from MCP endpoint | `GatewayUncertain("response_invalid")` |
 | Malformed response | Invalid tool-result schema | `GatewayUncertain("response_invalid")` |
 | Unknown outcome | Disconnect after possible dispatch | Surface uncertainty; do not retry blindly |
+| **Credential acquisition failed** | **Missing/invalid SPEC-068 credential set** | **Structured gateway error, not upstream fact** |
+| **Unknown scheme** | **Invalid scheme value in credential set** | **Warning + set ignored (fail-closed)** |
 
 Operational checks:
 
@@ -457,9 +498,10 @@ Operational checks:
 5. Confirm any `extra_required_actions` are granted.
 6. Confirm MCP endpoint reachability and TLS configuration.
 7. Confirm per-target credentials are configured and valid.
-8. Inspect gateway logs for `policy_decision` and `tool_invoked` events.
-9. Inspect audit service delivery separately from gateway logs.
-10. Do not infer success from HTTP 2xx alone; validate the tool-result envelope.
+8. **Updated**: Verify SPEC-068 credential substrate is properly configured with correct scheme values.
+9. Inspect gateway logs for `policy_decision` and `tool_invoked` events.
+10. Inspect audit service delivery separately from gateway logs.
+11. Do not infer success from HTTP 2xx alone; validate the tool-result envelope.
 
 **Section sources**
 - [gateway_service.py:62-157](file://products/tool-gateway/src/tool_gateway/services/gateway_service.py#L62-L157)
@@ -475,20 +517,22 @@ The current codebase does not implement MCP ingestion. The authoritative design 
 - `docs/workspace/mcp-exposure-spike.md`, which establishes the extension seam and retention-of-native-connectors posture.
 - `docs/workspace/mcp-ingestion-spike.md`, which records the staged ServiceNow → Ansible → Windows sequencing and the non-negotiable architecture.
 - `docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md`, which formalizes the first pilot and establishes R6 as the release theme.
+- **Updated**: `docs/specs/SPEC-068-outbound-execution-credential-schemes/spec.md`, which provides the target-agnostic credential substrate that SPEC-067 consumes.
 
 Before implementation, the assessments require:
 
 1. Approval of the capability-substrate direction.
 2. Selection of ServiceNow as the first pilot.
 3. A per-target pilot spec with pinned artifacts, explicit allowlists, contract tests, and proven operator workflow/evidence/replay behavior.
-4. Resolution of the machine-consumer credential gap.
+4. **Updated**: Integration with SPEC-068's credential substrate rather than defining custom credential logic.
 5. Framing of R6 as a release theme if approved.
 
 Until those gates are met, the correct state is: assess, retain native connectors, and do not promote an implementation, pilot, ADR, or spec from these memos.
 
-**Updated** The strategy now confirms the direction to build one generic ingestion connector beneath tool-gateway, with SPEC-067 establishing ServiceNow as the first pilot in the confirmed risk-ordered sequence (ServiceNow → Ansible → Windows). Each pilot admits only required operations rather than building large catalogs upfront, maintaining the principle that "a large catalog is not itself a use case." The stable API productization backlog row referenced in the ingestion strategy remains de-numbered, as the previously earmarked SPEC-066 number was taken by the skill retrieval ranking fidelity spec (SPEC-066). The stable API productization row will receive its number at drafting time, maintaining consistency with the project's spec numbering discipline.
+**Updated** The strategy now confirms the direction to build one generic ingestion connector beneath tool-gateway, with SPEC-067 establishing ServiceNow as the first pilot in the confirmed risk-ordered sequence (ServiceNow → Ansible → Windows). The critical architectural evolution is that SPEC-067 now **consumes** the credential substrate from SPEC-068 rather than defining it, reducing blocking Open Questions from 6 to 3 and positioning the ServiceNow pilot as a consumer of external system authentication capability. Each pilot admits only required operations rather than building large catalogs upfront, maintaining the principle that "a large catalog is not itself a use case." The stable API productization backlog row referenced in the ingestion strategy remains de-numbered, as the previously earmarked SPEC-066 number was taken by the skill retrieval ranking fidelity spec (SPEC-066). The stable API productization row will receive its number at drafting time, maintaining consistency with the project's spec numbering discipline.
 
 **Section sources**
 - [mcp-ingestion-spike.md:176-204](file://docs/workspace/mcp-ingestion-spike.md#L176-L204)
 - [mcp-exposure-spike.md:267-311](file://docs/workspace/mcp-exposure-spike.md#L267-L311)
 - [SPEC-067-servicenow-mcp-ingestion-pilot/spec.md:44-73](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md#L44-L73)
+- [SPEC-068-outbound-execution-credential-schemes/spec.md:48-58](file://docs/specs/SPEC-068-outbound-execution-credential-schemes/spec.md#L48-L58)

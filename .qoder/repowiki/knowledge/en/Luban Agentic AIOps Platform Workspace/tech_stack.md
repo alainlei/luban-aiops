@@ -1,1 +1,1 @@
-FastAPI for all runtime services; Python uv for dependency management across child packages; Kustomize overlays under platform_ops for Kubernetes deployment; React/TypeScript + nginx for the operator_portal frontend; JSON Schema + YAML policy bundles in shared_contracts define the wire contract consumed by multiple services.
+Python services built with uv + Pydantic v2, FastAPI-style app entrypoints, Dockerized per product, orchestrated via Kubernetes gitops in `shared/platform-ops/gitops`; specs are authored as Markdown documents (SPEC-NNN) driving implementation.

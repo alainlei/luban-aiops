@@ -1,1 +1,0 @@
-`make` targets drive the build/test/lint workflow defined in `Makefile`; the package installs as the `audit-service` console script pointing at `audit_service.main:run`. Tests run via pytest under `.venv` managed by uv.

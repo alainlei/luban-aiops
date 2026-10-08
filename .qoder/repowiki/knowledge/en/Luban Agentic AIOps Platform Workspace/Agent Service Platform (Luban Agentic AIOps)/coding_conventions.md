@@ -1,4 +1,0 @@
-- Cross-cutting configuration flows through `RuntimeSettings.from_env()` rather than raw environment reads, so every child consumes typed settings instead of `os.environ`.
-- External data boundaries are declared once as JSON Schema files under `contracts/` and re-used by both the API layer and kernel middlewares for validation.
-- Background work (model discovery, recovery ledger maintenance) is launched as asyncio tasks inside the FastAPI lifespan manager and cancelled on shutdown.
-- Failure paths fail closed and surface structured errors to callers rather than silently falling back — e.g. unknown model ids raise `UnknownModelError`, missing execution-run identity aborts mutation.

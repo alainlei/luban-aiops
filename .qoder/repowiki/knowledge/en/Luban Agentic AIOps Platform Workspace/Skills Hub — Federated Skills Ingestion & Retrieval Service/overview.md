@@ -1,1 +1,0 @@
-FastAPI service that ingests Markdown skills from local directories and git repositories, validates frontmatter, and serves deterministic ranked search plus full-record retrieval to the agent platform.

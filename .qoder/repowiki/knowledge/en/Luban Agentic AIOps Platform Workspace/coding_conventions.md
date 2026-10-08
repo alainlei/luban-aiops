@@ -1,2 +1,5 @@
-- Each product/service lives in its own top-level directory with a stable architectural boundary rather than being grouped by language or layer.
-- Cross-service wire formats are centralized in shared_contracts as versioned JSON Schemas and validated before use by consuming services.
+- Every product exposes an `app.py` (FastAPI lifespan) and a `main.py` entrypoint, paired with a `metadata.py` file carrying version/build info.
+- Product packages follow a fixed internal layout of `api/`, `core/`, `schemas/`, and `services/` subpackages, mirroring the shared contract layer.
+- Feature work is initiated as a `docs/specs/SPEC-NNN-<slug>/` directory containing `plan.md`, `spec.md`, and `tasks.md`, with release notes mirrored under `docs/agentic-aiops-platform/release-notes/`.
+- Cross-service data types are defined once in `shared/shared-contracts/schemas/` and imported by consumers rather than redefined per product.
+- Per-product build and image targets are factored into `mk/python.mk` and `mk/image.mk` and included from each product's `Makefile` instead of being duplicated.

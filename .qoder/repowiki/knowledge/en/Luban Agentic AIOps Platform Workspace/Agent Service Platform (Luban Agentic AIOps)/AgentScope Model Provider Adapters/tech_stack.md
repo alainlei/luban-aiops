@@ -1,1 +1,0 @@
-Wraps the external `agentscope` SDK's `OpenAIChatModel`, `DashScopeChatModel`, and `DeepSeekChatModel` classes; no HTTP client is used directly here — all network calls go through AgentScope.

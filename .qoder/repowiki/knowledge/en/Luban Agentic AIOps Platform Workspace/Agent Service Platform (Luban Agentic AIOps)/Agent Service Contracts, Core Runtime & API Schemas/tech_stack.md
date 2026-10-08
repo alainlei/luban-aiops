@@ -1,1 +1,0 @@
-Pydantic v2 (`BaseModel`, `Field`, `model_validator`, `model_serializer`) for schema validation; `prometheus_client` for the always-on `/metrics` scrape surface; OpenTelemetry SDK with OTLP HTTP exporters (`opentelemetry.exporter.otlp.proto.http.*`) for optional traces/metrics/logs push; FastAPI instrumentation for automatic span creation.

@@ -1,1 +1,0 @@
-FastAPI service that normalizes and exposes platform tool connectors (Kubernetes, Elastic, skills, incidents, browser, HTTP, secrets) behind bearer-token auth and deny-by-default policy.

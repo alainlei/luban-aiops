@@ -1,1 +1,0 @@
-Python async/sync mix; `psycopg` (sync driver) with `Jsonb` for PostgreSQL; advisory locks (`pg_try_advisory_lock`) for per-run serialization; HMAC-SHA256 + base64url for signed pagination cursors; environment-driven backend selection via `AGENT_STATE_STORE_BACKEND` / `AGENT_STATE_DB_URL`.

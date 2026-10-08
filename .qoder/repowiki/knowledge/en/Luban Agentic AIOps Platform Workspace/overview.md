@@ -1,1 +1,1 @@
-Repository root that assembles the Luban platform's FastAPI services, shared contracts, Kubernetes overlays, docs, and samples into a single spec-driven workspace.
+Monorepo for the Luban agentic AIOps platform, orchestrating agent-platform, execution-runtime, identity-broker, audit-service, incident-service, platform-gateway, skills-hub, tool-gateway, and operator-portal under shared contracts and spec-driven development.

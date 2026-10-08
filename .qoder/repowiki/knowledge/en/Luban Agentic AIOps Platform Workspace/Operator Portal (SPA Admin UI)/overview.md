@@ -1,1 +1,0 @@
-React/TypeScript single-page admin portal for platform operators, providing chat, approvals, incidents, audit, skills/tools/settings views served by nginx and proxied to the gateway.

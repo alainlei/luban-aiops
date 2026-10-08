@@ -1,1 +1,0 @@
-FastAPI + Pydantic for the HTTP contract; httpx async client for gateway calls; Python `contextvars` for per-turn credential/context propagation; integrates with AgentScope's `Toolkit` / `FunctionTool` / `ToolChunk` abstractions rather than calling the kernel directly.

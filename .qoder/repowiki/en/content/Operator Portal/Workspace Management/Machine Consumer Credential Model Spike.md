@@ -4,20 +4,20 @@
 **Referenced Files in This Document**   
 - [machine-consumer-credential-model-spike.md](file://docs/workspace/machine-consumer-credential-model-spike.md)
 - [identity-and-authorization-design.md](file://docs/agentic-aiops-platform/identity-and-authorization-design.md)
+- [SPEC-068 spec.md](file://docs/specs/SPEC-068-outbound-execution-credential-schemes/spec.md)
 - [credential_sets.py](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py)
 - [http_connector.py](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py)
 - [config.py](file://products/tool-gateway/src/tool_gateway/core/config.py)
 - [exchange_service.py](file://products/identity-broker/src/identity_service/services/exchange_service.py)
-- [SPEC-067 spec.md](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md)
-- [SPEC-067 plan.md](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/plan.md)
 </cite>
 
 ## Update Summary
 **Changes Made**   
-- Updated transport decision section to reflect resolved OQ-3 decision for SPEC-067
-- Added reference to the official `mcp` Python SDK adoption as the ingestion transport
-- Clarified the relationship between the credential model extension and MCP ingestion strategy
-- Updated dependency analysis to reflect the resolved transport architecture
+- Enhanced architectural separation language to explicitly distinguish between inbound machine-consumer grants and outbound execution credentials
+- Updated terminology to consistently use "architectural separation" when discussing the two identity planes
+- Clarified that these are fundamentally different trust boundaries with separate governance models
+- Strengthened the distinction between platform-facing inbound authentication and external system outbound execution
+- Updated diagrams to better visualize the architectural separation between the two planes
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -31,33 +31,44 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document summarizes the machine-consumer credential model spike and grounds its conclusions in the shipped codebase. The spike's central finding is that the roadmap label "machine-consumer credential gap (`client_credentials`)" conflates two different problems:
+This document summarizes the machine-consumer credential model spike and grounds its conclusions in the shipped codebase. The spike's central finding is that the roadmap label "machine-consumer credential gap (`client_credentials`)" conflates two fundamentally different problems that require **architectural separation**:
 
 - **Outbound External Execution Identity**: tool-gateway authenticating to an external system (the real R6 prerequisite).
 - **Inbound approved machine consumer**: an external application authenticating to Luban as itself (parked, trust-model-blocked).
 
 The memo concludes that R6 does not require adding `client_credentials` to identity-broker. Instead, it needs a bounded extension of the existing outbound `credential_set` mechanism so tool-gateway connectors can present non-Basic credentials — such as a static bearer token or an OAuth client-credentials flow against the *external* target's identity provider.
 
-**Updated** The transport decision for SPEC-067 has been resolved, confirming that the credential extension will support the official `mcp` Python SDK ingestion transport against ServiceNow's own MCP server.
+**Updated** The architectural separation between these two identity planes is now formally recognized: inbound machine-consumer grants operate at the platform boundary for applications consuming Luban's API, while outbound execution credentials operate at the external system boundary for Luban authenticating to third-party services. These are distinct trust boundaries requiring separate governance and implementation.
 
 ## Project Structure
-The relevant implementation spans two products:
+The relevant implementation spans two products with clear architectural separation:
 
-| Area | Product package | Responsibility |
-|---|---|---|
-| Outbound credentials | `tool_gateway` | Stores named credential sets and projects them into connector authentication. |
-| Inbound delegation | `identity_service` | Authenticates platform services and mints short-lived delegated tokens bound to a human subject. |
-| Design contract | `agentic-aiops-platform` | Defines the three-plane Service Identity Model used by this spike. |
-| Spike memo | `docs/workspace` | Scopes the gap and recommends the first-pilot direction. |
+| Area | Product package | Responsibility | Architectural Boundary |
+|---|---|---|---|
+| Outbound credentials | `tool_gateway` | Stores named credential sets and projects them into connector authentication. | External system boundary |
+| Inbound delegation | `identity_service` | Authenticates platform services and mints short-lived delegated tokens bound to a human subject. | Platform service boundary |
+| Design contract | `agentic-aiops-platform` | Defines the three-plane Service Identity Model used by this spike. | Trust model foundation |
+| Spike memo | `docs/workspace` | Scopes the gap and recommends the first-pilot direction. | Architectural guidance |
 
 ```mermaid
 graph TB
 A["Spike Memo<br/>Machine-Consumer Credential Model"] --> B["Service Identity Model<br/>Human / Platform / External"]
-B --> C["Tool Gateway<br/>Credential Sets + Connectors"]
-B --> D["Identity Broker<br/>Token Exchange"]
+B --> C["Tool Gateway<br/>Credential Sets + Connectors<br/>(External System Boundary)"]
+B --> D["Identity Broker<br/>Token Exchange<br/>(Platform Service Boundary)"]
 C --> E["HTTP Connector<br/>Basic Auth Only Today"]
 C --> F["Config<br/>File Paths & Flags"]
 D --> G["Exchange Service<br/>User-Subject-Bound Delegation"]
+subgraph "Architectural Separation"
+subgraph "Inbound Plane - Platform Consumption"
+D
+G
+end
+subgraph "Outbound Plane - External Execution"
+C
+E
+F
+end
+end
 ```
 
 **Diagram sources**
@@ -73,13 +84,13 @@ D --> G["Exchange Service<br/>User-Subject-Bound Delegation"]
 - [identity-and-authorization-design.md:333-369](file://docs/agentic-aiops-platform/identity-and-authorization-design.md#L333-L369)
 
 ## Core Components
-The spike identifies three identity planes and maps each to shipped behavior:
+The spike identifies three identity planes and maps each to shipped behavior, emphasizing their architectural separation:
 
-| Plane | Meaning | Current state | Relevance to R6 |
-|---|---|---|---|
-| Human Identity | Operator → Luban | OIDC authorization code + refresh token via Keycloak. | Not the missing piece. |
-| Platform Service Identity | Luban service → Luban service | Broker-mediated delegation with `sub`=user, `act`=service, `aud`=target audience. | Constrains any new machine-subject design. |
-| External Execution Identity | Luban → external system | Per-target `credential_set`, but only HTTP Basic username/password. | **R6's actual prerequisite.** |
+| Plane | Meaning | Current state | Relevance to R6 | Architectural Boundary |
+|---|---|---|---|---|
+| Human Identity | Operator → Luban | OIDC authorization code + refresh token via Keycloak. | Not the missing piece. | Platform consumption |
+| Platform Service Identity | Luban service → Luban service | Broker-mediated delegation with `sub`=user, `act`=service, `aud`=target audience. | Constrains any new machine-subject design. | Internal platform communication |
+| External Execution Identity | Luban → external system | Per-target `credential_set`, but only HTTP Basic username/password. | **R6's actual prerequisite.** | External system integration |
 
 The current outbound credential store validates exactly two required fields: `username` and `password`. It reloads from a mounted JSON file on modification time, ignores malformed sets, never logs values, and exposes only set names. The HTTP connector resolves a configured set into `httpx.BasicAuth`; no other scheme is projected. There is no outbound OAuth/token-acquisition code anywhere under `products/`.
 
@@ -103,7 +114,7 @@ Ignore --> Request
 - [http_connector.py:322-387](file://products/tool-gateway/src/tool_gateway/tools/http_connector.py#L322-L387)
 
 ## Architecture Overview
-The spike separates the problem into two independent flows.
+The spike separates the problem into two independent flows with clear architectural boundaries.
 
 ### Outbound External Execution Identity (R6 prerequisite)
 ```mermaid
@@ -143,6 +154,8 @@ Service-->>Client : Read-only response
 - [identity-and-authorization-design.md:333-369](file://docs/agentic-aiops-platform/identity-and-authorization-design.md#L333-L369)
 
 The inbound flow is parked because today the broker exchange copies the human subject verbatim and never creates a token whose principal is the machine itself. Building inbound machine attribution would also collide with the platform's HITL and ownership model, which requires a human owner and approver.
+
+**Updated** The architectural separation is critical: inbound machine-consumer grants would authenticate external applications *to* Luban's platform, while outbound execution credentials authenticate Luban *to* external systems. These represent fundamentally different trust relationships and cannot be conflated in implementation or governance.
 
 **Section sources**
 - [machine-consumer-credential-model-spike.md:52-81](file://docs/workspace/machine-consumer-credential-model-spike.md#L52-L81)
@@ -275,25 +288,25 @@ The spike's recommendation is to extend the outbound seam rather than expand the
 | Identity broker as outbound token broker | Broker gains outbound exchange logic | Expands broker charter and adds hot-path dependency. |
 | Sidecar/in-cluster credential broker | External secret system | Strongest rotation story; heaviest operational lift. |
 
-**Updated** The transport decision for SPEC-067 has been resolved to adopt the official `mcp` Python SDK as the ingestion transport against ServiceNow's own MCP server. This confirms that the credential extension will support bearer/OAuth2 schemes needed for the MCP session authentication, while keeping governance decisions tool-gateway-side.
+**Updated** The architectural separation confirms that outbound execution credentials should remain within tool-gateway, while inbound machine-consumer grants would require separate development in identity-broker. SPEC-068 formalizes this separation by focusing exclusively on the outbound credential substrate.
 
 ```mermaid
 graph TB
-MCP["MCP Ingestion Pilot<br/>(OQ-3 Resolved)"] --> TG["Tool Gateway"]
-TG --> CS["Credential Set Store"]
+TG["Tool Gateway<br/>(Outbound Execution)"] --> CS["Credential Set Store"]
 TG --> HC["HTTP/Browser Connector"]
-TG --> MCPSDK["Official MCP SDK<br/>(Resolved Transport)"]
-MCPSDK --> SNOW["ServiceNow MCP Server"]
 TG --> ExtIdp["External Target IdP"]
-TG --> IB["Identity Broker"]
-IB --> Delegate["Delegated Platform Token"]
-subgraph "Outbound External Execution Identity"
-MCS["Connector-local token client"]
-TG --> MCS
-MCS --> ExtIdp
+IB["Identity Broker<br/>(Inbound Grants)"] --> Delegate["Delegated Platform Token"]
+subgraph "Architectural Separation"
+subgraph "Outbound Plane - External Execution Credentials"
+TG
+CS
+HC
+ExtIdp
 end
-subgraph "Inbound Platform Service Identity"
+subgraph "Inbound Plane - Machine Consumer Grants"
+IB
 Delegate
+end
 end
 ```
 
@@ -301,11 +314,11 @@ end
 - [machine-consumer-credential-model-spike.md:63-71](file://docs/workspace/machine-consumer-credential-model-spike.md#L63-L71)
 - [credential_sets.py:30-50](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L30-L50)
 - [exchange_service.py:148-194](file://products/identity-broker/src/identity_service/services/exchange_service.py#L148-L194)
-- [SPEC-067 spec.md:261-271](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md#L261-L271)
+- [SPEC-068 spec.md:226-230](file://docs/specs/SPEC-068-outbound-execution-credential-schemes/spec.md#L226-L230)
 
 **Section sources**
 - [machine-consumer-credential-model-spike.md:63-71](file://docs/workspace/machine-consumer-credential-model-spike.md#L63-L71)
-- [SPEC-067 spec.md:261-271](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md#L261-L271)
+- [SPEC-068 spec.md:226-230](file://docs/specs/SPEC-068-outbound-execution-credential-schemes/spec.md#L226-L230)
 
 ## Performance Considerations
 The spike recommends keeping token acquisition and caching connector-local and in-process for the first pilot. This mirrors existing precedents such as browser session management and secret-delivery buffering. The trade-off is that each connector may re-implement a bounded token client unless a shared helper is introduced.
@@ -318,8 +331,6 @@ Key performance-related constraints already present in the codebase include:
 - The identity broker caches JWKS clients per workload issuer.
 
 These patterns suggest that a connector-local token cache should be bounded by lifetime, size, and failure behavior rather than growing indefinitely.
-
-**Updated** The resolved transport decision confirms that the official `mcp` Python SDK will be used, which provides built-in connection pooling and session management. The credential extension will need to handle bearer/OAuth2 token caching similar to the existing patterns.
 
 **Section sources**
 - [credential_sets.py:30-50](file://products/tool-gateway/src/tool_gateway/tools/credential_sets.py#L30-L50)
@@ -366,7 +377,7 @@ CheckUpstream --> Action
 ## Conclusion
 The spike corrects a misleading roadmap label and narrows R6 to a concrete, bounded extension of the outbound credential model. The immediate prerequisite is not `client_credentials` in identity-broker, but a way for tool-gateway connectors to present an authenticated credential to an external system.
 
-**Updated** With the resolved transport decision in SPEC-067 (OQ-3), the architecture is now confirmed to use the official `mcp` Python SDK as the ingestion transport against ServiceNow's own MCP server. This validates the approach of extending the credential model to support bearer/OAuth2 schemes needed for MCP session authentication.
+**Updated** The architectural separation between inbound machine-consumer grants and outbound execution credentials is now formally established. SPEC-068 focuses exclusively on the outbound plane (External Execution Identity), while the inbound plane remains parked due to trust model constraints. This separation ensures that each identity plane can evolve independently with appropriate governance.
 
 Recommended next steps are:
 
@@ -380,4 +391,4 @@ Recommended next steps are:
 **Section sources**
 - [machine-consumer-credential-model-spike.md:83-93](file://docs/workspace/machine-consumer-credential-model-spike.md#L83-L93)
 - [identity-and-authorization-design.md:333-369](file://docs/agentic-aiops-platform/identity-and-authorization-design.md#L333-L369)
-- [SPEC-067 spec.md:261-271](file://docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md#L261-L271)
+- [SPEC-068 spec.md:226-230](file://docs/specs/SPEC-068-outbound-execution-credential-schemes/spec.md#L226-L230)
