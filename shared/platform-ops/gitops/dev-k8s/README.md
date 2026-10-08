@@ -722,7 +722,10 @@ without the profile stays deny-by-default.
 (`tool-gateway-browser-credentials`, key `credential-sets.json`) via
 `sync-browser-credentials.sh`; a dev `acme-admin` set is generated with a
 random password, or provide `BROWSER_CREDENTIAL_SETS_FILE=<path>` / skip
-with `SKIP_BROWSER_CREDENTIALS=true`.
+with `SKIP_BROWSER_CREDENTIALS=true`. The dev default is a single `basic`
+set, so the SPEC-068 credential-scheme extension stays inert until an
+operator provisions a `bearer`/`oauth2_client_credentials` set through that
+override (documented in `docs/guides/tool-configuration.md`).
 
 ```bash
 # Deploy the opted-in dev posture (profile already wired into dev-k8s)

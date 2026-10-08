@@ -1521,6 +1521,29 @@ class CredentialTests(unittest.TestCase):
         self.assertEqual(result.status, "error")
         self.assertEqual(result.error["code"], "INVALID_PARAMETERS")
 
+    def test_non_basic_set_fails_closed(self) -> None:
+        # SPEC-068 R-1: a bearer set carries no username/password, so a
+        # browser login flow naming it must fail closed rather than fill a
+        # blank (or raise KeyError on the absent field). Rotate the mounted
+        # file to a non-basic set; the store reloads on the mtime bump.
+        with open(self._tmp.name, "w", encoding="utf-8") as fh:
+            json.dump(
+                {"inventory-app": {"scheme": "bearer", "token": "abc"}}, fh
+            )
+        stat = os.stat(self._tmp.name)
+        os.utime(self._tmp.name, (stat.st_atime + 10, stat.st_mtime + 10))
+        result = _run(
+            self.registry.invoke(
+                "web.fill_credential",
+                {"ref": 1, "credential_set": "inventory-app", "field": "password"},
+                IDENTITY,
+            )
+        )
+        self.assertEqual(result.status, "error")
+        self.assertEqual(result.error["code"], "CREDENTIAL_SET_NOT_FOUND")
+        # The password field was never filled.
+        self.assertEqual(self.password_field.fills, [])
+
     def test_fill_credential_unbound_allowlisted_admitted(self) -> None:
         # SPEC-054 R-2: the flow-binding precondition is relaxed for read-tier
         # ref-addressed interactions so an unbound session can reach and

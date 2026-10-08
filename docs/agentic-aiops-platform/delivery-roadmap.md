@@ -388,7 +388,8 @@ approved specs.
 
 ### Status
 
-**Framed 2026-10-06; not opened for implementation.** R6 is recorded as the
+**Framed 2026-10-06; substrate slice delivered, pilot not opened for implementation.**
+R6 is recorded as the
 release theme the trigger-gated MCP-ingestion backlog row promotes. Its first
 target slice is [SPEC-067 ServiceNow ITSM MCP-ingestion pilot](../specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md),
 **drafted 2026-10-06** with `plan.md` / `tasks.md` banner-marked provisional. Its
@@ -402,9 +403,14 @@ SPEC-068 already ships), OQ-4 (the read-tier operation set), and OQ-5 (dev-clust
 validation feasibility), all PDI-gated; OQ-2 was resolved 2026-10-08 (extract to
 SPEC-068), OQ-3 on 2026-10-07 (adopt the official `mcp` SDK against ServiceNow's own
 MCP server, REST fallback), and OQ-6 moved to and was resolved in SPEC-068. **SPEC-068
-itself has no Open Questions blocking `approved`.** No implementation, pilot, ADR,
-adapter, deployment, or version bump is authorized; per the backlog discipline each
-target pilot still requires separate explicit approval.
+was approved 2026-10-08** (no Open Question blocked it), implemented, and **delivered
+as v0.47.0** — the R6 outbound execution-credential substrate is now shipped (full
+`make verify` green, `make validate-secret-vocabulary` unchanged), so **SPEC-067 R-1
+now depends on a delivered prerequisite** rather than a pending one. Commit/push and
+deployment of that release remain separate authorization gates.
+For **SPEC-067** itself, no implementation, pilot, ADR, adapter, deployment, or
+version bump is authorized; per the backlog discipline each target pilot still
+requires separate explicit approval.
 
 The theme's central scoping finding (recorded in the
 [machine-consumer credential memo](../workspace/machine-consumer-credential-model-spike.md)):

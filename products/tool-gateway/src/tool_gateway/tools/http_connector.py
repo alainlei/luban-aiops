@@ -41,8 +41,10 @@ from tool_gateway.tools.base import (
     build_evidence,
     make_error_result,
 )
+from tool_gateway.tools.auth_resolution import resolve_outbound_auth
 from tool_gateway.tools.browser_connector import origin_of
 from tool_gateway.tools.credential_sets import CredentialSetStore
+from tool_gateway.tools.oauth_client import OAuth2TokenClient
 from tool_gateway.tools.registry import ToolRegistry
 from tool_gateway.tools.url_redaction import is_secret_param, redact_secret_query
 
@@ -343,6 +345,11 @@ class HttpConnector:
         self._max_response_bytes = max_response_bytes
         self._max_request_bytes = max_request_bytes
         self._credentials = CredentialSetStore(credential_sets_path)
+        # SPEC-068 R-2/R-3: the connector owns one OAuth2 token client so its
+        # in-memory token cache persists across calls. It shares the injected
+        # transport, so a test's MockTransport can serve both the token endpoint
+        # and the target API.
+        self._tokens = OAuth2TokenClient(transport=transport)
         # Test seam: an injected transport (httpx.MockTransport) replaces the
         # real one at the single call site below. None uses httpx's default.
         self._transport = transport
@@ -358,13 +365,16 @@ class HttpConnector:
         registry.register(HttpGetTool(self))
         registry.register(HttpPostTool(self))
 
-    def _resolve_auth(
+    async def _resolve_auth(
         self, credential_set: object
-    ) -> tuple[httpx.BasicAuth | None, tuple[str, str, str] | None]:
-        """Resolve a named credential set into Basic auth (R-4).
+    ) -> tuple[httpx.Auth | None, tuple[str, str, str] | None]:
+        """Resolve a named credential set into outbound auth (R-4).
 
-        Only the set **name** ever surfaces; the value flows straight into the
-        client and never into a result, evidence field or log line.
+        Delegates the scheme dispatch to the reusable SPEC-068 R-3 resolver
+        (``basic`` / ``bearer`` / ``oauth2_client_credentials``). Only the set
+        **name** ever surfaces; a credential value or acquired token flows
+        straight into the client and never into a result, evidence field or log
+        line.
         """
         if not credential_set:
             return None, None
@@ -384,7 +394,12 @@ class HttpConnector:
                 f"Credential set '{name}' was not found.",
                 "error",
             )
-        return httpx.BasicAuth(entry["username"], entry["password"]), None
+        resolved, err = await resolve_outbound_auth(
+            set_name=name, entry=entry, token_client=self._tokens
+        )
+        if err is not None:
+            return None, err
+        return (resolved.auth if resolved is not None else None), None
 
     async def _request(
         self,
@@ -406,7 +421,7 @@ class HttpConnector:
         )
         if err is not None:
             return None, None, err
-        auth, err = self._resolve_auth(credential_set)
+        auth, err = await self._resolve_auth(credential_set)
         if err is not None:
             return None, None, err
 

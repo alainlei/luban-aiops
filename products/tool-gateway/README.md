@@ -167,7 +167,7 @@ Current runtime environment knobs (tool-scoped; the portal-facing `PLATFORM_GATE
 - `GATEWAY_BROWSER_FLOW_MAX_STEPS`
   - interaction step budget per bound flow; exhaustion denies further interactions; defaults to `20`
 - `GATEWAY_BROWSER_CREDENTIAL_SETS`
-  - path to a secret-mounted JSON file mapping credential-set names to `{"username": ..., "password": ...}`; empty (default) leaves `web.fill_credential` failing closed; values flow only into Playwright fills and are masked in snapshots
+  - path to a secret-mounted JSON file mapping credential-set names to their fields; empty (default) leaves `web.fill_credential` failing closed. Each set carries an optional `scheme` (default `basic` = `{"username": ..., "password": ...}`, byte-identical to the pre-SPEC-068 shape); `bearer` (`{"token": ...}`) and `oauth2_client_credentials` (`{"token_url", "client_id", "client_secret"}`, plus optional `scope`/`audience`/`resource`/`client_auth`) are the SPEC-068 schemes. `web.fill_credential` resolves `basic` sets only and fails closed otherwise; the `http.*` connectors resolve all three. A basic value flows only into a Playwright fill; a bearer/OAuth2 token flows only into an outbound `Authorization` header, is held in memory only, and is masked in snapshots, results, evidence, and logs. The `http.*` connectors read `GATEWAY_HTTP_CREDENTIAL_SETS`, which defaults to this path, so one mounted secret serves both surfaces
 - `GATEWAY_BROWSER_SCREENSHOT_MAX_BYTES`
   - byte cap for base64 JPEG screenshots; the connector compresses (quality loop, then clip shrink) to fit and errors when it cannot; defaults to `65536`
 - `OTEL_ENABLED`

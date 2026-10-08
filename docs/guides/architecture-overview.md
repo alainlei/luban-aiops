@@ -14,7 +14,7 @@ The platform consists of eleven workloads deployed to a single Kubernetes namesp
 | **platform-gateway** | `luban-aiops/platform-gateway` | Portal-facing edge: JWT verification, action policy, chat/session proxying, token delegation, audit query proxy |
 | **agent-service** | `luban-aiops/agent-service` | AgentScope runtime kernel: LLM orchestration, session management, tool trace emission |
 | **execution-runtime** | `luban-aiops/execution-runtime` | Isolated worker executing approved mutating calls: authenticated handoff, envelope re-verification, signed receipts (SPEC-038) |
-| **tool-gateway** | `luban-aiops/tool-gateway` | Tool execution framework: connector dispatch (Kubernetes, Elastic, HTTP, skills-hub, incidents, secrets, browser web-checks), policy enforcement, output redaction |
+| **tool-gateway** | `luban-aiops/tool-gateway` | Tool execution framework: connector dispatch (Kubernetes, Elastic, HTTP, skills-hub, incidents, secrets, browser web-checks), outbound credential resolution (basic / bearer / OAuth2 client-credentials, SPEC-068), policy enforcement, output redaction |
 | **identity-service** | `luban-aiops/identity-service` | Enterprise identity: Keycloak OIDC login, JWT issuance, token exchange for delegation |
 | **audit-service** | `luban-aiops/audit-service` | Durable audit trail: authenticated ingest, retention-bounded store, query API (SPEC-013) |
 | **skills-hub** | `luban-aiops/skills-hub` | Federated skill ingestion and ranked retrieval for grounded guidance (SPEC-014) |
@@ -107,7 +107,9 @@ Browser → web-ui → platform-gateway → agent-service → tool-gateway → c
 5. **tool-gateway** verifies the delegated token, evaluates tool policy (`tools:list`,
    `tools:invoke`), dispatches to the appropriate connector (Kubernetes, Elastic,
    HTTP, skills-hub, incidents, secrets, or — for browser web-checks, SPEC-049 —
-   a sidecar browser over CDP), redacts credential-shaped output, and returns the result
+   a sidecar browser over CDP), resolving the named outbound credential set for
+   the target (basic / bearer / OAuth2 client-credentials, SPEC-068), redacts
+   credential-shaped output, and returns the result
    with evidence
    metadata. For procedure or remediation questions the agent consults the read-only
    `skills.search` / `skills.get` / `skills.list` tools for team-owned guidance and

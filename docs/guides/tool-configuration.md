@@ -198,7 +198,9 @@ never log values and must preserve write-tier authorization.
 - [ ] **Credential sets (optional)** — `GATEWAY_BROWSER_CREDENTIAL_SETS`
       points at a secret-mounted JSON file; dev provides
       `sync-browser-credentials.sh`; without it `web.fill_credential`
-      fails closed at call time
+      fails closed at call time. It resolves `basic` sets only (a browser
+      form fill has no bearer/OAuth2 form) and fails closed on any other
+      scheme — see the Credential-Set File section below
 - [ ] **HITL confirmation enabled for write-class flows** —
       `AGENT_HITL_CONFIRM_TIMEOUT > 0` on agent-platform; `web.click` and
       `web.type` are write-tier, so a `write`-class flow parks exactly one
@@ -231,7 +233,9 @@ never log values and must preserve write-tier authorization.
       a secret-mounted JSON file and **defaults to the browser path**
       (`GATEWAY_BROWSER_CREDENTIAL_SETS`) when unset, so one mounted secret
       serves both surfaces; without it a `credential_set` reference fails
-      closed at call time with `CREDENTIAL_SET_NOT_FOUND`
+      closed at call time with `CREDENTIAL_SET_NOT_FOUND`. `http.*` resolves
+      all three schemes (`basic`, `bearer`, `oauth2_client_credentials`) — see
+      the Credential-Set File section below
 
 > **Dev target.** The repository ships one: [`samples/acme-admin`](../../samples/acme-admin/),
 > a FastAPI console deployed out-of-band with `make deploy-sample-app` (the
@@ -255,10 +259,65 @@ three-hop limit, or a POST returned a redirect), `HTTP_URL_SECRET_NOT_ALLOWED`
 (a POST URL carried a secret-bearing query parameter), `HTTP_BODY_TOO_LARGE`
 (serialized body over the byte limit),
 `HTTP_TIMEOUT`, `TOOL_EXECUTION_ERROR` (connection failure), `UPSTREAM_ERROR`,
-and `CREDENTIAL_SET_NOT_FOUND`. An upstream 4xx/5xx is **not** an error: it is
+`CREDENTIAL_SET_NOT_FOUND`, and `CREDENTIAL_ACQUISITION_FAILED` (a
+`credential_set`'s scheme could not be resolved into outbound auth — a missing
+field, or an OAuth2 token the gateway could not acquire; the target is never
+called unauthenticated). An upstream 4xx/5xx is **not** an error: it is
 reported as `status: "success"` with the real code in `data.status` (and
 `data.mutation_confirmed: false` for a non-2xx POST), so a skill can assert on
 the fact rather than having the gateway swallow it.
+
+## Credential-Set File (SPEC-049 R-5, SPEC-068)
+
+`web.fill_credential` (browser) and `http.get`/`http.post` (HTTP) resolve a
+`credential_set` **by name** from one secret-mounted JSON file — never an inline
+env value, never committed. `GATEWAY_HTTP_CREDENTIAL_SETS` points at it and
+**defaults to** `GATEWAY_BROWSER_CREDENTIAL_SETS`, so a single mounted secret
+serves both surfaces. In dev, `sync-browser-credentials.sh` writes it into the
+`tool-gateway-browser-credentials` secret (key `credential-sets.json`); an
+operator supplies their own sets with `BROWSER_CREDENTIAL_SETS_FILE=<path>`.
+
+Each entry carries an optional `scheme` (default `basic`, byte-for-byte the
+pre-SPEC-068 shape). A set is admitted only when every field its scheme requires
+is a non-empty string; an unknown scheme or a missing field is ignored with a
+warning (fail-closed), never admitted half-formed. The file reloads on mtime
+change, so rotating a secret needs no gateway restart.
+
+```json
+{
+  "acme-admin": {"username": "admin", "password": "..."},
+  "snow-read":  {"scheme": "bearer", "token": "..."},
+  "snow-oauth": {"scheme": "oauth2_client_credentials",
+                 "token_url": "https://.../oauth_token.do",
+                 "client_id": "...", "client_secret": "...",
+                 "scope": "...", "client_auth": "client_secret_basic"}
+}
+```
+
+| `scheme` | Required | Optional | Resolves to |
+|---|---|---|---|
+| `basic` (default) | `username`, `password` | — | `httpx.BasicAuth`, or a Playwright `fill` for `web.fill_credential` |
+| `bearer` | `token` | — | `Authorization: Bearer <token>` |
+| `oauth2_client_credentials` | `token_url`, `client_id`, `client_secret` | `scope`, `audience`, `resource`, `client_auth` | a gateway-acquired token, then `Authorization: Bearer <token>` |
+
+`client_auth` is `client_secret_basic` (default — the client id/secret ride the
+token request's `Authorization` header) or `client_secret_post` (they ride the
+form body). The acquired OAuth2 token is held **in memory only** — never on
+disk, in a result, an evidence field, audit, or a log line — cached per set name
+and refreshed on near-expiry. `web.fill_credential` resolves `basic` sets only;
+any other scheme fails closed with `CREDENTIAL_SET_NOT_FOUND`.
+
+**Provisioning invariants (SPEC-068 R-5).** The extension rides the *existing*
+file / secret / sync model — no new secret mechanism and no new mandatory env
+var — and is **inert until a non-`basic` set is provisioned**: with only `basic`
+sets (the dev default), behavior is byte-identical to before. A credential or
+config failure on any scheme is a structured `CREDENTIAL_ACQUISITION_FAILED`
+gateway error and **never** falls back to an unauthenticated call. Because
+`sync-browser-credentials.sh` derives the sample app's `ACME_ADMIN_PASSWORD`
+from the file's `acme-admin` entry, an operator supplying their own file must
+still include a `basic` `acme-admin` set or the script fails closed. A dedicated
+sync/secret for a real non-sample target is **optional**, owned by the consuming
+pilot (SPEC-067), not by this substrate.
 
 ## Kubernetes Connector
 

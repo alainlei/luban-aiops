@@ -1,13 +1,12 @@
 # SPEC-068 Plan: Outbound Execution-Credential Schemes (Tool-Gateway Substrate)
 
-> **Draft — decision-complete, but not yet authorized.** SPEC-068 is `draft` with
-> **no Open Questions blocking `approved`**: it is target-agnostic and ready for an
-> approval decision without any live-system verification. That said, this plan is not
-> an authorization to build — approval, implementation, commit/push, deployment, and any
-> version bump are each separate authorization boundaries not granted by this document.
-> Unlike SPEC-067, there is **no external Stage-0 fact to pin first**: the substrate is
-> verified entirely against mocks and the shipped code, so implementation can begin as
-> soon as the spec is approved.
+> **Delivered 2026-10-08 — released as v0.47.0.** SPEC-068 is `delivered`: the plan
+> below was executed through R-1 → R-5 in `products/tool-gateway` with unit and
+> end-to-end tests, `make verify` green (including the full SPEC-063 execution-failure
+> campaign), and `make validate-secret-vocabulary` unchanged. This plan is retained as
+> the build record. Commit/push and deployment remain separate authorization boundaries
+> not crossed by the release. It was target-agnostic and decision-complete at approval
+> (2026-10-08), needing no live-system verification and no external Stage-0 fact.
 
 ## Approach
 

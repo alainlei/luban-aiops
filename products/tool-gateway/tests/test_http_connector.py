@@ -700,6 +700,96 @@ class CredentialTests(unittest.TestCase):
             base64.b64decode(second.split(" ", 1)[1]).decode(), "svc:second"
         )
 
+    # --- SPEC-068 R-3: bearer + oauth2 resolve to an Authorization header ---
+
+    def test_bearer_set_sends_bearer_header(self) -> None:
+        _write_credentials(
+            self.cred_path, {"snow": {"scheme": "bearer", "token": "static-tok"}}
+        )
+        router = _Router({
+            ("GET", "/health"): lambda r: httpx.Response(200, json={"ok": True}),
+        })
+        connector = _connector(
+            router, credential_sets_path=str(self.cred_path)
+        )
+        result = _call(
+            connector, "http.get",
+            {"url": ALLOWED + "/health", "credential_set": "snow"},
+        )
+        self.assertEqual(result.status, "success")
+        self.assertEqual(self._auth_header(router.calls[0]), "Bearer static-tok")
+        # The bearer token never rides the result or evidence.
+        self.assertNotIn("static-tok", json.dumps(result.to_dict()))
+
+    def test_oauth2_set_acquires_token_then_sends_bearer(self) -> None:
+        _write_credentials(self.cred_path, {
+            "snow": {
+                "scheme": "oauth2_client_credentials",
+                "token_url": ALLOWED + "/oauth_token.do",
+                "client_id": "cid",
+                "client_secret": "csec-SUPERSECRET",
+            }
+        })
+        router = _Router({
+            ("POST", "/oauth_token.do"): lambda r: httpx.Response(
+                200,
+                json={
+                    "access_token": "TOK123",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                },
+            ),
+            ("GET", "/health"): lambda r: httpx.Response(200, json={"ok": True}),
+        })
+        connector = _connector(
+            router, credential_sets_path=str(self.cred_path)
+        )
+        result = _call(
+            connector, "http.get",
+            {"url": ALLOWED + "/health", "credential_set": "snow"},
+        )
+        self.assertEqual(result.status, "success")
+        # One token fetch + one target call, both via the single transport.
+        self.assertEqual(router.call_count, 2)
+        target = next(c for c in router.calls if c.url.path == "/health")
+        self.assertEqual(target.headers.get("authorization"), "Bearer TOK123")
+        body = json.dumps(result.to_dict())
+        self.assertNotIn("csec-SUPERSECRET", body)
+        self.assertNotIn("TOK123", body)
+
+    def test_oauth2_token_failure_is_a_gateway_error_and_target_uncalled(
+        self,
+    ) -> None:
+        _write_credentials(self.cred_path, {
+            "snow": {
+                "scheme": "oauth2_client_credentials",
+                "token_url": ALLOWED + "/oauth_token.do",
+                "client_id": "cid",
+                "client_secret": "csec-SUPERSECRET",
+            }
+        })
+        router = _Router({
+            ("POST", "/oauth_token.do"): lambda r: httpx.Response(
+                401, json={"error": "invalid_client"}
+            ),
+            ("GET", "/health"): lambda r: httpx.Response(200, json={"ok": True}),
+        })
+        connector = _connector(
+            router, credential_sets_path=str(self.cred_path)
+        )
+        result = _call(
+            connector, "http.get",
+            {"url": ALLOWED + "/health", "credential_set": "snow"},
+        )
+        self.assertEqual(result.status, "error")
+        self.assertEqual(result.error["code"], "CREDENTIAL_ACQUISITION_FAILED")
+        self.assertIn("snow", result.error["message"])
+        # Only the token endpoint was hit: a token failure never falls back to
+        # an unauthenticated call of the target (the SPEC-058 inverse).
+        self.assertEqual(router.call_count, 1)
+        self.assertEqual(router.calls[0].url.path, "/oauth_token.do")
+        self.assertNotIn("csec-SUPERSECRET", json.dumps(result.to_dict()))
+
 
 # --- Configuration (R-7) ---
 

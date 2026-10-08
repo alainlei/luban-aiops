@@ -1290,13 +1290,24 @@ class WebFillCredentialTool(_WebInteractionTool):
                 f"Credential set '{set_name}' is not configured.",
                 source_system=SOURCE_SYSTEM,
             )
+        # SPEC-068 R-1: a non-`basic` set (bearer/oauth2) carries no
+        # username/password to fill. Fail closed *before* acquiring the
+        # guarded handle rather than filling a blank or raising KeyError;
+        # the message stays generic per W-3 (no scheme disclosure).
+        value = credential.get(field)
+        if not isinstance(value, str) or not value:
+            return make_error_result(
+                self.tool_name, "CREDENTIAL_SET_NOT_FOUND",
+                f"Credential set '{set_name}' cannot fill the "
+                f"'{field}' field.",
+                source_system=SOURCE_SYSTEM,
+            )
 
         handle, guard = await self._guarded_handle(
             entry, parameters, identity.get("approval_kind")
         )
         if guard is not None:
             return guard
-        value = credential[field]
         try:
             await handle.fill(value)
         except Exception as exc:

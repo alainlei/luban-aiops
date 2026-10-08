@@ -29,10 +29,15 @@
 # Provide your own sets via BROWSER_CREDENTIAL_SETS_FILE (a JSON object
 # mapping set name -> {"username": ..., "password": ...}); otherwise a
 # dev set for the `acme-admin` sample app is generated with a random
-# password (never echoed, never committed). The override path still
-# produces the app-side secret, taken from your file's `acme-admin`
-# entry — an operator supplying their own sets supplies the app's
-# password too, or the app cannot start.
+# password (never echoed, never committed). An entry may instead carry an
+# optional "scheme" — "bearer" (a "token") or "oauth2_client_credentials"
+# ("token_url"/"client_id"/"client_secret") per SPEC-068 — for the http.*
+# connectors; the full shape is documented in
+# docs/guides/tool-configuration.md. The `acme-admin` entry must stay a
+# basic username/password set regardless, because the app-side secret is
+# derived from it. The override path still produces that app-side secret,
+# taken from your file's `acme-admin` entry — an operator supplying their
+# own sets supplies the app's password too, or the app cannot start.
 #
 # Usage:
 #   shared/platform-ops/gitops/sync-browser-credentials.sh [namespace]

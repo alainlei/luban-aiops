@@ -362,6 +362,19 @@ Represents:
 
 - the service account, workload identity, or short-lived credential used against Kubernetes or other enterprise systems
 
+> Landed (SPEC-068): the first concrete outbound execution-credential form is the
+> tool-gateway's file-mounted **named credential sets** — `basic`, `bearer`, and
+> `oauth2_client_credentials` (a target-issued token the gateway acquires itself,
+> with no new signing authority and no centralized broker). These are *platform
+> configuration*, resolved by name at call time and never model-supplied; an
+> acquired token is held in memory only and flows solely into an outbound
+> `Authorization` header. This outbound target credential is a **separate plane**
+> from the platform's own ADR-0004 `sub`/`act` delegation (which authenticates
+> service-to-service calls *within* Luban): a credential or config failure fails
+> closed as a structured gateway error and never falls back to an unauthenticated
+> call. Kubernetes workload-identity-bound short-lived tokens remain the
+> documented upgrade path.
+
 These identities should be logged separately so audit records can answer:
 
 - who requested the action

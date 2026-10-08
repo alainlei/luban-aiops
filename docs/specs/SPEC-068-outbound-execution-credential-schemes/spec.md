@@ -2,7 +2,7 @@
 
 ## Status
 
-- status: `draft`
+- status: `delivered`
 - owner: luban-platform-team
 - created: 2026-10-08
 - release slice: **R6-enabling substrate** — the target-agnostic outbound
@@ -10,9 +10,10 @@
   from [SPEC-067](../SPEC-067-servicenow-mcp-ingestion-pilot/spec.md) R-1 so it can
   be approved and shipped **independently of any single pilot's live-system gate**
   (see the [delivery roadmap](../../agentic-aiops-platform/delivery-roadmap.md#r6-external-system-integration-via-mcp-ingestion)).
-- target version: unversioned while `draft` — the version is pinned only at approval.
-  The platform is at v0.46.0; like SPEC-066, this substrate is small and
-  self-contained enough to ship standalone at its own bump once approved.
+- target version: **v0.47.0** — pinned at approval (2026-10-08). The platform is
+  at v0.46.0; like SPEC-066, this substrate is small and self-contained enough to
+  ship standalone at its own minor bump. The `VERSION` file bump itself is a
+  separate release gate, crossed neither by approval nor by implementation.
 - related ADRs: **none.** SPEC-068 adds no new platform signing authority and mints
   no platform delegation token — it acquires a **target-issued** token via the
   standard OAuth2 `client_credentials` grant and attaches it outbound. ADR-0004's
@@ -41,9 +42,9 @@
 > target-agnostic and decision-complete, so it is ready for an approval decision
 > without any live-system verification. It was extracted from SPEC-067 R-1 precisely
 > so the reusable substrate can be approved and shipped during the ServiceNow PDI
-> waitlist, independent of that pilot's Stage-0 facts. Approval, implementation,
-> commit/push, deployment, and any version bump are each separate authorization
-> boundaries **not** granted by this `draft`.
+> waitlist, independent of that pilot's Stage-0 facts. **Approved by the operator
+> 2026-10-08; implementation authorized.** Commit/push, deployment, and any version
+> bump remain separate authorization boundaries not granted by this approval.
 
 ## Summary
 
@@ -261,10 +262,11 @@ Acceptance criteria:
   platform's own ADR-0004 `sub`/`act` delegation is unaffected (the outbound target
   token is a separate plane).
 - living state docs to update on delivery: `products/tool-gateway/README.md` (the
-  credential-scheme surface), `docs/agentic-aiops-platform/architecture.md`
-  (tool-gateway credential section), `identity-and-authorization-design.md` §Service
-  Identity Model (record the outbound credential landing), and the delivery-roadmap
-  (mark the substrate delivered; note SPEC-067 R-1 now depends on it).
+  credential-scheme surface), `docs/guides/architecture-overview.md` (the
+  tool-gateway capability row and request-flow narrative),
+  `identity-and-authorization-design.md` §Service Identity Model (record the
+  outbound credential landing), and the delivery-roadmap (mark the substrate
+  delivered; note SPEC-067 R-1 now depends on it).
 
 ## Open Questions
 
@@ -298,6 +300,16 @@ skipped):
 
 ## Changelog
 
+- 2026-10-08: **delivered** (status `approved` → `delivered`). R-1–R-5 implemented in
+  `products/tool-gateway` (new `tools/oauth_client.py` + `tools/auth_resolution.py`;
+  generalized `tools/credential_sets.py` and `http_connector._resolve_auth`) with unit
+  and end-to-end tests; living docs updated. `make verify` green (including the full
+  SPEC-063 execution-failure campaign) and `make validate-secret-vocabulary` unchanged.
+  Released as **v0.47.0** (`VERSION` bump + CHANGELOG). Commit/push, deployment remain
+  separate authorization boundaries.
+- 2026-10-08: **approved by the operator** (status `draft` → `approved`);
+  implementation authorized. Target version pinned to **v0.47.0** (the `VERSION`
+  bump itself remains a separate release gate). No Open Question blocked approval.
 - 2026-10-08: created as `draft`; full scaffold (`spec.md` + `plan.md` + `tasks.md`)
   authored together per the SPEC-064/065/066/067 precedent. Extracted from
   [SPEC-067](../SPEC-067-servicenow-mcp-ingestion-pilot/spec.md) R-1 per its OQ-2

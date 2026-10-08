@@ -11,6 +11,83 @@ portal is enforced by `make validate-version`.
 Versions prior to 0.1.0 were not numbered; Release 0 foundation work and
 Release 1 entries are grouped retrospectively under 0.1.0.
 
+## 0.47.0 — 2026-10-08
+
+Feature release: outbound execution-credential schemes. The `tool-gateway`'s
+outbound credential model generalizes beyond HTTP Basic so a connector can
+authenticate to a modern API — an optional per-set `scheme`
+(`basic` | `bearer` | `oauth2_client_credentials`) and a connector-local OAuth2
+`client_credentials` token client behind one reusable async auth-resolution seam,
+delivered under
+[SPEC-068](docs/specs/SPEC-068-outbound-execution-credential-schemes/spec.md)
+(additively extending
+[SPEC-049](docs/specs/SPEC-049-browser-web-check-tools/spec.md) R-5's named
+`credential_set` mechanism; first consumer
+[SPEC-058](docs/specs/SPEC-058-http-service-check-tools/spec.md)'s
+`http_connector`). The change is **additive and target-agnostic**: every existing
+`basic` set is byte-for-byte unchanged, the extension is inert until a non-`basic`
+set is provisioned, and **no new dependency** is introduced (`httpx` already present;
+the grant is a plain form-encoded POST). This is the *External Execution Identity*'s
+first concrete credential form and the R6-enabling substrate every MCP-ingestion
+pilot shares — extracted from
+[SPEC-067](docs/specs/SPEC-067-servicenow-mcp-ingestion-pilot/spec.md) R-1 so it
+ships independently of that pilot's live-system gate. No new route, action, tool,
+policy-bundle change, audit event type, or secret-vocabulary change (existing
+redaction already covers the new names, so `make validate-secret-vocabulary` stays
+green without a new canonical field set). Only `products/tool-gateway` is touched.
+
+### Added
+
+- **SPEC-068 R-1: per-set `scheme` field and generalized parsing.**
+  `tools/credential_sets.py` moves from the fixed `REQUIRED_FIELDS` projection to a
+  per-scheme field model that **retains** scheme-specific fields, with an optional
+  `scheme` defaulting to `basic`. A `basic` set — or a set with no `scheme` key —
+  parses exactly as before; `bearer` requires a non-empty `token`;
+  `oauth2_client_credentials` requires `token_url`/`client_id`/`client_secret` and may
+  carry optional `scope`/`audience`/`resource`/`client_auth`. Missing required fields
+  or an **unknown** scheme are ignored with a warning (fail-closed, never a crash and
+  never silently `basic`); `web.fill_credential` against a non-`basic` set fails closed
+  with a structured error.
+- **SPEC-068 R-2: connector-local OAuth2 `client_credentials` token client** (new
+  `tools/oauth_client.py`, Option A of the credential memo). Fetches on cache miss,
+  caches the token **in memory only** keyed by set name (never disk, result, evidence,
+  audit, or log), refreshes within a safety margin of `expires_in` via an injectable
+  clock, supports both `client_secret_basic` and `client_secret_post` client-auth
+  variants, and coalesces concurrent callers for one set into a single in-flight fetch
+  (per-set `asyncio.Lock` + double-check). A token-endpoint failure (unreachable,
+  timeout, non-2xx, or no `access_token`) fails closed with a structured gateway error.
+- **SPEC-068 R-3: reusable outbound auth-resolution seam** (new
+  `tools/auth_resolution.py`). `http_connector._resolve_auth` becomes a single `async`
+  resolver returning both an `httpx.Auth` and the raw bearer token/header (the one
+  acquisition path SPEC-067's non-httpx MCP client will reuse). `basic` resolves to
+  `httpx.BasicAuth` unchanged; `bearer`/`oauth2` attach `Authorization: Bearer <token>`.
+  A credential/config failure returns a structured `CREDENTIAL_SET_NOT_FOUND` or the new
+  `CREDENTIAL_ACQUISITION_FAILED` code — a gateway error, the deliberate **inverse** of
+  SPEC-058's "an upstream 4xx/5xx is a fact, not a tool error." Only the set **name**
+  ever surfaces.
+- **SPEC-068 R-4: secret-handling invariant tests** (`tests/test_credential_redaction.py`)
+  prove `client_secret`/`access_token`/static bearer tokens are masked across every
+  layer — URL projection (substring match), tool-result and evidence keys, and
+  value-shape patterns (Bearer/JWT) — with the forbidden secret present in the input
+  fixture and asserted absent from output. `_PROJECTED_HEADERS` continues to exclude
+  `authorization`/`set-cookie`.
+- **SPEC-068 R-5: provisioning and config reuse the existing model.** The new fields
+  ride the file-mounted `credential-sets.json` (`tool-gateway-browser-credentials`
+  secret, `sync-browser-credentials.sh` via `BROWSER_CREDENTIAL_SETS_FILE`); the http
+  connector keeps reading `GATEWAY_HTTP_CREDENTIAL_SETS` with the
+  `GATEWAY_BROWSER_CREDENTIAL_SETS` fallback; no new required env var. The dev default
+  (`acme-admin` basic set) is byte-identical and `make overlays` renders green.
+
+### Changed
+
+- Living docs updated for the landed substrate: `products/tool-gateway/README.md`
+  (credential-scheme surface), `docs/guides/architecture-overview.md` (tool-gateway
+  capability row + request-flow narrative),
+  `docs/agentic-aiops-platform/identity-and-authorization-design.md` (External
+  Execution Identity landing note), and `docs/guides/tool-configuration.md` (new
+  Credential-Set File section + `CREDENTIAL_ACQUISITION_FAILED`). The delivery roadmap
+  marks the R6 substrate delivered; SPEC-067 R-1 now depends on it.
+
 ## 0.46.0 — 2026-10-03
 
 Feature release: skill-retrieval ranking fidelity. The `skills-hub` scorer gains
